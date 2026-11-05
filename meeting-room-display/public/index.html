@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071311">
+  <title>Meeting room display</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main class="display-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">MEETING SPACE</p>
+        <h1 id="room-name">Meeting Room</h1>
+      </div>
+      <div class="clock" aria-label="Current time">
+        <strong id="clock-time">--:--</strong>
+        <span id="clock-date">Loading…</span>
+      </div>
+    </header>
+
+    <section id="status-panel" class="status-panel available" aria-live="polite">
+      <div class="status-copy">
+        <div class="status-line"><span class="status-dot"></span><span id="status-label">Checking room…</span></div>
+        <h2 id="status-title">Loading calendar</h2>
+        <p id="status-detail">Connecting to Microsoft 365</p>
+      </div>
+      <div class="status-actions">
+        <button id="reserve-button" class="primary-button" type="button" hidden>Reserve now</button>
+        <p id="sync-state" class="sync-state"><span></span>Connecting</p>
+      </div>
+    </section>
+
+    <section class="agenda-section">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">TODAY</p>
+          <h2>Room schedule</h2>
+        </div>
+        <button id="refresh-button" class="icon-button" type="button" aria-label="Refresh schedule">↻</button>
+      </div>
+      <div id="agenda" class="agenda" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <dialog id="booking-dialog">
+    <form id="booking-form" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">QUICK RESERVE</p>
+          <h2>Book this room</h2>
+        </div>
+        <button class="close-button" type="button" id="close-dialog" aria-label="Close">×</button>
+      </div>
+      <label class="field-label" for="booking-subject">Meeting title</label>
+      <input id="booking-subject" name="subject" maxlength="120" value="Ad hoc meeting" autocomplete="off">
+      <fieldset>
+        <legend>Duration</legend>
+        <div class="duration-grid">
+          <label><input type="radio" name="duration" value="15"><span>15 min</span></label>
+          <label><input type="radio" name="duration" value="30" checked><span>30 min</span></label>
+          <label><input type="radio" name="duration" value="45"><span>45 min</span></label>
+          <label><input type="radio" name="duration" value="60"><span>60 min</span></label>
+        </div>
+      </fieldset>
+      <p id="booking-error" class="booking-error" role="alert"></p>
+      <button class="primary-button wide" id="confirm-booking" type="submit">Reserve room</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
