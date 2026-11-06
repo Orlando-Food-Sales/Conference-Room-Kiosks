@@ -1,0 +1,26 @@
+[Unit]
+Description=M365 Meeting Room Display
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=m365room
+Group=m365room
+WorkingDirectory=/opt/m365-room-display
+EnvironmentFile=/opt/m365-room-display/.env
+Environment=NODE_ENV=production
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/env node /opt/m365-room-display/src/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/m365-room-display
+
+[Install]
+WantedBy=multi-user.target
