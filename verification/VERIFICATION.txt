@@ -1,0 +1,11 @@
+Verification date: 2026-11-09
+Fixture: exact known-good JavaScript target block plus recovered base stylesheet
+git apply --unidiff-zero --check: PASS
+node --check public/app.js: PASS
+git diff --check: PASS
+python3 tools/apply_single_line_update.py --check .: PASS
+  public/app.js: already current; syntax valid
+  public/styles.css: already current
+  CHECK OK: repository is compatible; no files changed.
+Updater idempotency check: PASS (updated files recognized as already current)
+Secrets scan: bundle intentionally contains no production credentials or room configuration.

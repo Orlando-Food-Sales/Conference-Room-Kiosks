@@ -1,52 +1,31 @@
-# M365 Meeting Room Display v2.0.0
+# Microsoft 365 Room Display — GitHub Update Bundle
 
-A dependency-light Node.js service for multi-room Microsoft 365 calendar displays. It provides room tablet views, a room picker, timed calendar refresh, server-sent updates, tablet heartbeat tracking, an administrator dashboard, and optional quick booking.
+This bundle updates the previously supplied **v2 known-good repository** to the
+validated **single-line upcoming meeting layout** used by the working deployment.
 
-This is the **known-good v2 baseline**. It includes the tablet fix that uses a secure UUID fallback when `crypto.randomUUID()` is unavailable.
+## What changes
 
-## Quick start (demo mode)
+- `public/app.js`: gives upcoming meetings dedicated indicator, time, subject,
+  and organizer columns.
+- `public/styles.css`: adds compact single-line desktop styling and a tablet
+  fallback that hides the organizer below 800 px.
+- The existing Microsoft 365/Graph, room selection, SSE, tablet heartbeat,
+  quick-booking, dashboard, and UUID compatibility logic is not changed.
 
-```bash
-git clone https://github.com/YOUR-ORG/m365-room-display.git
-cd m365-room-display
-sudo bash scripts/install-ubuntu.sh
-```
+## Contents
 
-Open `http://SERVER-IP/room/front` and `http://SERVER-IP/dashboard`. The installer starts in demo mode. Follow [INSTALL-UBUNTU.md](INSTALL-UBUNTU.md) to connect Microsoft 365 securely.
+- `UPDATING-GITHUB.md` — exact update and commit procedure.
+- `tools/apply_single_line_update.py` — recommended safety-checked updater.
+- `patches/0001-single-line-upcoming-meetings.patch` — reviewable Git patch.
+- `public/styles.css` — complete replacement stylesheet based on the known-good
+  base plus the validated layout.
+- `snippets/` — exact JavaScript and CSS blocks for code review.
+- `CHECKSUMS.sha256` — SHA-256 integrity hashes.
+- `verification/VERIFICATION.txt` — build and test record.
 
-## Requirements
+## Security
 
-- Ubuntu Server 22.04 or 24.04 LTS
-- Node.js 20 or later (the installer pins Node.js 26.13.0 LTS when needed)
-- Nginx
-- Microsoft Entra app registration and Exchange Online room mailboxes for production mode
-
-## Repository layout
-
-| Path | Purpose |
-|---|---|
-| `src/` | HTTP server, configuration, demo and Microsoft Graph calendar clients |
-| `public/` | Tablet and dashboard web applications |
-| `config/rooms.example.json` | Sanitized multi-room template |
-| `deploy/` | Systemd and Nginx production configuration |
-| `scripts/` | Installer, smoke test, and protected backup script |
-| `test/` | Node built-in test suite |
-| `.github/workflows/ci.yml` | GitHub Actions validation |
-
-## Local development
-
-```bash
-cp .env.example .env
-cp config/rooms.example.json config/rooms.json
-npm install
-npm run check
-npm start
-```
-
-Then open `http://localhost:3000/room/front`.
-
-## Production configuration
-
-Do not commit `.env` or `config/rooms.json`. Use `Calendars.Read` for display-only deployments. Only grant `Calendars.ReadWrite` when quick booking is enabled, and scope application access to the intended room mailboxes.
-
-See [INSTALL-UBUNTU.md](INSTALL-UBUNTU.md) for step-by-step installation, Entra configuration, validation, update, backup, and rollback instructions.
+This bundle contains no `.env`, tenant ID, client ID, client secret, administrator
+token, room mailbox address, production hostname, IP address, or backup archive.
+Use a private repository if your main project contains organization-specific room
+configuration.
