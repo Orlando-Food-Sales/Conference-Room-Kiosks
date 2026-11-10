@@ -510,3 +510,8 @@ body::before {
 .icon-button { width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--text); font-size: 1.25rem; line-height: 1; cursor: pointer; opacity: .75; }
 .icon-button:hover, .icon-button:focus-visible { opacity: 1; border-color: var(--blue); color: var(--blue); }
 .modal-link { color: var(--muted); font-size: .85rem; text-align: center; }
+
+/* One-tap booking under "Free until". */
+.quick-book { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+.quick-book button { min-height: 48px; padding: 12px 24px; border: 2px solid var(--green); border-radius: 999px; background: transparent; color: var(--green); font: 800 1.05rem inherit; cursor: pointer; }
+.quick-book button:hover, .quick-book button:focus-visible { background: var(--green); color: #fff; }

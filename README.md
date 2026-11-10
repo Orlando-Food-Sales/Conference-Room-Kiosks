@@ -7,7 +7,8 @@ dependencies; Node.js 20 or later.
 ## What it shows
 
 - Room status (Available / In use), clock, and today's schedule with NOW and NEXT badges.
-- Optional quick booking from the tablet.
+- "Free until 2:30 PM" on the status card. For rooms with `allowQuickBooking`, one-tap 15, 30 and 60 minute buttons (only those that fit before the next meeting) plus a "Reserve now" form.
+- Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
   mood that follows the weather (clear, clouds, rain, storm, snow, fog).
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
@@ -47,7 +48,7 @@ All settings are environment variables; see `.env.example`.
 celebration. It is a review tool; remove or block it on public kiosks if you prefer.
 
 Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
-`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `nostream=1`.
+`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `quickbook=1` (show the booking buttons), `nostream=1`.
 
 ## Security
 

@@ -26,7 +26,7 @@ function updateClock() { if (!state.room) return; var now = new Date(); $('clock
 function activeControl(control) { control = control || { displayEnabled: true }; document.body.classList.toggle('display-off', control.displayEnabled === false); var visible = control.message && (!control.messageExpiresAt || new Date(control.messageExpiresAt) > new Date()); $('notice').textContent = visible ? control.message : ''; $('notice').classList.toggle('hidden', !visible); }
 
 async function chooseRoom() { var data = await api('/api/rooms'); $('picker').classList.remove('hidden'); $('display').classList.add('hidden'); $('roomList').innerHTML = ''; data.rooms.forEach(function (room) { var button = document.createElement('button'); button.type = 'button'; button.className = 'room-choice'; button.innerHTML = '<span></span><span>→</span>'; button.firstChild.textContent = room.name; button.addEventListener('click', function () { history.replaceState({}, '', room.displayUrl); initializeRoom(room.id).catch(function (error) { showToast(error.message); }); }); $('roomList').appendChild(button); }); }
-function render() { if (!state.room) return; var now = Date.now(); var current = state.events.find(function (event) { return new Date(event.start).getTime() <= now && new Date(event.end).getTime() > now; }); var busy = Boolean(current); $('availability').classList.toggle('busy', busy); $('statusText').textContent = busy ? 'In use' : 'Available'; $('currentMeeting').textContent = busy ? ((current.subject || 'Reserved') + ' · until ' + formatTime(current.end)) : 'No meeting in progress'; $('reserveButton').classList.toggle('hidden', !state.room.allowQuickBooking || busy); var upcoming = state.events.filter(function (event) { return new Date(event.end).getTime() > now - 1800000; }).slice(0, 8); $('eventList').innerHTML = upcoming.length ? upcoming.map(function (event) { var start = new Date(event.start).getTime(), end = new Date(event.end).getTime(); var cls = start <= now && end > now ? 'current' : end <= now ? 'past' : ''; var nextUp = upcoming.find(function (e) { return new Date(e.start).getTime() > now; }); var badge = cls === 'current' ? '<span class="badge now">NOW</span>' : (event === nextUp ? '<span class="badge next">NEXT</span>' : ''); return '<article class="event meeting-row ' + cls + '"><div class="meeting-indicator"></div><div class="meeting-time">' + formatRange(event) + '</div><div class="meeting-subject">' + escapeText(event.subject) + '</div><div class="meeting-organizer">' + escapeText(event.organizer) + '</div><div class="meeting-badge">' + badge + '</div></article>'; }).join('') : '<p class="empty">No more meetings scheduled.</p>'; }
+function render() { if (!state.room) return; var now = Date.now(); var current = state.events.find(function (event) { return new Date(event.start).getTime() <= now && new Date(event.end).getTime() > now; }); var busy = Boolean(current); $('availability').classList.toggle('busy', busy); $('statusText').textContent = busy ? 'In use' : 'Available'; $('currentMeeting').textContent = busy ? ((current.subject || 'Reserved') + ' · until ' + formatTime(current.end)) : freeUntilText(now); $('reserveButton').classList.toggle('hidden', !state.room.allowQuickBooking || busy); renderQuickBook(now, busy); var upcoming = state.events.filter(function (event) { return new Date(event.end).getTime() > now - 1800000; }).slice(0, 8); $('eventList').innerHTML = upcoming.length ? upcoming.map(function (event) { var start = new Date(event.start).getTime(), end = new Date(event.end).getTime(); var cls = start <= now && end > now ? 'current' : end <= now ? 'past' : ''; var nextUp = upcoming.find(function (e) { return new Date(e.start).getTime() > now; }); var badge = cls === 'current' ? '<span class="badge now">NOW</span>' : (event === nextUp ? '<span class="badge next">NEXT</span>' : ''); return '<article class="event meeting-row ' + cls + '"><div class="meeting-indicator"></div><div class="meeting-time">' + formatRange(event) + '</div><div class="meeting-subject">' + escapeText(event.subject) + '</div><div class="meeting-organizer">' + escapeText(event.organizer) + '</div><div class="meeting-badge">' + badge + '</div></article>'; }).join('') : '<p class="empty">No more meetings scheduled.</p>'; }
 // Preview helper: ?preview=free|soon|busy|ended|error swaps in fixed sample meetings.
 function previewEvents(events) {
   var mode = new URLSearchParams(location.search).get('preview');
@@ -44,7 +44,7 @@ async function loadEvents() { try { var data = await api('/api/events?room=' + e
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }) }); } catch (_) { } }
 function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
-async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(state.room.control); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); }
+async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); if (new URLSearchParams(location.search).has('quickbook')) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(state.room.control); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); }
 
 $('reserveButton').addEventListener('click', function () { $('bookingPanel').classList.remove('hidden'); });
 $('cancelBooking').addEventListener('click', function () { $('bookingPanel').classList.add('hidden'); });
@@ -120,3 +120,59 @@ $('messageClear').addEventListener('click', async function () {
   $('messageError').textContent = '';
   try { await sendControl('clearMessage'); $('messageText').value = ''; closeMessagePanel(); showToast('Message cleared'); } catch (error) { $('messageError').textContent = error.message; }
 });
+
+// "Free until 2:30 PM" and one-tap booking buttons (15, 30, 60 minutes starting now).
+function nextMeeting(now) { return state.events.find(function (event) { return new Date(event.start).getTime() > now; }); }
+function dayKey(value) { return new Intl.DateTimeFormat('en-CA', { timeZone: state.room.timeZone }).format(new Date(value)); }
+function freeUntilText(now) {
+  var next = nextMeeting(now);
+  if (!next) return 'Free for the rest of the day';
+  return 'Free until ' + (dayKey(next.start) === dayKey(now) ? '' : 'tomorrow ') + formatTime(next.start);
+}
+function renderQuickBook(now, busy) {
+  var box = $('quickBook');
+  var next = nextMeeting(now);
+  var gap = next ? (new Date(next.start).getTime() - now) / 60000 : Infinity;
+  var any = false;
+  Array.prototype.forEach.call(box.querySelectorAll('button'), function (button) {
+    var fits = gap >= Number(button.dataset.minutes);
+    button.classList.toggle('hidden', !fits);
+    any = any || fits;
+  });
+  box.classList.toggle('hidden', !(state.room.allowQuickBooking && !busy && any));
+}
+var booking = false;
+async function bookNow(minutes) {
+  if (booking || !state.room) return;
+  booking = true;
+  var start = new Date(Math.floor(Date.now() / 60000) * 60000);
+  try {
+    await api('/api/bookings', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, subject: 'Reserved', start: start.toISOString(), end: new Date(start.getTime() + minutes * 60000).toISOString() }) });
+    showToast('Room reserved for ' + minutes + ' minutes');
+    await loadEvents();
+  } catch (error) { showToast(error.message); }
+  booking = false;
+}
+$('quickBook').addEventListener('click', function (event) {
+  var button = event.target.closest ? event.target.closest('button') : null;
+  if (button && button.dataset.minutes) bookNow(Number(button.dataset.minutes));
+});
+
+// Quiet nightly reload so tablets left on for weeks start fresh (new code, no memory build-up).
+// Reloads once per night between 3:30 and 3:50 in the room's time zone, spread by tablet id.
+function nightReloadDue(hour, minute, offset, today, lastDate, uptimeMs) {
+  return hour === 3 && minute >= 30 + offset && minute < 50 && lastDate !== today && uptimeMs > 6 * 3600000;
+}
+function checkNightReload() {
+  if (!state.room || NO_STREAM) return;
+  var parts = new Intl.DateTimeFormat('en-US', { timeZone: state.room.timeZone, hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date());
+  var hour = Number(parts.filter(function (p) { return p.type === 'hour'; })[0].value);
+  var minute = Number(parts.filter(function (p) { return p.type === 'minute'; })[0].value);
+  var sum = 0; for (var i = 0; i < state.tabletId.length; i += 1) sum += state.tabletId.charCodeAt(i);
+  var today = dayKey(Date.now());
+  if (!nightReloadDue(hour, minute, sum % 15, today, localStorage.getItem('lastNightReload'), performance.now())) return;
+  if (!$('bookingPanel').classList.contains('hidden') || !$('messagePanel').classList.contains('hidden')) return;
+  localStorage.setItem('lastNightReload', today);
+  location.reload();
+}
+setInterval(checkNightReload, 60000);

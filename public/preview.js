@@ -55,6 +55,7 @@
     if (selected) q.set('snoopy', selected);
     if ($('outfit').value) q.set('outfit', $('outfit').value);
     if ($('celebrate').value) q.set('celebrate', $('celebrate').value);
+    if ($('quickbook').value) q.set('quickbook', '1');
     return '/room/room?' + q;
   }
 
@@ -80,7 +81,7 @@
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis
