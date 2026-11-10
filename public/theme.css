@@ -565,3 +565,7 @@ body.display-off::before, body.display-off::after { display: none; }
   .meeting-time { font-size: .82rem; white-space: nowrap; }
   .snoopy { right: 12px; top: 12px; height: 96px; }
 }
+
+/* "Closed tomorrow" heads-up on the status card. */
+.closed-soon { margin-top: 16px; padding: 8px 14px; border: 1px solid var(--amber, #ffbf47); border-radius: 12px; color: var(--amber, #ffbf47); font-weight: 800; font-size: clamp(1rem, 2vw, 1.4rem); width: fit-content; max-width: 100%; }
+@media (max-height: 700px) { .closed-soon { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }

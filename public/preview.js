@@ -60,6 +60,7 @@
     if ($('message').value) q.set('message', $('message').value);
     if ($('hours').value) q.set('hours', $('hours').value);
     q.set('holiday', $('holiday').value);
+    q.set('closedsoon', $('closedsoon').value);
     return '/room/room?' + q;
   }
 
@@ -85,7 +86,7 @@
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday', 'closedsoon'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis

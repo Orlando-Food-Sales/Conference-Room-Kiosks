@@ -75,17 +75,17 @@ export class CelebrationService {
   async get(now = new Date()) {
     const b = this.config.birthdays;
     const date = todayIn(b.timeZone, now);
-    if (!this.enabled) return { date, celebrations: [], holiday: null };
+    if (!this.enabled) return { date, celebrations: [], holiday: null, nextHoliday: null };
     if (this.cached && this.cachedKey === date && Date.now() - this.cachedAt < this.ttlMs) return this.cached;
     try {
-      const { celebrations, holiday, holidays } = await this.fetchDays(date, now);
-      this.cached = { date, celebrations, holiday };
+      const { celebrations, holiday, holidays, nextHoliday } = await this.fetchDays(date, now);
+      this.cached = { date, celebrations, holiday, nextHoliday };
       this.holidays = holidays;
       this.cachedKey = date;
       this.cachedAt = Date.now();
     } catch (error) {
       // Keep yesterday's answer off the screen: only reuse a result for the same date.
-      if (!(this.cached && this.cachedKey === date)) return { date, celebrations: [], holiday: null };
+      if (!(this.cached && this.cachedKey === date)) return { date, celebrations: [], holiday: null, nextHoliday: null };
     }
     return this.cached;
   }
@@ -181,6 +181,20 @@ export class CelebrationService {
         out.push(d === date ? entry : { ...entry, day: weekdayName(d) });
       }
     }
-    return { celebrations: out.slice(0, 12), holiday: holidays[date] ? { name: holidays[date] } : null, holidays };
+    // Heads-up: the next working day is a company holiday ("Closed tomorrow: Thanksgiving").
+    let nextHoliday = null;
+    if (!holidays[date]) {
+      for (let k = 1; k <= 8; k += 1) {
+        const d = addDays(date, k);
+        if (hours && !hours.days.includes(weekdayNumber(d))) continue;      // skip weekends
+        if (holidays[d]) {
+          let last = d;
+          while (holidays[addDays(last, 1)]) last = addDays(last, 1);       // a holiday that runs for several days
+          nextHoliday = { name: holidays[d], dayLabel: k === 1 ? 'tomorrow' : weekdayName(d), through: last !== d ? weekdayName(last) : null };
+        }
+        break;                                                              // only the very next working day matters
+      }
+    }
+    return { celebrations: out.slice(0, 12), holiday: holidays[date] ? { name: holidays[date] } : null, holidays, nextHoliday };
   }
 }

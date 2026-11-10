@@ -115,6 +115,10 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     changeCheckSeconds: /^(off|false|no)$/i.test(String(env.CHANGE_CHECK_SECONDS || '')) ? 0 : (String(env.CHANGE_CHECK_SECONDS ?? '').trim() === '0' ? 0 : integerValue(env.CHANGE_CHECK_SECONDS, 15, 5, 3600)),
     // Optional shared secret that Microsoft change notifications must carry (see /api/notifications).
     graphClientState: String(env.GRAPH_CLIENT_STATE || '').trim(),
+    // Tablet offline alerts: a tablet that has not checked in for this long (during office hours) raises an alert.
+    // ALERT_WEBHOOK_URL is optional (Teams, Slack or similar incoming webhook); alerts always show on the dashboard.
+    alertAfterMinutes: integerValue(env.ALERT_AFTER_MINUTES, 10, 1, 1440),
+    alertWebhookUrl: String(env.ALERT_WEBHOOK_URL || '').trim(),
     // Outside these hours the display shows "Closed" instead of "Available". null turns it off.
     officeHours: loadOfficeHours(env),
     birthdays: {
@@ -132,6 +136,7 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     },
     rooms: loadRooms(env, cwd)
   };
+  if (config.alertWebhookUrl && !/^https:\/\//i.test(config.alertWebhookUrl)) throw new Error('ALERT_WEBHOOK_URL must start with https://');
   const birthdayZone = String(env.BIRTHDAY_TIME_ZONE || '').trim() || config.rooms[0].timeZone;
   try { new Intl.DateTimeFormat('en-US', { timeZone: birthdayZone }).format(); }
   catch { throw new Error(`BIRTHDAY_TIME_ZONE is not a valid IANA time zone: ${birthdayZone}`); }

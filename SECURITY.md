@@ -11,3 +11,4 @@
 - Pages may be framed by the same origin only (`x-frame-options: SAMEORIGIN`), which the preview page needs. `/preview.html` is a review tool; block it in Nginx on public kiosks if you do not want it served.
 
 Report suspected vulnerabilities privately to the repository owner. Do not open a public issue containing secrets or tenant details.
+- `ALERT_WEBHOOK_URL` is a secret (anyone with it can post into your channel). Keep it in `.env` only. Alerts contain room and tablet names but no calendar details.

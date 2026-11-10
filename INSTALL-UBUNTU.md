@@ -176,7 +176,11 @@ OFFICE_HOURS_START=08:00
 OFFICE_HOURS_END=17:00
 OFFICE_DAYS=1-5
 CHANGE_CHECK_SECONDS=15
+ALERT_AFTER_MINUTES=10
+ALERT_WEBHOOK_URL=
 ```
+
+Tablet offline alerts: a tablet that has not checked in for `ALERT_AFTER_MINUTES` during office hours (and not on a company holiday) is listed under "Recent alerts" on the dashboard and written to the service log (`journalctl -u m365-room-display | grep ALERT`). To also get them in a chat tool, create an incoming webhook there and put its https address in `ALERT_WEBHOOK_URL`; the server posts `{"text": "..."}`. Teams workflow webhooks may need a different message shape; if nothing arrives, check the log for "Alert webhook" lines.
 
 `CHANGE_CHECK_SECONDS` is how often the server looks at each room calendar to spot changes (5 to 3600, 0 turns it off). Tablets are updated right away when something changes, so no public web address or Microsoft webhook is needed. With 2 rooms and the default this is about 8 extra Microsoft Graph requests a minute.
 

@@ -131,6 +131,69 @@ export function createAppServer(options = {}) {
     const hit = latest.get(roomId);
     return hit && Date.now() - hit.at < maxAgeMs ? hit.events : refreshRoom(roomId);
   }
+  // ---- Tablet offline alerts ----
+  // A tablet that stops checking in during office hours raises one alert (and one "back online" when it returns).
+  // Alerts always show on the dashboard; if ALERT_WEBHOOK_URL is set they are also posted there as {"text": "..."}.
+  const alerts = [];
+  const alertState = new Map();            // key -> alerted?
+  const startedAt = Date.now();
+  async function sendAlert(text) {
+    alerts.unshift({ at: new Date().toISOString(), text });
+    alerts.length = Math.min(alerts.length, 20);
+    logger.warn?.(`ALERT: ${text}`);
+    if (!config.alertWebhookUrl) return;
+    try {
+      const response = await (options.fetchImpl || fetch)(config.alertWebhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(5000) });
+      if (!response.ok) logger.error?.(`Alert webhook answered ${response.status}`);
+    } catch (error) { logger.error?.(`Alert webhook failed: ${error.message}`); }
+  }
+  function localClock(timeZone, ms) {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(ms));
+    const part = type => parts.find(p => p.type === type).value;
+    return { day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(part('weekday')), minutes: Number(part('hour')) * 60 + Number(part('minute')) };
+  }
+  // True once the office has been open for at least the alert delay (so nothing fires the moment the doors open).
+  function officeSettled(room, ms) {
+    const hours = config.officeHours;
+    if (hours) {
+      const clock = localClock(room.timeZone, ms);
+      if (!hours.days.includes(clock.day) || clock.minutes < hours.startMinutes + config.alertAfterMinutes || clock.minutes >= hours.endMinutes) return false;
+    }
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: room.timeZone }).format(new Date(ms));
+    return !celebrations.holidayOn?.(today);
+  }
+  function clockText(room, ms) { return new Intl.DateTimeFormat('en-US', { timeZone: room.timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(ms)); }
+  async function checkTablets(ms = Date.now()) {
+    const delay = config.alertAfterMinutes * 60000;
+    for (const [key, tablet] of [...tablets]) {          // forget tablets that have been gone for a week
+      if (ms - Date.parse(tablet.lastSeen) > 7 * 86400000) { tablets.delete(key); alertState.delete(key); }
+    }
+    for (const room of config.rooms) {
+      if (!officeSettled(room, ms)) continue;
+      const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id);
+      for (const tablet of roomTablets) {
+        const key = `${room.id}:${tablet.tabletId}`;
+        const quietFor = ms - Date.parse(tablet.lastSeen);
+        if (quietFor >= delay && !alertState.get(key)) {
+          alertState.set(key, true);
+          await sendAlert(`${room.name}: the tablet "${tablet.name}" has not checked in since ${clockText(room, Date.parse(tablet.lastSeen))} (${Math.round(quietFor / 60000)} minutes). It may be off, asleep or disconnected.`);
+        } else if (quietFor < config.tabletOfflineSeconds * 1000 && alertState.get(key)) {
+          alertState.delete(key);
+          await sendAlert(`${room.name}: the tablet "${tablet.name}" is back online.`);
+        }
+      }
+      const noneKey = `${room.id}:none`;
+      if (!roomTablets.length && ms - startedAt >= delay && !alertState.get(noneKey)) {
+        alertState.set(noneKey, true);
+        await sendAlert(`${room.name}: no tablet has checked in since the server started ${Math.round((ms - startedAt) / 60000)} minutes ago.`);
+      } else if (roomTablets.length && alertState.get(noneKey)) {
+        alertState.delete(noneKey);
+        await sendAlert(`${room.name}: a tablet has checked in again.`);
+      }
+    }
+  }
+  let monitor = null;
+
   let watcher = null;
   let lastWatchError = 0;
   function startWatcher() {
@@ -248,7 +311,7 @@ export function createAppServer(options = {}) {
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
             return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: controls.get(room.id), error };
           }));
-          return sendJson(res, 200, { rooms, generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { rooms, alerts, generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
         const match = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/control$/);
         if (req.method === 'POST' && match) {
@@ -278,9 +341,10 @@ export function createAppServer(options = {}) {
     }
   });
 
-  server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); });
-  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom };
+  server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
+  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, alerts };
   if (options.startSubscriptions !== false) startWatcher();
+  if (options.startSubscriptions !== false) { monitor = setInterval(() => checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`)), 60000); monitor.unref?.(); }
   if (options.startSubscriptions !== false) subscriptions.start().catch(error => logger.error('Subscriptions did not start:', error.message));
   return server;
 }

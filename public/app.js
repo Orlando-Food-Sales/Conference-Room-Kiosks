@@ -49,7 +49,7 @@ function fitRows() {
   rows.forEach(function (row) { row.classList.remove('hidden'); });
   var limit = list.clientHeight;
   rows.forEach(function (row, index) {
-    if (index > 0 && row.offsetTop + row.offsetHeight > limit + 1) row.classList.add('hidden');
+    if (row.offsetTop + row.offsetHeight > limit + 1) row.classList.add('hidden');
   });
 }
 window.addEventListener('resize', fitRows);
@@ -92,7 +92,17 @@ function showCelebrations(items) {
   fitRows();
 }
 function applyHoliday(name) { var next = name || ''; if (next !== (state.holiday || '')) { state.holiday = next; render(); } }
+// "Closed tomorrow: Thanksgiving" heads-up. Preview: ?closedsoon=Thanksgiving (or none).
+function showClosedSoon(info) {
+  var box = $('closedSoon');
+  var text = info ? 'Closed ' + info.dayLabel + (info.through ? ' through ' + info.through : '') + ': ' + info.name : '';
+  box.textContent = text;
+  box.classList.toggle('hidden', !text);
+  fitRows();
+}
 async function loadCelebrations() {
+  var closedPreview = new URLSearchParams(location.search).get('closedsoon');
+  if (closedPreview !== null) showClosedSoon(closedPreview && closedPreview !== 'none' ? { name: closedPreview, dayLabel: 'tomorrow', through: null } : null);
   var holidayPreview = new URLSearchParams(location.search).get('holiday');   // preview: ?holiday=Thanksgiving or none
   if (holidayPreview !== null) applyHoliday(holidayPreview === 'none' ? '' : holidayPreview);
   var preview = new URLSearchParams(location.search).get('celebrate');
@@ -108,6 +118,7 @@ async function loadCelebrations() {
     var data = await api('/api/celebrations?room=' + encodeURIComponent(state.room.id));
     showCelebrations(state.room.showCelebrations === false ? [] : data.celebrations);
     if (new URLSearchParams(location.search).get('holiday') === null) applyHoliday(data.holiday && data.holiday.name);
+    if (new URLSearchParams(location.search).get('closedsoon') === null) showClosedSoon(data.nextHoliday);
   } catch (_) { /* keep what is showing */ }
 }
 setInterval(loadCelebrations, 15 * 60 * 1000);
