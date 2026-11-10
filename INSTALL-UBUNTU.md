@@ -12,7 +12,7 @@ Prepare:
 
 - A new Ubuntu Server 22.04 or 24.04 LTS host with a static/reserved IP.
 - A sudo-capable administrator account and working DNS/NTP.
-- Outbound HTTPS access to `login.microsoftonline.com`, `graph.microsoft.com`, and `nodejs.org`.
+- Outbound HTTPS access to `login.microsoftonline.com`, `graph.microsoft.com`, `api.open-meteo.com` (display weather; optional), and `nodejs.org`.
 - The Microsoft 365 room mailbox addresses and IANA time zones (for example, `America/New_York`).
 - A Microsoft Entra administrator who can grant application permissions.
 
@@ -132,6 +132,7 @@ Rules:
 - `email` must be the actual Exchange Online room mailbox.
 - `timeZone` must be an IANA name.
 - Keep `allowQuickBooking` false unless `Calendars.ReadWrite` was granted and booking is required.
+- `showCelebrations` (optional, default true) controls birthdays and anniversaries on that room's display; set it to `false` for client-facing rooms.
 
 Validate the JSON:
 

@@ -4,13 +4,15 @@
     "name": "Front Conference Room",
     "email": "frontconference@example.com",
     "timeZone": "America/New_York",
-    "allowQuickBooking": false
+    "allowQuickBooking": false,
+    "showCelebrations": true
   },
   {
     "id": "back",
     "name": "Back Conference Room",
     "email": "backconference@example.com",
     "timeZone": "America/New_York",
-    "allowQuickBooking": false
+    "allowQuickBooking": false,
+    "showCelebrations": true
   }
 ]

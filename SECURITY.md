@@ -6,5 +6,8 @@
 - Scope application access to the room mailboxes with Exchange Online Application RBAC.
 - Rotate the Entra client secret and `ADMIN_TOKEN` on a defined schedule and after any suspected disclosure.
 - Use HTTPS when traffic crosses an untrusted network.
+- The server makes one optional outbound call to `api.open-meteo.com` for weather. Only the configured latitude and longitude are sent; disable it with `WEATHER_ENABLED=false`.
+- Birthdays and anniversaries are public on every tablet that shows them. Show first names only (the default) and set `"showCelebrations": false` on client-facing rooms.
+- Pages may be framed by the same origin only (`x-frame-options: SAMEORIGIN`), which the preview page needs. `/preview.html` is a review tool; block it in Nginx on public kiosks if you do not want it served.
 
 Report suspected vulnerabilities privately to the repository owner. Do not open a public issue containing secrets or tenant details.

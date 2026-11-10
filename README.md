@@ -1,31 +1,54 @@
-# Microsoft 365 Room Display — GitHub Update Bundle
+# Microsoft 365 Room Display
 
-This bundle updates the previously supplied **v2 known-good repository** to the
-validated **single-line upcoming meeting layout** used by the working deployment.
+Multi-room meeting-room display for tablets, with an operations dashboard. It reads room calendars
+from Microsoft 365 (Microsoft Graph), or runs in demo mode with sample meetings. No runtime
+dependencies; Node.js 20 or later.
 
-## What changes
+## What it shows
 
-- `public/app.js`: gives upcoming meetings dedicated indicator, time, subject,
-  and organizer columns.
-- `public/styles.css`: adds compact single-line desktop styling and a tablet
-  fallback that hides the organizer below 800 px.
-- The existing Microsoft 365/Graph, room selection, SSE, tablet heartbeat,
-  quick-booking, dashboard, and UUID compatibility logic is not changed.
+- Room status (Available / In use), clock, and today's schedule with NOW and NEXT badges.
+- Optional quick booking from the tablet.
+- Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
+  mood that follows the weather (clear, clouds, rain, storm, snow, fog).
+- Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
+  thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
+- Snoopy outfits chosen by date (Christmas, New Year, Halloween, Thanksgiving) then by weather
+  (winter coat, raincoat, Hawaiian shirt). See `public/snoopy/outfits.json` and
+  `public/snoopy/outfits/README.md`.
+- Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card.
+- Dashboard at `/dashboard` (needs `ADMIN_TOKEN`): room overview, tablet status, messages, display on/off.
 
-## Contents
+## Run it
 
-- `UPDATING-GITHUB.md` — exact update and commit procedure.
-- `tools/apply_single_line_update.py` — recommended safety-checked updater.
-- `patches/0001-single-line-upcoming-meetings.patch` — reviewable Git patch.
-- `public/styles.css` — complete replacement stylesheet based on the known-good
-  base plus the validated layout.
-- `snippets/` — exact JavaScript and CSS blocks for code review.
-- `CHECKSUMS.sha256` — SHA-256 integrity hashes.
-- `verification/VERIFICATION.txt` — build and test record.
+```bash
+DEMO_MODE=true npm start     # http://localhost:3000/room/room
+npm run check                # syntax check and tests
+```
+
+Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`.
+Copy `.env.example` to `.env` and `config/rooms.example.json` to `config/rooms.json`.
+
+## Settings
+
+All settings are environment variables; see `.env.example`.
+
+- Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `ROOMS_FILE`
+- Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`
+- Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms)
+- Birthdays: `BIRTHDAY_CALENDAR_MAILBOX`, `BIRTHDAY_CALENDAR_NAME`, `BIRTHDAY_CALENDAR_ID`,
+  `BIRTHDAY_NAME_STYLE`, `BIRTHDAY_TIME_ZONE`. Only titles containing "birthday", "b'day" or
+  "anniversary" are used; PTO and holidays on the same calendar are ignored.
+- Per room, in `rooms.json`: `allowQuickBooking`, and `showCelebrations` (set `false` for
+  client-facing rooms).
+
+## Preview and testing URLs
+
+`/preview.html` shows every theme, weather, room state, screen size, Snoopy animation, outfit and
+celebration. It is a review tool; remove or block it on public kiosks if you prefer.
+
+Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
+`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `nostream=1`.
 
 ## Security
 
-This bundle contains no `.env`, tenant ID, client ID, client secret, administrator
-token, room mailbox address, production hostname, IP address, or backup archive.
-Use a private repository if your main project contains organization-specific room
-configuration.
+No secrets, tenant IDs, room mailboxes or backups belong in this repository. See `SECURITY.md`.
