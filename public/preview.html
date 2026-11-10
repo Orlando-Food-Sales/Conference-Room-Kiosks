@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Room Display Preview</title>
+    <link rel="stylesheet" href="/preview.css">
+</head>
+
+<body>
+    <aside class="panel">
+        <h1>Room display preview</h1>
+        <p class="hint">Pick any combination. One live display is shown at a time.</p>
+
+        <section>
+            <h2>Snoopy animation</h2>
+            <div id="gallery" class="gallery"></div>
+        </section>
+
+        <section class="controls">
+            <label>Theme
+                <select id="theme">
+                    <option value="dark" selected>Dark (default)</option>
+                    <option value="light">Light</option>
+                    <option value="auto">Auto (day/night)</option>
+                </select>
+            </label>
+            <label>Weather
+                <select id="weather">
+                    <option value="none" selected>None</option>
+                    <option value="">Live weather</option>
+                    <option value="clear">Clear</option>
+                    <option value="clouds">Clouds</option>
+                    <option value="rain">Rain</option>
+                    <option value="storm">Storm</option>
+                    <option value="snow">Snow</option>
+                    <option value="fog">Fog</option>
+                </select>
+            </label>
+            <label>Room state
+                <select id="state">
+                    <option value="free" selected>Free</option>
+                    <option value="soon">Meeting starts in 3 min</option>
+                    <option value="busy">In use</option>
+                    <option value="ended">Meeting just ended</option>
+                    <option value="error">Calendar error</option>
+                </select>
+            </label>
+            <label>Screen
+                <select id="screen">
+                    <option value="1280x800" selected>Desktop 1280×800</option>
+                    <option value="1024x768">Tablet landscape 1024×768</option>
+                    <option value="800x1280">Tablet portrait 800×1280</option>
+                    <option value="420x800">Narrow 420×800</option>
+                </select>
+            </label>
+        </section>
+
+        <section>
+            <h2>Tour every combination</h2>
+            <div class="tour">
+                <button id="tourPrev" type="button">Prev</button>
+                <button id="tourPlay" type="button">Play</button>
+                <button id="tourNext" type="button">Next</button>
+            </div>
+            <p id="tourInfo" class="hint">Cycles through every Snoopy animation, theme, weather and room state.</p>
+        </section>
+
+        <p class="hint">Direct link: <a id="link" href="/room/room" target="_blank" rel="noopener">open this view</a>
+        </p>
+    </aside>
+
+    <main class="stage">
+        <p id="caption" class="caption"></p>
+        <div id="frameBox" class="frame-box"><iframe id="frame" title="Room display preview"></iframe></div>
+    </main>
+    <script src="/preview.js"></script>
+</body>
+
+</html>

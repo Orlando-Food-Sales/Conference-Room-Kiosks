@@ -1,0 +1,152 @@
+* {
+    box-sizing: border-box
+}
+
+body {
+    margin: 0;
+    display: flex;
+    min-height: 100vh;
+    background: #1b1b1d;
+    color: #eee;
+    font-family: Inter, system-ui, sans-serif
+}
+
+.panel {
+    width: 340px;
+    flex: none;
+    padding: 20px;
+    border-right: 1px solid #333;
+    overflow-y: auto;
+    max-height: 100vh
+}
+
+h1 {
+    margin: 0 0 4px;
+    font-size: 1.25rem
+}
+
+h2 {
+    margin: 22px 0 10px;
+    font-size: .8rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: #ef5b62
+}
+
+.hint {
+    color: #aaa;
+    font-size: .85rem;
+    margin: 4px 0
+}
+
+a {
+    color: #ef5b62
+}
+
+.gallery {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px
+}
+
+.gallery button {
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    border: 1px solid #3a3a3d;
+    border-radius: 10px;
+    background: #242427;
+    color: #ddd;
+    font: inherit;
+    font-size: .72rem;
+    cursor: pointer
+}
+
+.gallery button[aria-pressed="true"] {
+    border-color: #ef5b62;
+    background: #3a2327
+}
+
+.gallery .thumb {
+    width: 64px;
+    height: 69px;
+    background: url(/snoopy/snoopy.png) 0 0 / 800% 1100% no-repeat
+}
+
+.controls {
+    display: grid;
+    gap: 12px;
+    margin-top: 20px
+}
+
+label {
+    display: grid;
+    gap: 5px;
+    font-size: .8rem;
+    color: #bbb
+}
+
+select,
+button {
+    font: inherit
+}
+
+select {
+    padding: 9px;
+    border-radius: 8px;
+    border: 1px solid #3a3a3d;
+    background: #242427;
+    color: #eee
+}
+
+.tour {
+    display: flex;
+    gap: 8px
+}
+
+.tour button {
+    flex: 1;
+    padding: 9px;
+    border-radius: 8px;
+    border: 1px solid #3a3a3d;
+    background: #242427;
+    color: #eee;
+    cursor: pointer
+}
+
+.tour button#tourPlay {
+    background: #ef5b62;
+    border-color: #ef5b62;
+    color: #1a0507;
+    font-weight: 700
+}
+
+.stage {
+    flex: 1;
+    min-width: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center
+}
+
+.caption {
+    margin: 0 0 12px;
+    color: #ccc;
+    font-size: .9rem;
+    text-align: center
+}
+
+.frame-box {
+    overflow: hidden;
+    border-radius: 10px;
+    border: 1px solid #444;
+    background: #000
+}
+
+iframe {
+    border: 0;
+    display: block;
+    transform-origin: 0 0
+}
