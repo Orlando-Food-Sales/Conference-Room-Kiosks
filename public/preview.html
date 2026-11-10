@@ -45,10 +45,19 @@
                 </select>
             </label>
             <label>Birthdays and anniversaries
-        <select id="celebrate"><option value="" selected>None</option><option value="birthday">Birthdays</option><option value="anniversary">Work anniversary</option><option value="both">Both</option></select>
+        <select id="celebrate"><option value="none" selected>Hide</option><option value="birthday">Birthdays</option><option value="anniversary">Work anniversary</option><option value="both">Both</option></select>
       </label>
       <label>One-tap booking buttons
-        <select id="quickbook"><option value="" selected>Off</option><option value="1">On</option></select>
+        <select id="quickbook"><option value="" selected>Auto (room setting)</option><option value="1">Show</option><option value="0">Hide</option></select>
+      </label>
+      <label>Screen power
+        <select id="display"><option value="" selected>On</option><option value="off">Off (black screen)</option></select>
+      </label>
+      <label>Admin message banner
+        <select id="message"><option value="" selected>Hide</option><option value="Lunch is in the kitchen">Show: Lunch is in the kitchen</option><option value="Fire drill at 2 PM. Please leave through the front door.">Show: long message</option></select>
+      </label>
+      <label>Office hours
+        <select id="hours"><option value="">Auto (real clock)</option><option value="open" selected>Open</option><option value="closed">Closed (after hours)</option></select>
       </label>
       <label>Room state
                 <select id="state">

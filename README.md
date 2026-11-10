@@ -8,6 +8,7 @@ dependencies; Node.js 20 or later.
 
 - Room status (Available / In use), clock, and today's schedule with NOW and NEXT badges.
 - "Free until 2:30 PM" on the status card. For rooms with `allowQuickBooking`, one-tap 15, 30 and 60 minute buttons (only those that fit before the next meeting) plus a "Reserve now" form.
+- Office hours (default 8:00 AM to 5:00 PM, Monday to Friday, in the room's time zone): outside them the display says "Closed" instead of "Available" and hides booking. A meeting still in progress shows "In use". During the day, "Free until" stops at closing time and booking buttons never run past it.
 - Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
   mood that follows the weather (clear, clouds, rain, storm, snow, fog).
@@ -35,6 +36,7 @@ All settings are environment variables; see `.env.example`.
 
 - Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `ROOMS_FILE`
 - Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`
+- Office hours: `OFFICE_HOURS_START`, `OFFICE_HOURS_END`, `OFFICE_DAYS`, or `OFFICE_HOURS=off`
 - Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms)
 - Birthdays: `BIRTHDAY_CALENDAR_MAILBOX`, `BIRTHDAY_CALENDAR_NAME`, `BIRTHDAY_CALENDAR_ID`,
   `BIRTHDAY_NAME_STYLE`, `BIRTHDAY_TIME_ZONE`. Only titles containing "birthday", "b'day" or
@@ -48,7 +50,7 @@ All settings are environment variables; see `.env.example`.
 celebration. It is a review tool; remove or block it on public kiosks if you prefer.
 
 Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
-`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `quickbook=1` (show the booking buttons), `nostream=1`.
+`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `quickbook=1` (show the booking buttons), `hours` (open or closed), `nostream=1`.
 
 ## Security
 

@@ -172,7 +172,12 @@ PUBLIC_BASE_URL=
 WEATHER_LATITUDE=40.9595
 WEATHER_LONGITUDE=-74.1252
 BIRTHDAY_CALENDAR_MAILBOX=
+OFFICE_HOURS_START=08:00
+OFFICE_HOURS_END=17:00
+OFFICE_DAYS=1-5
 ```
+
+Office hours use each room's `timeZone`. Outside them (and on days not in `OFFICE_DAYS`, where 0 is Sunday) the display shows "Closed" instead of "Available". A meeting still in progress shows "In use". Set `OFFICE_HOURS=off` to always show availability.
 
 Weather uses one location for all rooms (the defaults are Glen Rock, NJ; set `WEATHER_ENABLED=false` to turn it off). The other optional settings are listed in `.env.example`.
 

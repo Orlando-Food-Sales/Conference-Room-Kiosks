@@ -520,3 +520,7 @@ body::before {
 body.display-off { position: fixed; inset: 0; display: block; background: #000; z-index: 50; }
 body.display-off > * { display: none !important; }
 body.display-off::before, body.display-off::after { display: none; }
+
+/* After hours: neutral instead of green. */
+.status-panel.closed:before { background: var(--muted); }
+.status-panel.closed .status-copy > p:first-of-type { color: var(--muted); }

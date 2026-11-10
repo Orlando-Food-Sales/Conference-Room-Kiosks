@@ -150,7 +150,7 @@ export function createAppServer(options = {}) {
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
-        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, control: controls.get(room.id) });
+        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: controls.get(room.id) });
       }
       if (req.method === 'GET' && url.pathname === '/api/events') {
         const roomId = url.searchParams.get('room') || config.rooms[0].id;

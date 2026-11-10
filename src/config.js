@@ -18,6 +18,36 @@ function floatValue(value, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function timeOfDay(value, fallback, name) {
+  const text = String(value ?? '').trim();
+  if (!text) return fallback;
+  const match = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match || Number(match[1]) > 24 || Number(match[2]) > 59) throw new Error(`${name} must look like 08:00 or 17:30.`);
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function weekdays(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return [1, 2, 3, 4, 5];
+  const days = new Set();
+  for (const part of text.split(',')) {
+    const range = part.trim().match(/^([0-6])(?:-([0-6]))?$/);
+    if (!range) throw new Error('OFFICE_DAYS must look like 1-5 or 1,2,3,4,5 (0 is Sunday).');
+    const from = Number(range[1]);
+    const to = range[2] === undefined ? from : Number(range[2]);
+    for (let d = from; d <= to; d += 1) days.add(d);
+  }
+  return [...days].sort();
+}
+
+function loadOfficeHours(env) {
+  if (/^(off|false|0|no)$/i.test(String(env.OFFICE_HOURS || ''))) return null;
+  const startMinutes = timeOfDay(env.OFFICE_HOURS_START, 8 * 60, 'OFFICE_HOURS_START');
+  const endMinutes = timeOfDay(env.OFFICE_HOURS_END, 17 * 60, 'OFFICE_HOURS_END');
+  if (endMinutes <= startMinutes) throw new Error('OFFICE_HOURS_END must be after OFFICE_HOURS_START.');
+  return { startMinutes, endMinutes, days: weekdays(env.OFFICE_DAYS) };
+}
+
 function roomId(value) {
   const id = String(value || '').trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(id)) {
@@ -80,6 +110,8 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     eventRefreshSeconds: integerValue(env.EVENT_REFRESH_SECONDS, 60, 15, 3600),
     tabletOfflineSeconds: integerValue(env.TABLET_OFFLINE_SECONDS, 120, 30, 86400),
     publicBaseUrl: String(env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+    // Outside these hours the display shows "Closed" instead of "Available". null turns it off.
+    officeHours: loadOfficeHours(env),
     birthdays: {
       mailbox: String(env.BIRTHDAY_CALENDAR_MAILBOX || '').trim(),
       calendarId: String(env.BIRTHDAY_CALENDAR_ID || '').trim(),
