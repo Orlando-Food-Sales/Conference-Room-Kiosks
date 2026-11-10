@@ -20,7 +20,7 @@
     var theme = 'dark';
     if (forcedTheme === 'light') theme = 'light';
     else if (forcedTheme === 'auto') theme = weather ? (weather.isDay ? 'light' : 'dark') : clockTheme();
-    var condition = forcedWeather || (weather && weather.condition) || '';
+    var condition = forcedWeather === 'none' ? '' : (forcedWeather || (weather && weather.condition) || '');
     root.dataset.theme = theme;
     if (condition) root.dataset.weather = condition; else delete root.dataset.weather;
     var meta = document.querySelector('meta[name="theme-color"]');

@@ -472,3 +472,31 @@ body::before {
     animation: none !important;
   }
 }
+
+/* Snoopy (public/snoopy.js). Sits in the empty right side of the status card. */
+.snoopy {
+  position: absolute;
+  right: 240px;
+  top: 50%;
+  transform: translateY(-50%) translateX(var(--snoopy-x, 0px));
+  width: 200px;
+  height: 216px;
+  background: url(/snoopy/snoopy.png) 0 0 / 800% 1100% no-repeat;
+  cursor: pointer;
+  filter: drop-shadow(0 6px 10px var(--shadow));
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 800px) {
+  .snoopy {
+    right: 16px;
+    top: 16px;
+    transform: none;
+    width: 98px;
+    height: 106px;
+  }
+}
+
+.status-panel {
+  min-height: 250px;
+}
