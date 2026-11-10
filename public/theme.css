@@ -515,3 +515,8 @@ body::before {
 .quick-book { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
 .quick-book button { min-height: 48px; padding: 12px 24px; border: 2px solid var(--green); border-radius: 999px; background: transparent; color: var(--green); font: 800 1.05rem inherit; cursor: pointer; }
 .quick-book button:hover, .quick-book button:focus-visible { background: var(--green); color: #fff; }
+
+/* Display off (from the dashboard): a plain black screen. The page keeps running so it can wake up. */
+body.display-off { position: fixed; inset: 0; display: block; background: #000; z-index: 50; }
+body.display-off > * { display: none !important; }
+body.display-off::before, body.display-off::after { display: none; }

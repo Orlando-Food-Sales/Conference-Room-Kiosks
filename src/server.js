@@ -86,12 +86,12 @@ function validateBooking(body) {
 }
 
 function serveStatic(req, res, file) {
-  const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+  const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
   const full = path.resolve(PUBLIC, file);
   if (!full.startsWith(`${PUBLIC}${path.sep}`) || !fs.existsSync(full) || !fs.statSync(full).isFile()) return false;
   securityHeaders(res);
   const stat = fs.statSync(full);
-  res.writeHead(200, { 'content-type': types[path.extname(full)] || 'application/octet-stream', 'content-length': stat.size, 'cache-control': path.extname(full) === '.html' ? 'no-store' : 'public, max-age=300' });
+  res.writeHead(200, { 'content-type': types[path.extname(full)] || 'application/octet-stream', 'content-length': stat.size, 'cache-control': path.extname(full) === '.html' ? 'no-store' : (['.js', '.css', '.json'].includes(path.extname(full)) ? 'no-cache' : 'public, max-age=300') });
   if (req.method === 'HEAD') res.end(); else fs.createReadStream(full).pipe(res);
   return true;
 }
