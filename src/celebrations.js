@@ -39,6 +39,22 @@ function todayIn(timeZone, now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
 
+// Calendar dates are plain YYYY-MM-DD strings; noon UTC keeps day arithmetic clear of DST.
+function addDays(key, n) {
+  const d = new Date(`${key}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function weekdayNumber(key) { return new Date(`${key}T12:00:00Z`).getUTCDay(); }
+function weekdayName(key) {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${key}T12:00:00Z`));
+}
+function appliesOn(event, date) {
+  const start = String(event.start?.dateTime || '').slice(0, 10);
+  const end = String(event.end?.dateTime || '').slice(0, 10);
+  return event.isAllDay ? (start <= date && date < end) : start === date;
+}
+
 export class CelebrationService {
   constructor(config, tokenProvider, fetchImpl = fetch) {
     this.config = config;
@@ -48,6 +64,7 @@ export class CelebrationService {
     this.cachedKey = '';
     this.cachedAt = 0;
     this.ttlMs = 15 * 60 * 1000;
+    this.holidays = {};      // YYYY-MM-DD -> holiday name, for today and the next week
   }
 
   get enabled() {
@@ -61,8 +78,9 @@ export class CelebrationService {
     if (!this.enabled) return { date, celebrations: [], holiday: null };
     if (this.cached && this.cachedKey === date && Date.now() - this.cachedAt < this.ttlMs) return this.cached;
     try {
-      const { celebrations, holiday } = await this.fetchToday(date, now);
+      const { celebrations, holiday, holidays } = await this.fetchDays(date, now);
       this.cached = { date, celebrations, holiday };
+      this.holidays = holidays;
       this.cachedKey = date;
       this.cachedAt = Date.now();
     } catch (error) {
@@ -70,6 +88,12 @@ export class CelebrationService {
       if (!(this.cached && this.cachedKey === date)) return { date, celebrations: [], holiday: null };
     }
     return this.cached;
+  }
+
+  // Name of the company holiday on a date (YYYY-MM-DD), or null. Uses the last successful lookup,
+  // so an unreachable calendar never blocks anything.
+  holidayOn(dateKey) {
+    return this.holidays[dateKey] || null;
   }
 
   async graph(url, timeZone) {
@@ -93,12 +117,12 @@ export class CelebrationService {
     return picked.slice(0, 10).map(c => ({ id: c.id, name: String(c.name || '') }));
   }
 
-  async fetchToday(date, now) {
+  async fetchDays(date, now) {
     const b = this.config.birthdays;
     const day = 24 * 60 * 60 * 1000;
     const params = new URLSearchParams({
       startDateTime: new Date(now.getTime() - day).toISOString(),
-      endDateTime: new Date(now.getTime() + 2 * day).toISOString(),
+      endDateTime: new Date(now.getTime() + 10 * day).toISOString(),
       '$select': 'subject,start,end,isAllDay,isCancelled',
       '$top': '100'
     });
@@ -114,30 +138,49 @@ export class CelebrationService {
         next = body['@odata.nextLink'] || '';
       }
     }
+    const live = events.filter(event => !event.isCancelled);
+
+    // Company holidays for today and the next 8 days.
+    const holidays = {};
+    for (let k = 0; k <= 8; k += 1) {
+      const d = addDays(date, k);
+      let found = null;
+      let publicName = '';
+      for (const event of live) {
+        if (!event.isAllDay || !appliesOn(event, d)) continue;
+        const name = holidayName(event.subject);
+        if (name !== null && found === null) found = name;
+        // A bare "Holiday" entry borrows the name from the public holidays calendar for the same day.
+        else if (name === null && /holiday/i.test(event.calendarName) && !publicName) publicName = String(event.subject || '').trim().slice(0, 60);
+      }
+      if (found !== null) holidays[d] = found || publicName || 'Company holiday';
+    }
+
+    // Today, plus the closed days that follow when today is a working day (a Saturday birthday shows on Friday).
+    const hours = this.config.officeHours;
+    const closed = d => Boolean(holidays[d]) || Boolean(hours && !hours.days.includes(weekdayNumber(d)));
+    const days = [date];
+    if (!closed(date)) {
+      for (let k = 1; k <= 7; k += 1) {
+        const d = addDays(date, k);
+        if (!closed(d)) break;
+        days.push(d);
+      }
+    }
+
     const seen = new Set();
     const out = [];
-    let holiday = null;
-    let publicHoliday = '';
-    for (const event of events) {
-      if (event.isCancelled) continue;
-      const start = String(event.start?.dateTime || '').slice(0, 10);
-      const end = String(event.end?.dateTime || '').slice(0, 10);
-      const today = event.isAllDay ? (start <= date && date < end) : start === date;
-      if (!today) continue;
-      if (event.isAllDay) {
-        const name = holidayName(event.subject);
-        if (name !== null && !holiday) holiday = { name };
-        // A bare "Holiday" entry borrows the name from the public holidays calendar for the same day.
-        else if (name === null && /holiday/i.test(event.calendarName) && !publicHoliday) publicHoliday = String(event.subject || '').trim().slice(0, 60);
+    for (const d of days) {
+      for (const event of live) {
+        if (!appliesOn(event, d)) continue;
+        const entry = parseCelebration(event.subject, b.nameStyle);
+        if (!entry) continue;
+        const key = `${d}:${entry.kind}:${entry.name.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(d === date ? entry : { ...entry, day: weekdayName(d) });
       }
-      const entry = parseCelebration(event.subject, b.nameStyle);
-      if (!entry) continue;
-      const key = `${entry.kind}:${entry.name.toLowerCase()}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(entry);
     }
-    if (holiday && !holiday.name) holiday.name = publicHoliday || 'Company holiday';
-    return { celebrations: out.slice(0, 12), holiday };
+    return { celebrations: out.slice(0, 12), holiday: holidays[date] ? { name: holidays[date] } : null, holidays };
   }
 }

@@ -69,12 +69,18 @@ var requestedRoom = roomIdFromLocation(); if (requestedRoom) initializeRoom(requ
 // Preview without a calendar: ?celebrate=birthday|anniversary|both
 function celebrationLines(items) {
   function join(names) { return names.length > 1 ? names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1] : names[0]; }
-  var birthdays = items.filter(function (i) { return i.kind === 'birthday'; }).map(function (i) { return i.name; });
-  var anniversaries = items.filter(function (i) { return i.kind === 'anniversary'; });
+  // Today first, then the closed days that follow (for example a Saturday birthday shows on Friday).
+  var order = [], groups = {};
+  items.forEach(function (item) { var key = item.day || ''; if (!groups[key]) { groups[key] = []; order.push(key); } groups[key].push(item); });
   var lines = [];
-  if (birthdays.length) lines.push('\uD83C\uDF82 Happy birthday, ' + join(birthdays.slice(0, 4)) + (birthdays.length > 4 ? ' +' + (birthdays.length - 4) + ' more' : '') + '!');
-  anniversaries.slice(0, 3).forEach(function (i) { lines.push('\uD83C\uDF89 Happy ' + (i.years ? i.years + '-year ' : '') + 'work anniversary, ' + i.name + '!'); });
-  return lines;
+  order.forEach(function (key) {
+    var suffix = key ? ' (' + key + ')' : '';
+    var birthdays = groups[key].filter(function (i) { return i.kind === 'birthday'; }).map(function (i) { return i.name; });
+    var anniversaries = groups[key].filter(function (i) { return i.kind === 'anniversary'; });
+    if (birthdays.length) lines.push('\uD83C\uDF82 Happy birthday, ' + join(birthdays.slice(0, 4)) + (birthdays.length > 4 ? ' +' + (birthdays.length - 4) + ' more' : '') + suffix + '!');
+    anniversaries.slice(0, 3).forEach(function (i) { lines.push('\uD83C\uDF89 Happy ' + (i.years ? i.years + '-year ' : '') + 'work anniversary, ' + i.name + suffix + '!'); });
+  });
+  return lines.slice(0, 4);
 }
 function showCelebrations(items) {
   var box = $('celebration');
@@ -94,6 +100,7 @@ async function loadCelebrations() {
     var sample = [];
     if (preview === 'birthday' || preview === 'both') sample.push({ kind: 'birthday', name: 'Jane' }, { kind: 'birthday', name: 'Sam' });
     if (preview === 'anniversary' || preview === 'both') sample.push({ kind: 'anniversary', name: 'Alex', years: 5 });
+    if (preview === 'weekend') sample.push({ kind: 'birthday', name: 'Mabel', day: 'Saturday' }, { kind: 'anniversary', name: 'Alex', years: 5, day: 'Sunday' });
     return showCelebrations(sample);
   }
   if (!state.room) return;

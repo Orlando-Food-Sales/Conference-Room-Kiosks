@@ -115,6 +115,41 @@ export function createAppServer(options = {}) {
     for (const client of sseClients) if (client.roomId === roomId || client.roomId === '*') client.res.write(`event: ${type}\ndata: ${data}\n\n`);
   }
 
+  // Latest events per room. One fetch serves every tablet for a few seconds, and any difference from the
+  // previous fetch is pushed to the tablets straight away (this is what makes updates feel instant).
+  const latest = new Map();
+  async function refreshRoom(roomId) {
+    const window = roomWindow();
+    const events = await calendars.get(roomId).listEvents(window.start, window.end);
+    const key = JSON.stringify(events.map(e => [e.id, e.subject, e.start, e.end, e.organizer, e.isPrivate]));
+    const previous = latest.get(roomId);
+    latest.set(roomId, { at: Date.now(), events, key });
+    if (previous && previous.key !== key) notifyRoom(roomId, 'calendar.changed', { reason: 'change-detected' });
+    return events;
+  }
+  async function cachedEvents(roomId, maxAgeMs = 8000) {
+    const hit = latest.get(roomId);
+    return hit && Date.now() - hit.at < maxAgeMs ? hit.events : refreshRoom(roomId);
+  }
+  let watcher = null;
+  let lastWatchError = 0;
+  function startWatcher() {
+    if (!config.changeCheckSeconds || watcher) return;
+    let busy = false;
+    const tick = async () => {
+      if (busy) return;
+      busy = true;
+      for (const room of config.rooms) {
+        try { await refreshRoom(room.id); }
+        catch (error) { if (Date.now() - lastWatchError > 60000) { lastWatchError = Date.now(); logger.error?.(`Calendar change check failed for ${room.id}: ${error.message}`); } }
+      }
+      busy = false;
+    };
+    watcher = setInterval(tick, config.changeCheckSeconds * 1000);
+    watcher.unref?.();
+    setTimeout(tick, 1000).unref?.();
+  }
+
   const subscriptions = options.subscriptions || new SubscriptionManager({ onChange: value => notifyRoom(value.roomId || '*', 'graph.changed', value) });
 
   function clientIp(req) { return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(); }
@@ -161,7 +196,7 @@ export function createAppServer(options = {}) {
         const start = url.searchParams.get('start') || defaults.start;
         const end = url.searchParams.get('end') || defaults.end;
         if (!Number.isFinite(new Date(start).getTime()) || !Number.isFinite(new Date(end).getTime())) return sendJson(res, 400, { error: 'Invalid date range.' });
-        const events = await calendar.listEvents(start, end);
+        const events = (!url.searchParams.get('start') && !url.searchParams.get('end')) ? await cachedEvents(roomId) : await calendar.listEvents(start, end);
         return sendJson(res, 200, { roomId, events, generatedAt: new Date().toISOString() });
       }
       if (req.method === 'GET' && url.pathname === '/api/stream') {
@@ -186,6 +221,12 @@ export function createAppServer(options = {}) {
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
         if (!room.allowQuickBooking) return sendJson(res, 403, { error: 'Quick booking is disabled for this room.' });
         const booking = validateBooking(body);
+        // Company holidays are closed days: refuse bookings that start or end on one. If the holiday calendar
+        // cannot be read, bookings are allowed (the check never blocks on an outage).
+        try { await celebrations.get(); } catch { /* holiday lookup is best effort */ }
+        const dayOf = value => new Intl.DateTimeFormat('en-CA', { timeZone: room.timeZone }).format(new Date(value));
+        const closedFor = celebrations.holidayOn?.(dayOf(booking.start)) || celebrations.holidayOn?.(dayOf(new Date(booking.end).getTime() - 1));
+        if (closedFor) return sendJson(res, 409, { error: `The office is closed for ${closedFor}, so this room cannot be booked.` });
         const calendar = calendars.get(room.id);
         const overlapping = (await calendar.listEvents(booking.start, booking.end)).some(event => new Date(event.end) > new Date(booking.start) && new Date(event.start) < new Date(booking.end));
         if (overlapping) return sendJson(res, 409, { error: 'That time overlaps an existing meeting.' });
@@ -194,7 +235,7 @@ export function createAppServer(options = {}) {
         return sendJson(res, 201, { event });
       }
       if (url.pathname === '/api/notifications' && url.searchParams.has('validationToken')) return sendText(res, 200, url.searchParams.get('validationToken'));
-      if (req.method === 'POST' && url.pathname === '/api/notifications') { subscriptions.processNotifications((await readJson(req, 256000)).value || []); return sendText(res, 202, 'Accepted'); }
+      if (req.method === 'POST' && url.pathname === '/api/notifications') { subscriptions.processNotifications(((await readJson(req, 256000)).value || []).filter(value => !config.graphClientState || value.clientState === config.graphClientState)); return sendText(res, 202, 'Accepted'); }
       if (url.pathname.startsWith('/api/admin/')) {
         if (!config.adminToken) return sendJson(res, 503, { error: 'Dashboard controls are disabled until ADMIN_TOKEN is configured.' });
         if (!isAdmin(req)) return sendJson(res, 401, { error: 'A valid dashboard token is required.' });
@@ -237,8 +278,9 @@ export function createAppServer(options = {}) {
     }
   });
 
-  server.on('close', () => subscriptions.stop());
-  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom };
+  server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); });
+  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom };
+  if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) subscriptions.start().catch(error => logger.error('Subscriptions did not start:', error.message));
   return server;
 }

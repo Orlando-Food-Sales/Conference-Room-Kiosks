@@ -110,6 +110,11 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     eventRefreshSeconds: integerValue(env.EVENT_REFRESH_SECONDS, 60, 15, 3600),
     tabletOfflineSeconds: integerValue(env.TABLET_OFFLINE_SECONDS, 120, 30, 86400),
     publicBaseUrl: String(env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+    // The server checks each room calendar this often and pushes changes to the tablets at once.
+    // 0 turns it off (tablets then refresh on their own timer only).
+    changeCheckSeconds: /^(off|false|no)$/i.test(String(env.CHANGE_CHECK_SECONDS || '')) ? 0 : (String(env.CHANGE_CHECK_SECONDS ?? '').trim() === '0' ? 0 : integerValue(env.CHANGE_CHECK_SECONDS, 15, 5, 3600)),
+    // Optional shared secret that Microsoft change notifications must carry (see /api/notifications).
+    graphClientState: String(env.GRAPH_CLIENT_STATE || '').trim(),
     // Outside these hours the display shows "Closed" instead of "Available". null turns it off.
     officeHours: loadOfficeHours(env),
     birthdays: {

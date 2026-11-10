@@ -175,7 +175,10 @@ BIRTHDAY_CALENDAR_MAILBOX=
 OFFICE_HOURS_START=08:00
 OFFICE_HOURS_END=17:00
 OFFICE_DAYS=1-5
+CHANGE_CHECK_SECONDS=15
 ```
+
+`CHANGE_CHECK_SECONDS` is how often the server looks at each room calendar to spot changes (5 to 3600, 0 turns it off). Tablets are updated right away when something changes, so no public web address or Microsoft webhook is needed. With 2 rooms and the default this is about 8 extra Microsoft Graph requests a minute.
 
 Office hours use each room's `timeZone`. Outside them (and on days not in `OFFICE_DAYS`, where 0 is Sunday) the display shows "Closed" instead of "Available". A meeting still in progress shows "In use". Set `OFFICE_HOURS=off` to always show availability.
 

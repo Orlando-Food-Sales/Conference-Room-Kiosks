@@ -20,6 +20,9 @@
 - Company holidays: an all-day event whose title starts with "Holiday" (for example "Holiday - Christmas") on the shared calendar makes the display say "Closed" with the holiday name and hides booking for that day. Public holidays such as Veterans Day do not close the office.
 - Fits the Samsung Galaxy Tab A7 Lite (8.7in, 1340x800) and other tablets: the page always fits the screen height with no scrolling, rows that do not fit are hidden, short screens get tighter spacing, and portrait no longer lets the time run into the meeting title.
 - "Today's schedule" lists only today's meetings. A meeting tomorrow morning no longer shows up looking like an old one; when nothing is left it says "No more meetings today. Next: tomorrow at 9:00 AM."
+- Weekend and holiday birthdays: on a working day the birthday line also covers the closed days that follow, for example "Happy birthday, Mabel (Saturday)!" on Friday. Company holidays count as closed days.
+- Bookings on a company holiday are refused by the server too (409 "The office is closed for Thanksgiving"), not just hidden on the tablet. If the holiday calendar cannot be read, booking is allowed.
+- Faster updates: the server checks each room calendar every 15 seconds (`CHANGE_CHECK_SECONDS`) and pushes any change to the tablets immediately, instead of waiting up to a minute. One fetch is shared by all tablets for a few seconds. No public web address is needed. `/api/notifications` now ignores notifications that do not carry `GRAPH_CLIENT_STATE` when it is set.
 - Added `.env.example` (the installer needs it), `.gitignore`, and updated docs.
 
 ## 2.0.0 known-good baseline — 2026-11-06
