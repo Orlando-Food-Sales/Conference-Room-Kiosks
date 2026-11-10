@@ -223,7 +223,7 @@ export function createAppServer(options = {}) {
     if (!tabletId) throw Object.assign(new Error('tabletId is required.'), { status: 400 });
     const key = `${roomId}:${tabletId}`;
     const previous = tablets.get(key);
-    const tablet = { tabletId, roomId, name: String(body.name || previous?.name || 'Room tablet').trim().slice(0, 100), lastSeen: new Date().toISOString(), connectedAt: previous?.connectedAt || new Date().toISOString(), ip: clientIp(req), userAgent: String(req.headers['user-agent'] || '').slice(0, 300) };
+    const tablet = { tabletId, roomId, name: String(body.name || previous?.name || 'Room tablet').trim().slice(0, 100), lastSeen: new Date().toISOString(), connectedAt: previous?.connectedAt || new Date().toISOString(), ip: clientIp(req), userAgent: String(req.headers['user-agent'] || '').slice(0, 300), screen: /^[0-9x@. ]{1,30}$/.test(String(body.screen || '')) ? String(body.screen) : (previous?.screen || '') };
     tablets.set(key, tablet);
     return tablet;
   }

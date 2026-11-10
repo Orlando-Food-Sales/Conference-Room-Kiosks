@@ -25,6 +25,7 @@
 - Faster updates: the server checks each room calendar every 15 seconds (`CHANGE_CHECK_SECONDS`) and pushes any change to the tablets immediately, instead of waiting up to a minute. One fetch is shared by all tablets for a few seconds. No public web address is needed. `/api/notifications` now ignores notifications that do not carry `GRAPH_CLIENT_STATE` when it is set.
 - "Closed tomorrow" heads-up on the status card when the next working day is a company holiday ("Closed tomorrow through Friday: Thanksgiving", "Closed Monday: ...").
 - Tablet offline alerts: a tablet that stops checking in for 10 minutes during office hours (`ALERT_AFTER_MINUTES`) raises an alert on the dashboard and, if `ALERT_WEBHOOK_URL` is set, posts it there; a "back online" message follows. Also alerts when a room has had no tablet since the server started. Tablets unseen for a week are forgotten.
+- Tablets report their screen size and zoom with each check-in; the dashboard lists every device per room (model, screen size, address, online or not), to explain why two displays look different.
 - Added `.env.example` (the installer needs it), `.gitignore`, and updated docs.
 
 ## 2.0.0 known-good baseline — 2026-11-06
