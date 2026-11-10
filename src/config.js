@@ -12,6 +12,12 @@ function integerValue(value, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function floatValue(value, fallback, min, max) {
+  const parsed = Number.parseFloat(value ?? '');
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 function roomId(value) {
   const id = String(value || '').trim().toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(id)) {
@@ -73,6 +79,12 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     eventRefreshSeconds: integerValue(env.EVENT_REFRESH_SECONDS, 60, 15, 3600),
     tabletOfflineSeconds: integerValue(env.TABLET_OFFLINE_SECONDS, 120, 30, 86400),
     publicBaseUrl: String(env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+    weather: {
+      enabled: booleanValue(env.WEATHER_ENABLED, true),
+      // Defaults to Orlando, FL.
+      latitude: floatValue(env.WEATHER_LATITUDE, 28.5383, -90, 90),
+      longitude: floatValue(env.WEATHER_LONGITUDE, -81.3792, -180, 180)
+    },
     rooms: loadRooms(env, cwd)
   };
   if (!demoMode && (!config.tenantId || !config.clientId || !config.clientSecret)) {

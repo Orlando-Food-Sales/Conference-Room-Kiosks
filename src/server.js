@@ -7,6 +7,7 @@ import { loadConfig, publicRoom } from './config.js';
 import { DemoCalendar } from './demo-calendar.js';
 import { GraphCalendar, GraphTokenProvider } from './graph-calendar.js';
 import { SubscriptionManager } from './subscription-manager.js';
+import { WeatherService } from './weather.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -24,10 +25,10 @@ function loadDotEnv(file = path.join(ROOT, '.env')) {
 
 function securityHeaders(res) {
   res.setHeader('x-content-type-options', 'nosniff');
-  res.setHeader('x-frame-options', 'DENY');
+  res.setHeader('x-frame-options', 'SAMEORIGIN');
   res.setHeader('referrer-policy', 'no-referrer');
   res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('content-security-policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'");
+  res.setHeader('content-security-policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'self'");
   res.setHeader('cache-control', 'no-store');
 }
 
@@ -101,6 +102,7 @@ export function createAppServer(options = {}) {
   const tokenProvider = config.demoMode ? null : new GraphTokenProvider(config, options.fetchImpl || fetch);
   config.rooms.forEach((room, index) => calendars.set(room.id, config.demoMode ? new DemoCalendar(room, index) : new GraphCalendar(config, room, tokenProvider, options.fetchImpl || fetch)));
 
+  const weather = options.weather || new WeatherService(config, options.fetchImpl || fetch);
   const sseClients = new Set();
   const tablets = new Map();
   const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, revision: 0 }]));
@@ -136,6 +138,7 @@ export function createAppServer(options = {}) {
     const isHead = req.method === 'HEAD';
     try {
       if ((req.method === 'GET' || isHead) && url.pathname === '/healthz') return sendJson(res, 200, { status: 'ok', mode: config.demoMode ? 'demo' : 'm365', rooms: config.rooms.length, uptimeSeconds: Math.round(process.uptime()) }, isHead);
+      if (req.method === 'GET' && url.pathname === '/api/weather') return sendJson(res, 200, { weather: await weather.get() });
       if (req.method === 'GET' && url.pathname === '/api/rooms') return sendJson(res, 200, { rooms: config.rooms.map(publicRoom), refreshSeconds: config.eventRefreshSeconds });
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);

@@ -1,0 +1,474 @@
+/* Orlando Foods theme: brand palette, automatic light/dark, weather moods.
+   theme.js sets <html data-theme="light|dark" data-weather="clear|clouds|rain|storm|snow|fog">.
+   Loaded after styles.css so it overrides the base palette. */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #120b0d;
+  --panel: #1d1215;
+  --card: #170e11;
+  --line: #3b2429;
+  --text: #faf5f5;
+  --muted: #bda8ab;
+  --blue: #ef5b62;
+  /* brand accent (crimson, lightened for dark backgrounds) */
+  --on-accent: #1a0507;
+  --green: #35d07f;
+  /* availability */
+  --red: #ff6b6b;
+  /* in use */
+  --glow: #4a1a22;
+  --status-from: #2a1519;
+  --status-to: #1a0f12;
+  --shadow: #0007;
+  --message-bg: #fff;
+  --message-text: #2a1517;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #faf6f5;
+  --panel: #ffffff;
+  --card: #ffffff;
+  --line: #e7d6d8;
+  --text: #2a1517;
+  --muted: #7a6064;
+  --blue: #b22234;
+  --on-accent: #ffffff;
+  --green: #1f9d5c;
+  --red: #c62828;
+  --glow: #f6d3d6;
+  --status-from: #ffffff;
+  --status-to: #fbeeee;
+  --shadow: #8a1a2722;
+  --message-bg: #2a1517;
+  --message-text: #fff;
+}
+
+/* Weather moods tint the background glow. */
+:root[data-weather="clear"][data-theme="dark"] {
+  --glow: #5a2a1c;
+}
+
+:root[data-weather="clear"][data-theme="light"] {
+  --glow: #fde6b8;
+}
+
+:root[data-weather="clouds"][data-theme="dark"] {
+  --glow: #2c2328;
+}
+
+:root[data-weather="clouds"][data-theme="light"] {
+  --glow: #e6dfe0;
+}
+
+:root[data-weather="rain"][data-theme="dark"] {
+  --glow: #1c2a3d;
+}
+
+:root[data-weather="rain"][data-theme="light"] {
+  --glow: #d3e0ee;
+}
+
+:root[data-weather="storm"][data-theme="dark"] {
+  --glow: #2c1f45;
+}
+
+:root[data-weather="storm"][data-theme="light"] {
+  --glow: #d9d2e8;
+}
+
+:root[data-weather="snow"][data-theme="dark"] {
+  --glow: #26323f;
+}
+
+:root[data-weather="snow"][data-theme="light"] {
+  --glow: #e3eef7;
+}
+
+:root[data-weather="fog"][data-theme="dark"] {
+  --glow: #2b2a2c;
+}
+
+:root[data-weather="fog"][data-theme="light"] {
+  --glow: #e9e6e4;
+}
+
+/* Surfaces that styles.css hard-codes. */
+.display {
+  background: radial-gradient(circle at 85% 10%, var(--glow) 0, transparent 42%), var(--bg);
+  transition: background .8s;
+}
+
+.picker {
+  background: radial-gradient(circle at 50% 0, var(--glow), transparent 45%), var(--bg);
+}
+
+.status-panel {
+  background: linear-gradient(135deg, var(--status-from), var(--status-to));
+  box-shadow: 0 24px 80px var(--shadow);
+}
+
+.event,
+.event.meeting-row {
+  background: var(--card);
+}
+
+.room-choice {
+  background: var(--card);
+}
+
+.room-choice:hover,
+.room-choice:focus-visible {
+  background: var(--panel);
+}
+
+dialog {
+  background: var(--panel);
+}
+
+input {
+  background: var(--bg);
+}
+
+.toast {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.admin-message {
+  background: var(--message-bg);
+  color: var(--message-text);
+}
+
+.admin-message span {
+  color: var(--blue);
+}
+
+.reserve {
+  color: var(--on-accent);
+}
+
+.primary {
+  color: var(--on-accent);
+}
+
+.reserve {
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--green) 30%, transparent);
+}
+
+/* Booking modal, form controls, in-use state. */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #020710cc;
+}
+
+.modal-card {
+  width: min(520px, 100%);
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 26px;
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 30px 100px var(--shadow);
+}
+
+.modal-card h2 {
+  margin: 0 0 4px;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.secondary {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--text);
+  padding: 14px;
+  font: 700 1rem inherit;
+}
+
+select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 13px;
+  font: inherit;
+}
+
+.reserve,
+.primary {
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--blue);
+}
+
+.reserve {
+  background: var(--green);
+  color: #fff;
+}
+
+.status-panel {
+  min-height: 270px;
+}
+
+.room-choice {
+  cursor: pointer;
+}
+
+.admin-message {
+  text-align: center;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+/* Schedule rows: larger, aligned columns, NOW / NEXT badges. */
+.display {
+  grid-template-rows: auto minmax(220px, 1fr) auto;
+}
+
+.status-panel {
+  min-height: 220px;
+}
+
+.event-list {
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.event.meeting-row {
+  grid-template-columns: 6px 200px minmax(0, 1fr) minmax(120px, 240px) 64px;
+  gap: 18px;
+  padding: 16px 20px;
+  border-radius: 14px;
+}
+
+.meeting-indicator {
+  min-height: 40px;
+  border-radius: 6px;
+}
+
+.meeting-time {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 600;
+  opacity: .85;
+}
+
+.meeting-subject {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.meeting-organizer {
+  font-size: 1rem;
+}
+
+.meeting-badge {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.badge {
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.badge.now {
+  background: var(--red);
+  color: #fff;
+}
+
+.badge.next {
+  background: transparent;
+  color: var(--blue);
+  border: 1px solid var(--blue);
+}
+
+.event.meeting-row.current {
+  border-color: var(--red);
+}
+
+.event.meeting-row.past {
+  opacity: .5;
+}
+
+@media (max-width: 800px) {
+  .event.meeting-row {
+    grid-template-columns: 5px 130px minmax(0, 1fr) 56px;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .meeting-subject {
+    font-size: 1.05rem;
+  }
+
+  .meeting-time {
+    font-size: .9rem;
+  }
+}
+
+/* Whole-row colouring instead of the thin left stripe. */
+.meeting-indicator {
+  display: none;
+}
+
+.event.meeting-row {
+  grid-template-columns: 200px minmax(0, 1fr) minmax(120px, 240px) 64px;
+}
+
+.event.meeting-row {
+  background: color-mix(in srgb, var(--blue) 14%, var(--card));
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line));
+}
+
+.event.meeting-row.current {
+  background: var(--red);
+  border-color: var(--red);
+}
+
+.event.meeting-row.current .meeting-time,
+.event.meeting-row.current .meeting-subject,
+.event.meeting-row.current .meeting-organizer {
+  color: #fff;
+  opacity: 1;
+}
+
+.event.meeting-row.current .badge.now {
+  background: #fff;
+  color: var(--red);
+}
+
+.event.meeting-row.past {
+  background: var(--card);
+  border-color: var(--line);
+}
+
+@media (max-width: 800px) {
+  .event.meeting-row {
+    grid-template-columns: 130px minmax(0, 1fr) 56px;
+  }
+}
+
+/* Weather effects: subtle, behind content, off for reduced motion. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 1s;
+}
+
+.display,
+.picker {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-weather="rain"] body::before,
+:root[data-weather="storm"] body::before {
+  opacity: .35;
+  background-image: repeating-linear-gradient(105deg, transparent 0 14px, var(--blue) 14px 15px);
+  background-size: 120px 120px;
+  animation: rain-fall .7s linear infinite;
+}
+
+:root[data-weather="snow"] body::before {
+  opacity: .5;
+  background-image: radial-gradient(circle, var(--text) 1.5px, transparent 2px), radial-gradient(circle, var(--text) 1px, transparent 1.5px);
+  background-size: 90px 90px, 140px 140px;
+  animation: snow-fall 9s linear infinite;
+}
+
+:root[data-weather="fog"] body::before {
+  opacity: .25;
+  background: linear-gradient(180deg, transparent, var(--text) 60%, transparent);
+  animation: fog-drift 14s ease-in-out infinite alternate;
+}
+
+:root[data-weather="storm"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: #fff;
+  opacity: 0;
+  animation: flash 9s infinite;
+}
+
+@keyframes rain-fall {
+  to {
+    background-position: -30px 120px;
+  }
+}
+
+@keyframes snow-fall {
+  to {
+    background-position: 40px 140px, -30px 210px;
+  }
+}
+
+@keyframes fog-drift {
+  from {
+    transform: translateX(-3%);
+  }
+
+  to {
+    transform: translateX(3%);
+  }
+}
+
+@keyframes flash {
+
+  0%,
+  92%,
+  96%,
+  100% {
+    opacity: 0;
+  }
+
+  93% {
+    opacity: .12;
+  }
+
+  94% {
+    opacity: 0;
+  }
+
+  95% {
+    opacity: .08;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  body::before,
+  body::after {
+    animation: none !important;
+  }
+}

@@ -1,28 +1,66 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#07111f">
+  <meta name="theme-color" content="#120b0d">
   <title>Room Display</title>
   <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/theme.css">
+  <script src="/theme.js"></script>
 </head>
+
 <body>
   <section id="picker" class="picker hidden" aria-labelledby="pickerTitle">
-    <div class="picker-card"><p class="eyebrow">ROOM DISPLAY</p><h1 id="pickerTitle">Choose a room</h1><p class="muted">Select the conference room assigned to this tablet.</p><div id="roomList" class="room-list"></div></div>
+    <div class="picker-card">
+      <p class="eyebrow">ROOM DISPLAY</p>
+      <h1 id="pickerTitle">Choose a room</h1>
+      <p class="muted">Select the conference room assigned to this tablet.</p>
+      <div id="roomList" class="room-list"></div>
+    </div>
   </section>
   <main id="display" class="display hidden">
-    <header class="topbar"><div><p class="eyebrow">CONFERENCE ROOM</p><h1 id="roomName">Loading…</h1></div><div class="clock-block"><strong id="clock">--:--</strong><span id="date">—</span></div></header>
-    <section id="notice" class="notice hidden"></section>
-    <section class="status-grid">
-      <article id="availability" class="availability available"><p class="eyebrow">STATUS</p><h2 id="statusText">Available</h2><p id="currentMeeting">No meeting in progress</p><button id="reserveButton" class="primary hidden" type="button">Reserve now</button></article>
-      <article class="schedule"><div class="schedule-head"><h2>Today's schedule</h2><span id="syncState">Connecting…</span></div><div id="eventList" class="event-list"></div></article>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">CONFERENCE ROOM</p>
+        <h1 id="roomName">Loading…</h1>
+      </div>
+      <div class="clock-block"><strong id="clock">--:--</strong><span id="date">—</span></div>
+    </header>
+    <section id="availability" class="status-panel">
+      <div class="status-copy">
+        <p>STATUS</p>
+        <h2 id="statusText">Available</h2>
+        <p id="currentMeeting" class="status-detail">No meeting in progress</p>
+      </div>
+      <button id="reserveButton" class="reserve hidden" type="button">Reserve now</button>
+    </section>
+    <section class="schedule">
+      <div class="section-heading">
+        <h2>Today's schedule</h2><span id="syncState">Connecting…</span>
+      </div>
+      <div id="eventList" class="event-list"></div>
     </section>
   </main>
+  <section id="notice" class="admin-message hidden" role="status"></section>
   <section id="bookingPanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="bookingTitle">
-    <form id="bookingForm" class="modal-card"><h2 id="bookingTitle">Reserve this room</h2><label>Subject<input id="bookingSubject" name="subject" maxlength="100" value="Reserved"></label><label>Duration<select name="duration"><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="45">45 minutes</option><option value="60">60 minutes</option></select></label><p id="bookingError" class="error"></p><div class="actions"><button id="cancelBooking" type="button">Cancel</button><button class="primary" type="submit">Reserve</button></div></form>
+    <form id="bookingForm" class="modal-card">
+      <h2 id="bookingTitle">Reserve this room</h2>
+      <label>Subject<input id="bookingSubject" name="subject" maxlength="100" value="Reserved"></label>
+      <label>Duration<select name="duration">
+          <option value="15">15 minutes</option>
+          <option value="30" selected>30 minutes</option>
+          <option value="45">45 minutes</option>
+          <option value="60">60 minutes</option>
+        </select></label>
+      <p id="bookingError" class="form-error"></p>
+      <div class="actions"><button id="cancelBooking" class="secondary" type="button">Cancel</button><button
+          class="primary" type="submit">Reserve</button></div>
+    </form>
   </section>
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="/app.js"></script>
 </body>
+
 </html>
