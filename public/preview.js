@@ -19,8 +19,8 @@
   ];
   var THEMES = ['dark', 'light'];
   var WEATHERS = ['none', 'clear', 'clouds', 'rain', 'storm', 'snow', 'fog'];
-  var STATES = ['free', 'soon', 'busy', 'ended', 'error'];
-  var STATE_LABELS = { free: 'free', soon: 'starts in 3 min', busy: 'in use', ended: 'just ended', error: 'calendar error' };
+  var STATES = ['free', 'soon', 'busy', 'ended', 'tomorrow', 'error'];
+  var STATE_LABELS = { free: 'free', soon: 'starts in 3 min', busy: 'in use', ended: 'just ended', tomorrow: 'only tomorrow', error: 'calendar error' };
 
   function $(id) { return document.getElementById(id); }
   var gallery = $('gallery'), frame = $('frame'), box = $('frameBox');
