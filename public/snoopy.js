@@ -111,7 +111,8 @@
   function flourish() {
     var mood = baseMood();
     var canLook = sheetRows >= ROWS;
-    var choices = mood === 'idle' ? ['look', 'waving', 'jumping', 'walk', 'look'] : (mood === 'failed' ? [] : ['look']);
+    var party = document.documentElement.dataset.celebrate === '1';
+    var choices = mood === 'idle' ? (party ? ['jumping', 'waving', 'jumping', 'walk'] : ['look', 'waving', 'jumping', 'walk', 'look']) : (mood === 'failed' ? [] : ['look']);
     if (!canLook) choices = choices.filter(function (c) { return c !== 'look'; });
     if (!choices.length) return;
     var pick = choices[Math.floor(Math.random() * choices.length)];
@@ -126,7 +127,7 @@
     var mood = baseMood();
     if (mood !== name) start(mood);
     if (now >= nextFlourishAt) {
-      nextFlourishAt = now + 12000 + Math.random() * 12000;
+      nextFlourishAt = now + (document.documentElement.dataset.celebrate === '1' ? 5000 + Math.random() * 5000 : 12000 + Math.random() * 12000);
       flourish();
     }
   }

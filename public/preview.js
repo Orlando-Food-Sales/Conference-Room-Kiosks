@@ -54,6 +54,7 @@
     if (weather) q.set('weather', weather);
     if (selected) q.set('snoopy', selected);
     if ($('outfit').value) q.set('outfit', $('outfit').value);
+    if ($('celebrate').value) q.set('celebrate', $('celebrate').value);
     return '/room/room?' + q;
   }
 
@@ -75,11 +76,11 @@
     if (frame.getAttribute('src') !== target) frame.setAttribute('src', target);
     $('link').setAttribute('href', target.replace('&nostream=1', ''));
     var anim = ANIMATIONS.filter(function (a) { return a.id === selected; })[0];
-    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto')].join(' · ');
+    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto'), 'celebrate: ' + ($('celebrate').value || 'none')].join(' · ');
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen', 'outfit'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis

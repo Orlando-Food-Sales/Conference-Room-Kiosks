@@ -32,7 +32,8 @@ function normalizeRoom(value) {
     name: String(value.name || '').trim(),
     email: String(value.email || '').trim(),
     timeZone: String(value.timeZone || 'UTC').trim(),
-    allowQuickBooking: Boolean(value.allowQuickBooking)
+    allowQuickBooking: Boolean(value.allowQuickBooking),
+    showCelebrations: value.showCelebrations !== false      // set false for client-facing rooms
   };
   if (!room.name) throw new Error(`Room ${room.id} needs a name.`);
   if (!room.email || !room.email.includes('@')) throw new Error(`Room ${room.id} needs a valid mailbox address.`);
@@ -79,6 +80,13 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     eventRefreshSeconds: integerValue(env.EVENT_REFRESH_SECONDS, 60, 15, 3600),
     tabletOfflineSeconds: integerValue(env.TABLET_OFFLINE_SECONDS, 120, 30, 86400),
     publicBaseUrl: String(env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+    birthdays: {
+      mailbox: String(env.BIRTHDAY_CALENDAR_MAILBOX || '').trim(),
+      calendarId: String(env.BIRTHDAY_CALENDAR_ID || '').trim(),
+      calendarName: String(env.BIRTHDAY_CALENDAR_NAME || '').trim(),
+      nameStyle: /^full$/i.test(String(env.BIRTHDAY_NAME_STYLE || '')) ? 'full' : 'first',
+      timeZone: ''   // filled below from the first room unless BIRTHDAY_TIME_ZONE is set
+    },
     weather: {
       enabled: booleanValue(env.WEATHER_ENABLED, true),
       // Defaults to Orlando, FL.
@@ -87,6 +95,10 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     },
     rooms: loadRooms(env, cwd)
   };
+  const birthdayZone = String(env.BIRTHDAY_TIME_ZONE || '').trim() || config.rooms[0].timeZone;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: birthdayZone }).format(); }
+  catch { throw new Error(`BIRTHDAY_TIME_ZONE is not a valid IANA time zone: ${birthdayZone}`); }
+  config.birthdays.timeZone = birthdayZone;
   if (!demoMode && (!config.tenantId || !config.clientId || !config.clientSecret)) {
     throw new Error('TENANT_ID, CLIENT_ID, and CLIENT_SECRET are required when DEMO_MODE=false.');
   }
@@ -100,6 +112,7 @@ export function publicRoom(room) {
     email: room.email,
     timeZone: room.timeZone,
     allowQuickBooking: room.allowQuickBooking,
+    showCelebrations: room.showCelebrations,
     displayUrl: `/room/${room.id}`
   };
 }

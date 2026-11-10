@@ -500,3 +500,7 @@ body::before {
 .status-panel {
   min-height: 250px;
 }
+/* Birthdays and work anniversaries on the status card. */
+.celebration { margin-top: 18px; display: grid; gap: 6px; }
+.celebration p { margin: 0; font-size: clamp(1.05rem, 2vw, 1.6rem); font-weight: 700; color: var(--text); }
+.celebration p:first-child { color: var(--blue); }

@@ -44,10 +44,42 @@ async function loadEvents() { try { var data = await api('/api/events?room=' + e
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }) }); } catch (_) { } }
 function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
-async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(state.room.control); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); }
+async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(state.room.control); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); }
 
 $('reserveButton').addEventListener('click', function () { $('bookingPanel').classList.remove('hidden'); });
 $('cancelBooking').addEventListener('click', function () { $('bookingPanel').classList.add('hidden'); });
 $('bookingForm').addEventListener('submit', async function (event) { event.preventDefault(); $('bookingError').textContent = ''; var form = new FormData(event.currentTarget); var duration = Number(form.get('duration')); var start = new Date(Math.ceil(Date.now() / 300000) * 300000); try { await api('/api/bookings', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, subject: $('bookingSubject').value, start: start.toISOString(), end: new Date(start.getTime() + duration * 60000).toISOString() }) }); $('bookingPanel').classList.add('hidden'); showToast('Room reserved'); await loadEvents(); } catch (error) { $('bookingError').textContent = error.message; } });
 setInterval(updateClock, 1000); setInterval(heartbeat, 45000); setInterval(render, 30000); document.addEventListener('visibilitychange', function () { if (!document.hidden && state.room) { heartbeat(); loadEvents(); } });
 var requestedRoom = roomIdFromLocation(); if (requestedRoom) initializeRoom(requestedRoom).catch(async function (error) { localStorage.removeItem('selectedRoomId'); showToast(error.message); await chooseRoom(); }); else chooseRoom().catch(function (error) { showToast(error.message); });
+
+// Birthdays and work anniversaries from the shared calendar (see /api/celebrations).
+// Preview without a calendar: ?celebrate=birthday|anniversary|both
+function celebrationLines(items) {
+  function join(names) { return names.length > 1 ? names.slice(0, -1).join(', ') + ' & ' + names[names.length - 1] : names[0]; }
+  var birthdays = items.filter(function (i) { return i.kind === 'birthday'; }).map(function (i) { return i.name; });
+  var anniversaries = items.filter(function (i) { return i.kind === 'anniversary'; });
+  var lines = [];
+  if (birthdays.length) lines.push('\uD83C\uDF82 Happy birthday, ' + join(birthdays.slice(0, 4)) + (birthdays.length > 4 ? ' +' + (birthdays.length - 4) + ' more' : '') + '!');
+  anniversaries.slice(0, 3).forEach(function (i) { lines.push('\uD83C\uDF89 Happy ' + (i.years ? i.years + '-year ' : '') + 'work anniversary, ' + i.name + '!'); });
+  return lines;
+}
+function showCelebrations(items) {
+  var box = $('celebration');
+  var lines = celebrationLines(items || []);
+  box.textContent = '';
+  lines.forEach(function (text) { var line = document.createElement('p'); line.textContent = text; box.appendChild(line); });
+  box.classList.toggle('hidden', lines.length === 0);
+  if (lines.length) document.documentElement.dataset.celebrate = '1'; else delete document.documentElement.dataset.celebrate;
+}
+async function loadCelebrations() {
+  var preview = new URLSearchParams(location.search).get('celebrate');
+  if (preview) {
+    var sample = [];
+    if (preview === 'birthday' || preview === 'both') sample.push({ kind: 'birthday', name: 'Jane' }, { kind: 'birthday', name: 'Sam' });
+    if (preview === 'anniversary' || preview === 'both') sample.push({ kind: 'anniversary', name: 'Alex', years: 5 });
+    return showCelebrations(sample);
+  }
+  if (!state.room || state.room.showCelebrations === false) return showCelebrations([]);
+  try { var data = await api('/api/celebrations?room=' + encodeURIComponent(state.room.id)); showCelebrations(data.celebrations); } catch (_) { /* keep what is showing */ }
+}
+setInterval(loadCelebrations, 15 * 60 * 1000);
