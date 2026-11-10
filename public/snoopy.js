@@ -34,16 +34,22 @@
   el.className = 'snoopy';
   el.setAttribute('role', 'img');
   el.setAttribute('aria-label', 'Snoopy');
+  el.style.visibility = 'hidden';           // shown once we know which outfit to wear
   host.appendChild(el);
+  function reveal() { el.style.visibility = ''; }
+  setTimeout(reveal, 3000);                  // never stay hidden if outfits are slow
 
   var name = forced || 'idle', index = 0, timer = null;
   var plan = null;               // { repeat, then } for one-shot animations
   var x = 0;                     // horizontal offset in px (walking)
   var nextFlourishAt = Date.now() + 8000;
 
+  var sheetRows = ROWS;          // 11 for the base sheet; 9 for outfit sheets without look rows
+
   function draw() {
     var cell = ANIMATIONS[name].frames[index];
-    el.style.backgroundPosition = (cell[1] / (COLS - 1) * 100) + '% ' + (cell[0] / (ROWS - 1) * 100) + '%';
+    if (cell[0] >= sheetRows) cell = [0, 0];                    // row missing in this outfit: show idle
+    el.style.backgroundPosition = (cell[1] / (COLS - 1) * 100) + '% ' + (cell[0] / (sheetRows - 1) * 100) + '%';
   }
 
   function setX(value, ms) {
@@ -104,7 +110,9 @@
 
   function flourish() {
     var mood = baseMood();
+    var canLook = sheetRows >= ROWS;
     var choices = mood === 'idle' ? ['look', 'waving', 'jumping', 'walk', 'look'] : (mood === 'failed' ? [] : ['look']);
+    if (!canLook) choices = choices.filter(function (c) { return c !== 'look'; });
     if (!choices.length) return;
     var pick = choices[Math.floor(Math.random() * choices.length)];
     if (pick === 'walk') walk();
@@ -125,6 +133,7 @@
 
   // Look towards a tapped point. 0 degrees is up, clockwise; 16 directions.
   function lookAt(clientX, clientY) {
+    if (sheetRows < ROWS) return;                                // outfit has no look-around rows
     var box = el.getBoundingClientRect();
     var dx = clientX - (box.left + box.width / 2);
     var dy = clientY - (box.top + box.height / 2);
@@ -147,6 +156,56 @@
     nextFlourishAt = Date.now() + 15000;
     lookAt(event.clientX, event.clientY);
   });
+
+  // ---- Outfits: festive dates first, then weather (see snoopy/outfits.json) ----
+  var outfits = [];
+  var forcedOutfit = new URLSearchParams(location.search).get('outfit');   // id, or "none"
+  var wornId = null;
+  var known = {};                                                          // file -> true/false (loaded ok?)
+
+  function inRange(from, to, today) {
+    return from <= to ? (today >= from && today <= to) : (today >= from || today <= to);   // wraps the new year
+  }
+
+  function chooseOutfit() {
+    if (forcedOutfit) return outfits.filter(function (o) { return o.id === forcedOutfit && known[o.file] !== false; })[0] || null;
+    var d = new Date();
+    var today = ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    var weather = document.documentElement.dataset.weather || '';
+    var isDay = document.documentElement.dataset.day !== '0';
+    return outfits.filter(function (o) {
+      if (known[o.file] === false) return false;                          // art not supplied yet
+      if (o.from && o.to) return inRange(o.from, o.to, today);
+      if (o.weather) return o.weather.indexOf(weather) !== -1 && (!o.daytimeOnly || isDay);
+      return false;
+    })[0] || null;
+  }
+
+  function wear(outfit) {
+    var id = outfit ? outfit.id : null;
+    if (id === wornId) return;
+    if (!outfit) { wornId = null; sheetRows = ROWS; el.style.backgroundImage = ''; el.style.backgroundSize = ''; reveal(); return; }
+    var url = '/snoopy/' + outfit.file;
+    var probe = new Image();
+    probe.onload = function () {
+      known[outfit.file] = true; wornId = id;
+      sheetRows = outfit.rows || ROWS;
+      el.style.backgroundSize = '800% ' + (sheetRows * 100) + '%';
+      el.style.backgroundImage = 'url(' + url + ')';
+      draw();
+      reveal();
+    };
+    probe.onerror = function () { known[outfit.file] = false; refreshOutfit(); };   // fall back to the next match
+    probe.src = url;
+  }
+
+  function refreshOutfit() { if (outfits.length) wear(chooseOutfit()); else reveal(); }
+
+  fetch('/snoopy/outfits.json').then(function (r) { return r.ok ? r.json() : { outfits: [] }; })
+    .then(function (data) { outfits = data.outfits || []; refreshOutfit(); })
+    .catch(function () { });
+  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day'] });
+  setInterval(refreshOutfit, 60000);                                       // catches midnight / date changes
 
   draw();
   step();

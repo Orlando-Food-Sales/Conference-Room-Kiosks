@@ -53,6 +53,7 @@
     var weather = $('weather').value;
     if (weather) q.set('weather', weather);
     if (selected) q.set('snoopy', selected);
+    if ($('outfit').value) q.set('outfit', $('outfit').value);
     return '/room/room?' + q;
   }
 
@@ -74,11 +75,11 @@
     if (frame.getAttribute('src') !== target) frame.setAttribute('src', target);
     $('link').setAttribute('href', target.replace('&nostream=1', ''));
     var anim = ANIMATIONS.filter(function (a) { return a.id === selected; })[0];
-    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value]].join(' · ');
+    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto')].join(' · ');
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['theme', 'weather', 'state', 'screen', 'outfit'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis
@@ -108,6 +109,15 @@
   });
   $('tourNext').addEventListener('click', function () { stopTour(); showCombo(tourIndex + 1); });
   $('tourPrev').addEventListener('click', function () { stopTour(); showCombo(tourIndex - 1); });
+
+  // Outfit choices come from snoopy/outfits.json.
+  fetch('/snoopy/outfits.json').then(function (r) { return r.json(); }).then(function (data) {
+    (data.outfits || []).forEach(function (o) {
+      var option = document.createElement('option');
+      option.value = o.id; option.textContent = o.label || o.id;
+      $('outfit').appendChild(option);
+    });
+  }).catch(function () {});
 
   update();
 })();

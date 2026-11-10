@@ -1,0 +1,66 @@
+{
+  "_help": "First match wins, top to bottom. Put festive (date) outfits above weather ones. Dates are MM-DD in the tablet's local time and may wrap the new year. Missing image files are skipped, so Snoopy keeps his normal look. 'rows' is the number of 208px rows in the sheet: 11 for extended sheets, 9 for standard sheets (no look-around rows).",
+  "outfits": [
+    {
+      "id": "christmas",
+      "label": "Christmas",
+      "file": "outfits/christmas.png",
+      "rows": 9,
+      "from": "12-01",
+      "to": "12-26"
+    },
+    {
+      "id": "new-year",
+      "label": "New Year",
+      "file": "outfits/new-year.png",
+      "rows": 9,
+      "from": "12-27",
+      "to": "01-02"
+    },
+    {
+      "id": "halloween",
+      "label": "Halloween",
+      "file": "outfits/halloween.png",
+      "rows": 9,
+      "from": "10-20",
+      "to": "10-31"
+    },
+    {
+      "id": "autumn-thanksgiving",
+      "label": "Autumn / Thanksgiving",
+      "file": "outfits/autumn-thanksgiving.png",
+      "rows": 9,
+      "from": "11-20",
+      "to": "11-30"
+    },
+    {
+      "id": "winter-snow",
+      "label": "Winter snow",
+      "file": "outfits/winter-snow.png",
+      "rows": 9,
+      "weather": [
+        "snow"
+      ]
+    },
+    {
+      "id": "spring-raincoat",
+      "label": "Spring raincoat",
+      "file": "outfits/spring-raincoat.png",
+      "rows": 9,
+      "weather": [
+        "rain",
+        "storm"
+      ]
+    },
+    {
+      "id": "summer-sunshine",
+      "label": "Summer sunshine",
+      "file": "outfits/summer-sunshine.png",
+      "rows": 9,
+      "weather": [
+        "clear"
+      ],
+      "daytimeOnly": true
+    }
+  ]
+}
