@@ -89,9 +89,9 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     },
     weather: {
       enabled: booleanValue(env.WEATHER_ENABLED, true),
-      // Defaults to Orlando, FL.
-      latitude: floatValue(env.WEATHER_LATITUDE, 28.5383, -90, 90),
-      longitude: floatValue(env.WEATHER_LONGITUDE, -81.3792, -180, 180)
+      // Defaults to Glen Rock, NJ.
+      latitude: floatValue(env.WEATHER_LATITUDE, 40.9595, -90, 90),
+      longitude: floatValue(env.WEATHER_LONGITUDE, -74.1252, -180, 180)
     },
     rooms: loadRooms(env, cwd)
   };

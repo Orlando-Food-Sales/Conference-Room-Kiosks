@@ -39,7 +39,12 @@
     </section>
     <section class="schedule">
       <div class="section-heading">
-        <h2>Today's schedule</h2><span id="syncState">Connecting…</span>
+        <h2>Today's schedule</h2>
+        <div class="heading-tools">
+          <span id="syncState">Connecting…</span>
+          <button id="refreshButton" class="icon-button" type="button" aria-label="Refresh this screen" title="Refresh">&#8635;</button>
+          <button id="messageButton" class="icon-button" type="button" aria-label="Send a message to this screen" title="Message">&#9993;</button>
+        </div>
       </div>
       <div id="eventList" class="event-list"></div>
     </section>
@@ -58,6 +63,17 @@
       <p id="bookingError" class="form-error"></p>
       <div class="actions"><button id="cancelBooking" class="secondary" type="button">Cancel</button><button
           class="primary" type="submit">Reserve</button></div>
+    </form>
+  </section>
+  <section id="messagePanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="messageTitle">
+    <form id="messageForm" class="modal-card">
+      <h2 id="messageTitle">Message for this screen</h2>
+      <label>Message<input id="messageText" maxlength="280" autocomplete="off" placeholder="For example: Lunch is in the kitchen"></label>
+      <label>Show for<select id="messageTtl"><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="60">1 hour</option><option value="240">4 hours</option><option value="1440">24 hours</option></select></label>
+      <label>Administrator token<input id="messageToken" type="password" autocomplete="current-password"></label>
+      <p id="messageError" class="form-error"></p>
+      <div class="actions"><button id="messageCancel" class="secondary" type="button">Cancel</button><button id="messageClear" class="secondary" type="button">Clear</button><button class="primary" type="submit">Send</button></div>
+      <a class="modal-link" href="/dashboard">Open the full dashboard</a>
     </form>
   </section>
   <div id="toast" class="toast hidden" role="status"></div>

@@ -83,3 +83,40 @@ async function loadCelebrations() {
   try { var data = await api('/api/celebrations?room=' + encodeURIComponent(state.room.id)); showCelebrations(data.celebrations); } catch (_) { /* keep what is showing */ }
 }
 setInterval(loadCelebrations, 15 * 60 * 1000);
+
+// Refresh button and "send a message" panel (uses the same admin API as the dashboard).
+$('refreshButton').addEventListener('click', function () {
+  if (!state.room) return;
+  showToast('Refreshing\u2026');
+  initializeRoom(state.room.id).catch(function (error) { showToast(error.message); });
+});
+function closeMessagePanel() { $('messagePanel').classList.add('hidden'); $('messageError').textContent = ''; }
+$('messageButton').addEventListener('click', function () {
+  $('messageToken').value = sessionStorage.getItem('adminToken') || '';
+  $('messageText').value = (state.room && state.room.control && state.room.control.message) || '';
+  $('messagePanel').classList.remove('hidden');
+  $('messageText').focus();
+});
+$('messageCancel').addEventListener('click', closeMessagePanel);
+$('messagePanel').addEventListener('click', function (event) { if (event.target === $('messagePanel')) closeMessagePanel(); });
+async function sendControl(action, extra) {
+  var token = $('messageToken').value.trim();
+  if (!token) throw new Error('Enter the administrator token.');
+  var response = await fetch('/api/admin/rooms/' + encodeURIComponent(state.room.id) + '/control', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, body: JSON.stringify(Object.assign({ action: action }, extra || {})) });
+  var data = await response.json().catch(function () { return {}; });
+  if (!response.ok) throw new Error(data.error || ('Request failed: ' + response.status));
+  sessionStorage.setItem('adminToken', token);
+  if (data.control) activeControl(data.control);
+  return data;
+}
+$('messageForm').addEventListener('submit', async function (event) {
+  event.preventDefault();
+  $('messageError').textContent = '';
+  var text = $('messageText').value.trim();
+  if (!text) { $('messageError').textContent = 'Type a message first.'; return; }
+  try { await sendControl('message', { message: text, ttlMinutes: Number($('messageTtl').value) }); closeMessagePanel(); showToast('Message sent'); } catch (error) { $('messageError').textContent = error.message; }
+});
+$('messageClear').addEventListener('click', async function () {
+  $('messageError').textContent = '';
+  try { await sendControl('clearMessage'); $('messageText').value = ''; closeMessagePanel(); showToast('Message cleared'); } catch (error) { $('messageError').textContent = error.message; }
+});
