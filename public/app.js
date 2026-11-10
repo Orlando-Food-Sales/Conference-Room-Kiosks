@@ -26,7 +26,7 @@ function updateClock() { if (!state.room) return; var now = new Date(); $('clock
 function activeControl(control) { control = control || { displayEnabled: true }; document.body.classList.toggle('display-off', control.displayEnabled === false); var visible = control.message && (!control.messageExpiresAt || new Date(control.messageExpiresAt) > new Date()); $('notice').textContent = visible ? control.message : ''; $('notice').classList.toggle('hidden', !visible); }
 
 async function chooseRoom() { var data = await api('/api/rooms'); $('picker').classList.remove('hidden'); $('display').classList.add('hidden'); $('roomList').innerHTML = ''; data.rooms.forEach(function (room) { var button = document.createElement('button'); button.type = 'button'; button.className = 'room-choice'; button.innerHTML = '<span></span><span>→</span>'; button.firstChild.textContent = room.name; button.addEventListener('click', function () { history.replaceState({}, '', room.displayUrl); initializeRoom(room.id).catch(function (error) { showToast(error.message); }); }); $('roomList').appendChild(button); }); }
-function render() { if (!state.room) return; var now = Date.now(); var current = state.events.find(function (event) { return new Date(event.start).getTime() <= now && new Date(event.end).getTime() > now; }); var busy = Boolean(current); var closed = !busy && !officeOpen(now); $('availability').classList.toggle('busy', busy); $('availability').classList.toggle('closed', closed); $('statusText').textContent = busy ? 'In use' : (closed ? 'Closed' : 'Available'); $('currentMeeting').textContent = busy ? ((current.subject || 'Reserved') + ' · until ' + formatTime(current.end)) : (closed ? closedText() : freeUntilText(now)); $('reserveButton').classList.toggle('hidden', !state.room.allowQuickBooking || busy || closed); renderQuickBook(now, busy || closed); var upcoming = state.events.filter(function (event) { return new Date(event.end).getTime() > now - 1800000; }).slice(0, 8); $('eventList').innerHTML = upcoming.length ? upcoming.map(function (event) { var start = new Date(event.start).getTime(), end = new Date(event.end).getTime(); var cls = start <= now && end > now ? 'current' : end <= now ? 'past' : ''; var nextUp = upcoming.find(function (e) { return new Date(e.start).getTime() > now; }); var badge = cls === 'current' ? '<span class="badge now">NOW</span>' : (event === nextUp ? '<span class="badge next">NEXT</span>' : ''); return '<article class="event meeting-row ' + cls + '"><div class="meeting-indicator"></div><div class="meeting-time">' + formatRange(event) + '</div><div class="meeting-subject">' + escapeText(event.subject) + '</div><div class="meeting-organizer">' + escapeText(event.organizer) + '</div><div class="meeting-badge">' + badge + '</div></article>'; }).join('') : '<p class="empty">No more meetings scheduled.</p>'; }
+function render() { if (!state.room) return; var now = Date.now(); var current = state.events.find(function (event) { return new Date(event.start).getTime() <= now && new Date(event.end).getTime() > now; }); var busy = Boolean(current); var closed = !busy && (!officeOpen(now) || Boolean(state.holiday)); $('availability').classList.toggle('busy', busy); $('availability').classList.toggle('closed', closed); $('statusText').textContent = busy ? 'In use' : (closed ? 'Closed' : 'Available'); $('currentMeeting').textContent = busy ? ((current.subject || 'Reserved') + ' · until ' + formatTime(current.end)) : (closed ? closedText() : freeUntilText(now)); $('reserveButton').classList.toggle('hidden', !state.room.allowQuickBooking || busy || closed); renderQuickBook(now, busy || closed); var upcoming = state.events.filter(function (event) { return new Date(event.end).getTime() > now - 1800000; }).slice(0, 8); $('eventList').innerHTML = upcoming.length ? upcoming.map(function (event) { var start = new Date(event.start).getTime(), end = new Date(event.end).getTime(); var cls = start <= now && end > now ? 'current' : end <= now ? 'past' : ''; var nextUp = upcoming.find(function (e) { return new Date(e.start).getTime() > now; }); var badge = cls === 'current' ? '<span class="badge now">NOW</span>' : (event === nextUp ? '<span class="badge next">NEXT</span>' : ''); return '<article class="event meeting-row ' + cls + '"><div class="meeting-indicator"></div><div class="meeting-time">' + formatRange(event) + '</div><div class="meeting-subject">' + escapeText(event.subject) + '</div><div class="meeting-organizer">' + escapeText(event.organizer) + '</div><div class="meeting-badge">' + badge + '</div></article>'; }).join('') : '<p class="empty">No more meetings scheduled.</p>'; fitRows(); }
 // Preview helper: ?preview=free|soon|busy|ended|error swaps in fixed sample meetings.
 function previewEvents(events) {
   var mode = new URLSearchParams(location.search).get('preview');
@@ -40,6 +40,18 @@ function previewEvents(events) {
   if (mode === 'error') return [];
   return later;
 }
+// Hide the schedule rows that do not fit, so the page never needs to scroll.
+function fitRows() {
+  var list = $('eventList');
+  if (!list) return;
+  var rows = Array.prototype.slice.call(list.querySelectorAll('.event'));
+  rows.forEach(function (row) { row.classList.remove('hidden'); });
+  var limit = list.clientHeight;
+  rows.forEach(function (row, index) {
+    if (index > 0 && row.offsetTop + row.offsetHeight > limit + 1) row.classList.add('hidden');
+  });
+}
+window.addEventListener('resize', fitRows);
 async function loadEvents() { try { var data = await api('/api/events?room=' + encodeURIComponent(state.room.id)); state.events = data.events; state.events = previewEvents(state.events); $('syncState').textContent = new URLSearchParams(location.search).get('preview') === 'error' ? 'Calendar temporarily unavailable' : 'Updated ' + formatTime(data.generatedAt); render(); } catch (error) { $('syncState').textContent = 'Calendar temporarily unavailable'; showToast(error.message); } }
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }) }); } catch (_) { } }
 function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
@@ -70,8 +82,12 @@ function showCelebrations(items) {
   lines.forEach(function (text) { var line = document.createElement('p'); line.textContent = text; box.appendChild(line); });
   box.classList.toggle('hidden', lines.length === 0);
   if (lines.length) document.documentElement.dataset.celebrate = '1'; else delete document.documentElement.dataset.celebrate;
+  fitRows();
 }
+function applyHoliday(name) { var next = name || ''; if (next !== (state.holiday || '')) { state.holiday = next; render(); } }
 async function loadCelebrations() {
+  var holidayPreview = new URLSearchParams(location.search).get('holiday');   // preview: ?holiday=Thanksgiving or none
+  if (holidayPreview !== null) applyHoliday(holidayPreview === 'none' ? '' : holidayPreview);
   var preview = new URLSearchParams(location.search).get('celebrate');
   if (preview) {
     var sample = [];
@@ -79,8 +95,12 @@ async function loadCelebrations() {
     if (preview === 'anniversary' || preview === 'both') sample.push({ kind: 'anniversary', name: 'Alex', years: 5 });
     return showCelebrations(sample);
   }
-  if (!state.room || state.room.showCelebrations === false) return showCelebrations([]);
-  try { var data = await api('/api/celebrations?room=' + encodeURIComponent(state.room.id)); showCelebrations(data.celebrations); } catch (_) { /* keep what is showing */ }
+  if (!state.room) return;
+  try {
+    var data = await api('/api/celebrations?room=' + encodeURIComponent(state.room.id));
+    showCelebrations(state.room.showCelebrations === false ? [] : data.celebrations);
+    if (new URLSearchParams(location.search).get('holiday') === null) applyHoliday(data.holiday && data.holiday.name);
+  } catch (_) { /* keep what is showing */ }
 }
 setInterval(loadCelebrations, 15 * 60 * 1000);
 
@@ -208,6 +228,7 @@ function clockText(minutes) {
   return ((h % 12) || 12) + ':' + ('0' + m).slice(-2) + ' ' + (h < 12 ? 'AM' : 'PM');
 }
 function closedText() {
+  if (state.holiday) return state.holiday + ' \u00b7 office closed, no bookings';
   var hours = state.room.officeHours;
   return hours ? 'Office hours ' + clockText(hours.startMinutes) + ' \u2013 ' + clockText(hours.endMinutes) : 'Closed';
 }

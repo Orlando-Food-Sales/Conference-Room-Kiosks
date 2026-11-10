@@ -183,6 +183,8 @@ Weather uses one location for all rooms (the defaults are Glen Rock, NJ; set `WE
 
 Birthdays and work anniversaries come from a shared Microsoft 365 mailbox. Set `BIRTHDAY_CALENDAR_MAILBOX` to its address; leave it empty to turn the feature off. The app registration needs `Calendars.Read` for that mailbox as well (include it in the Application RBAC scope). Only event titles containing "birthday", "b'day" or "anniversary" are shown, so PTO and holiday events in the same mailbox are ignored. Use `BIRTHDAY_CALENDAR_NAME` to read only calendars whose name contains some text.
 
+The same mailbox also marks company holidays. Create an all-day event whose title starts with "Holiday" (for example "Holiday - Christmas", or "Holiday-Thanksgiving" spanning two days). On those days every display shows "Closed" with the holiday name and hides booking. If `BIRTHDAY_CALENDAR_NAME` is set, the holiday events must be in a calendar that matches it.
+
 Then:
 
 ```bash

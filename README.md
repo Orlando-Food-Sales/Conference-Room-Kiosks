@@ -9,6 +9,7 @@ dependencies; Node.js 20 or later.
 - Room status (Available / In use), clock, and today's schedule with NOW and NEXT badges.
 - "Free until 2:30 PM" on the status card. For rooms with `allowQuickBooking`, one-tap 15, 30 and 60 minute buttons (only those that fit before the next meeting) plus a "Reserve now" form.
 - Office hours (default 8:00 AM to 5:00 PM, Monday to Friday, in the room's time zone): outside them the display says "Closed" instead of "Available" and hides booking. A meeting still in progress shows "In use". During the day, "Free until" stops at closing time and booking buttons never run past it.
+- Company holidays from the same shared calendar as birthdays: an all-day event titled "Holiday - Christmas" (anything starting with "Holiday") shows "Closed" with the holiday name and hides all booking that day. A bare "HOLIDAY" takes its name from the public holidays calendar. Public holidays alone (Veterans Day and so on) do not close the office.
 - Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
   mood that follows the weather (clear, clouds, rain, storm, snow, fog).
@@ -50,7 +51,7 @@ All settings are environment variables; see `.env.example`.
 celebration. It is a review tool; remove or block it on public kiosks if you prefer.
 
 Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
-`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `quickbook=1` (show the booking buttons), `hours` (open or closed), `nostream=1`.
+`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `nostream=1`.
 
 ## Security
 

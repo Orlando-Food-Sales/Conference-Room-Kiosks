@@ -59,6 +59,7 @@
     if ($('display').value) q.set('display', $('display').value);
     if ($('message').value) q.set('message', $('message').value);
     if ($('hours').value) q.set('hours', $('hours').value);
+    q.set('holiday', $('holiday').value);
     return '/room/room?' + q;
   }
 
@@ -80,11 +81,11 @@
     if (frame.getAttribute('src') !== target) frame.setAttribute('src', target);
     $('link').setAttribute('href', target.replace('&nostream=1', ''));
     var anim = ANIMATIONS.filter(function (a) { return a.id === selected; })[0];
-    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto'), 'celebrate: ' + ($('celebrate').value === 'none' ? 'hidden' : $('celebrate').value), 'booking buttons: ' + ({ '': 'auto', '1': 'shown', '0': 'hidden' }[$('quickbook').value]), 'hours: ' + ($('hours').value || 'auto'), 'screen: ' + ($('display').value || 'on') + ($('message').value ? ' + message' : '')].join(' · ');
+    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto'), 'celebrate: ' + ($('celebrate').value === 'none' ? 'hidden' : $('celebrate').value), 'booking buttons: ' + ({ '': 'auto', '1': 'shown', '0': 'hidden' }[$('quickbook').value]), 'hours: ' + ($('hours').value || 'auto'), 'holiday: ' + ($('holiday').value === 'none' ? 'no' : $('holiday').value), 'screen: ' + ($('display').value || 'on') + ($('message').value ? ' + message' : '')].join(' · ');
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis

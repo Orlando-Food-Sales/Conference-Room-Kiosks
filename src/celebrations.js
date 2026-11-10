@@ -26,6 +26,15 @@ export function parseCelebration(subject, nameStyle = 'first') {
   return { kind, name: name.slice(0, 40), years };
 }
 
+// Company holidays are all-day events whose title starts with "Holiday" ("Holiday - Christmas",
+// "Holiday-Thanksgiving", or just "HOLIDAY"). Returns the holiday name, '' for a bare "Holiday",
+// or null when the title is not a company holiday.
+export function holidayName(subject) {
+  const raw = String(subject || '').replace(NOISE, ' ').trim();
+  if (!/^holiday\b/i.test(raw)) return null;
+  return raw.replace(/^holiday\s*[-\u2013\u2014:|]*\s*/i, '').trim().slice(0, 60);
+}
+
 function todayIn(timeZone, now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
@@ -49,16 +58,16 @@ export class CelebrationService {
   async get(now = new Date()) {
     const b = this.config.birthdays;
     const date = todayIn(b.timeZone, now);
-    if (!this.enabled) return { date, celebrations: [] };
+    if (!this.enabled) return { date, celebrations: [], holiday: null };
     if (this.cached && this.cachedKey === date && Date.now() - this.cachedAt < this.ttlMs) return this.cached;
     try {
-      const celebrations = await this.fetchToday(date, now);
-      this.cached = { date, celebrations };
+      const { celebrations, holiday } = await this.fetchToday(date, now);
+      this.cached = { date, celebrations, holiday };
       this.cachedKey = date;
       this.cachedAt = Date.now();
     } catch (error) {
       // Keep yesterday's answer off the screen: only reuse a result for the same date.
-      if (!(this.cached && this.cachedKey === date)) return { date, celebrations: [] };
+      if (!(this.cached && this.cachedKey === date)) return { date, celebrations: [], holiday: null };
     }
     return this.cached;
   }
@@ -76,12 +85,12 @@ export class CelebrationService {
   // Titles are filtered by keyword afterwards, so reading PTO or holiday calendars is harmless.
   async calendarIds(base) {
     const b = this.config.birthdays;
-    if (b.calendarId) return [b.calendarId];
+    if (b.calendarId) return [{ id: b.calendarId, name: '' }];
     const list = await this.graph(`${base}/calendars?$select=id,name&$top=50`, b.timeZone);
     const calendars = list.value || [];
     const wanted = String(b.calendarName || '').toLowerCase();
     const picked = wanted ? calendars.filter(c => String(c.name || '').toLowerCase().includes(wanted)) : calendars;
-    return picked.slice(0, 10).map(c => c.id);
+    return picked.slice(0, 10).map(c => ({ id: c.id, name: String(c.name || '') }));
   }
 
   async fetchToday(date, now) {
@@ -94,25 +103,33 @@ export class CelebrationService {
       '$top': '100'
     });
     const base = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(b.mailbox)}`;
-    const calendarIds = await this.calendarIds(base);
+    const calendars = await this.calendarIds(base);
     const events = [];
-    for (const id of calendarIds) {
+    for (const { id, name } of calendars) {
       const path = id ? `/calendars/${encodeURIComponent(id)}` : '';
       let next = `${base}${path}/calendarView?${params}`;
       for (let page = 0; next && page < 5; page += 1) {
         const body = await this.graph(next, b.timeZone);
-        events.push(...(body.value || []));
+        events.push(...(body.value || []).map(event => ({ ...event, calendarName: name })));
         next = body['@odata.nextLink'] || '';
       }
     }
     const seen = new Set();
     const out = [];
+    let holiday = null;
+    let publicHoliday = '';
     for (const event of events) {
       if (event.isCancelled) continue;
       const start = String(event.start?.dateTime || '').slice(0, 10);
       const end = String(event.end?.dateTime || '').slice(0, 10);
       const today = event.isAllDay ? (start <= date && date < end) : start === date;
       if (!today) continue;
+      if (event.isAllDay) {
+        const name = holidayName(event.subject);
+        if (name !== null && !holiday) holiday = { name };
+        // A bare "Holiday" entry borrows the name from the public holidays calendar for the same day.
+        else if (name === null && /holiday/i.test(event.calendarName) && !publicHoliday) publicHoliday = String(event.subject || '').trim().slice(0, 60);
+      }
       const entry = parseCelebration(event.subject, b.nameStyle);
       if (!entry) continue;
       const key = `${entry.kind}:${entry.name.toLowerCase()}`;
@@ -120,6 +137,7 @@ export class CelebrationService {
       seen.add(key);
       out.push(entry);
     }
-    return out.slice(0, 12);
+    if (holiday && !holiday.name) holiday.name = publicHoliday || 'Company holiday';
+    return { celebrations: out.slice(0, 12), holiday };
   }
 }

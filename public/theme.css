@@ -524,3 +524,44 @@ body.display-off::before, body.display-off::after { display: none; }
 /* After hours: neutral instead of green. */
 .status-panel.closed:before { background: var(--muted); }
 .status-panel.closed .status-copy > p:first-of-type { color: var(--muted); }
+
+/* ---- Fit the tablet (Samsung Galaxy Tab A7 Lite 8.7in, 1340x800 native) ----
+   The page always fits the screen height: the status card shrinks to its content, the schedule gets
+   the rest, and rows that do not fit are hidden (public/app.js fitRows) instead of scrolling. */
+.display { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; grid-template-rows: auto auto minmax(0, 1fr); padding: clamp(14px, 2.4vw, 40px); gap: clamp(10px, 1.8vw, 24px); }
+.status-panel { min-height: 0; padding: clamp(16px, 3vw, 48px) clamp(20px, 4vw, 56px); }
+.status-copy h2 { font-size: clamp(2.2rem, min(8vw, 15vh), 7rem); }
+.schedule { display: flex; flex-direction: column; min-height: 0; }
+.event-list { position: relative; flex: 1; min-height: 0; overflow: hidden; align-content: start; }
+.snoopy { width: auto; aspect-ratio: 192 / 208; height: min(216px, 80%); }
+.topbar h1 { font-size: clamp(1.6rem, min(4vw, 7vh), 4.4rem); }
+.clock-block strong { font-size: clamp(1.8rem, min(5vw, 9vh), 5rem); }
+
+@media (max-height: 700px) {
+  .eyebrow { margin-bottom: 4px; }
+  .status-copy > p:first-of-type { margin-bottom: 8px; }
+  .status-detail { margin-top: 10px; }
+  .quick-book { margin-top: 12px; gap: 10px; }
+  .quick-book button { min-height: 40px; padding: 8px 18px; font-size: .95rem; }
+  .celebration { margin-top: 10px; gap: 2px; }
+  .celebration p { font-size: 1rem; }
+  .section-heading { padding-bottom: 4px; }
+  .event-list { gap: 6px; padding-top: 6px; }
+  .event.meeting-row { padding: 8px 14px; }
+  .meeting-subject { font-size: 1.05rem; }
+  .meeting-time { font-size: .9rem; }
+  .clock-block span { font-size: .8rem; }
+  .reserve { padding: 12px 20px; }
+}
+@media (max-height: 540px) {
+  .clock-block span, .eyebrow { display: none; }
+  .meeting-organizer { display: none; }
+  .event.meeting-row { grid-template-columns: 170px minmax(0, 1fr) 64px; }
+}
+
+/* Portrait or narrow: wider time column so the time never runs into the title. */
+@media (max-width: 800px) {
+  .event.meeting-row { grid-template-columns: 150px minmax(0, 1fr) 56px; }
+  .meeting-time { font-size: .82rem; white-space: nowrap; }
+  .snoopy { right: 12px; top: 12px; height: 96px; }
+}

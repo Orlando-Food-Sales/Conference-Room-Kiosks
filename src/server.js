@@ -142,8 +142,9 @@ export function createAppServer(options = {}) {
       if ((req.method === 'GET' || isHead) && url.pathname === '/healthz') return sendJson(res, 200, { status: 'ok', mode: config.demoMode ? 'demo' : 'm365', rooms: config.rooms.length, uptimeSeconds: Math.round(process.uptime()) }, isHead);
       if (req.method === 'GET' && url.pathname === '/api/celebrations') {
         const room = roomById.get(url.searchParams.get('room') || '');
-        if (room && !room.showCelebrations) return sendJson(res, 200, { celebrations: [] });
-        return sendJson(res, 200, await celebrations.get());
+        const today = await celebrations.get();
+        // Birthdays can be hidden per room; a company holiday always applies.
+        return sendJson(res, 200, room && !room.showCelebrations ? { ...today, celebrations: [] } : today);
       }
       if (req.method === 'GET' && url.pathname === '/api/weather') return sendJson(res, 200, { weather: await weather.get() });
       if (req.method === 'GET' && url.pathname === '/api/rooms') return sendJson(res, 200, { rooms: config.rooms.map(publicRoom), refreshSeconds: config.eventRefreshSeconds });
