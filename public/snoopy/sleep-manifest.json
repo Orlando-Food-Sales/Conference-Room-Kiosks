@@ -3,8 +3,10 @@
   "cellWidth": 288,
   "cellHeight": 312,
   "columns": 8,
-  "rows": 19,
+  "rows": 23,
   "wakeMs": 15000,
+  "stirEveryMs": 240000,
+  "stirAwakeMs": 10000,
   "atlas": "/snoopy/sleep.png",
   "house": "/snoopy/sleep-house.png",
   "zs": "/snoopy/sleep-zs.png",
@@ -115,6 +117,30 @@
       "row": 18,
       "count": 8,
       "ms": 140,
+      "loop": false
+    },
+    "awake_shrug": {
+      "row": 19,
+      "count": 6,
+      "ms": 180,
+      "loop": false
+    },
+    "awake_thinking": {
+      "row": 20,
+      "count": 6,
+      "ms": 220,
+      "loop": false
+    },
+    "awake_glance": {
+      "row": 21,
+      "count": 6,
+      "ms": 200,
+      "loop": false
+    },
+    "sleepy_droop": {
+      "row": 22,
+      "count": 8,
+      "ms": 160,
       "loop": false
     }
   }

@@ -6,6 +6,11 @@
     var reduced = Boolean(options.reducedMotion), active = false, phase = 'off';
     var state = '', frame = 0, queue = [], sequence = null, timer = null, wakeTimer = null;
     var deadline = 0, generation = 0, nextVariation = 0, variation = 0, awakeLookAt = 0;
+    // Awake extras: while he is up he rotates through these (the rotation carries on from one wake to the next, so
+    // each tap shows something different). Clips missing from the manifest are skipped, so an older sheet still works.
+    var rnd = options.random || Math.random, extraIndex = 0, nextStir = Infinity;
+    var AWAKE_EXTRAS = ['awake_shrug', 'awake_thinking', 'look_around', 'awake_glance', 'sleepy_droop'].filter(function (id) { return manifest.clips[id]; });
+    function nextExtra() { var id = AWAKE_EXTRAS[extraIndex % AWAKE_EXTRAS.length]; extraIndex += 1; return id; }
     function snapshot() { return { active: active, phase: phase, clip: state, frame: frame, awakeUntil: deadline }; }
     function emit() { if (options.onFrame) options.onFrame(snapshot()); }
     function clearAnimation() { generation += 1; cancel(timer); timer = null; }
@@ -33,7 +38,10 @@
     }
     function enterSleep() {
       phase = 'asleep'; deadline = 0; cancel(wakeTimer); wakeTimer = null;
-      nextVariation = now() + 10000; play('sleep_breathing');
+      nextVariation = now() + 10000;
+      // On a Closed day he wakes up by himself now and then (manifest.stirEveryMs, 0.6x to 1.4x of it; 0 = never; never with reduced motion).
+      nextStir = manifest.stirEveryMs > 0 && !reduced ? now() + manifest.stirEveryMs * (0.6 + 0.8 * rnd()) : Infinity;
+      play('sleep_breathing');
     }
     function returnToSleep() {
       if (!active) return;
@@ -46,7 +54,7 @@
         var next = queue[0], rest = queue.slice(1);
         if (next === '@sleep') return enterSleep();
         if (next === '@awake') {
-          phase = 'awake'; awakeLookAt = now() + 4000;
+          phase = 'awake'; awakeLookAt = now() + 2500;
           if (now() >= deadline) return returnToSleep();
           return play('awake_idle');
         }
@@ -54,6 +62,7 @@
       }
       if (phase === 'asleep') {
         if (state !== 'sleep_breathing') return play('sleep_breathing');
+        if (now() >= nextStir) return stir();
         if (now() >= nextVariation) {
           nextVariation = now() + 12000;
           return play(variation++ % 2 ? 'sleep_paw_twitch' : 'sleep_ear_flick');
@@ -62,8 +71,8 @@
       }
       if (phase === 'awake') {
         if (now() >= deadline) return returnToSleep();
-        if (state === 'awake_idle' && now() >= awakeLookAt) {
-          awakeLookAt = now() + 8000; return play('look_around');
+        if (state === 'awake_idle' && now() >= awakeLookAt && AWAKE_EXTRAS.length) {
+          awakeLookAt = now() + 2500; return play(nextExtra());
         }
         return play('awake_idle');
       }
@@ -93,9 +102,16 @@
         var restore = []; for (var j = previousFrame; j >= 0; j -= 1) restore.push(j);
         play('lie_down', ['sleepy_wave', '@awake'], restore);
       } else {
-        play('tap_reaction', ['eyes_open', 'head_raise', 'yawn', 'stretch', 'sit_up', 'sleepy_wave', '@awake']);
+        wakeUp();
       }
       return true;
+    }
+    function wakeUp() { play('tap_reaction', ['eyes_open', 'head_raise', 'yawn', 'stretch', 'sit_up', 'sleepy_wave', '@awake']); }
+    // A self-wake: the same stir, yawn, stretch and wave as a tap, but he only stays up for manifest.stirAwakeMs.
+    // A tap during it extends it to the full wake time like any other tap.
+    function stir() {
+      phase = 'waking'; deadline = now() + (manifest.stirAwakeMs || 10000); armWakeDeadline();
+      wakeUp();
     }
     return {
       setClosed: function (closed, initial) {

@@ -23,7 +23,7 @@ dependencies; Node.js 22 or later.
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
 - Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, St. Patrick's Day, Easter, July 4th, Halloween, Veterans Day, Thanksgiving), pajamas (see sleeping, next) when the display says Closed, then weather and feels-like temperature (storm raincoat, raincoat, winter coat, Hawaiian shirt), and a chef hat on otherwise plain Fridays. Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
-- Sleeping Snoopy: while the display says Closed he sleeps on his red doghouse with floating Zs. A tap wakes him (stir, yawn, stretch, sit up, sleepy wave) for 15 seconds, then he settles back to sleep. Details and file list in `public/snoopy/README.md`.
+- Sleeping Snoopy: while the display says Closed he sleeps on his red doghouse with floating Zs. A tap wakes him (stir, yawn, stretch, sit up, sleepy wave) for 15 seconds, with a shrug, a thoughtful chin-rub, a glance or a look-around along the way, then he settles back to sleep. On Closed days he also stirs by himself every few minutes. Details and file list in `public/snoopy/README.md`.
 - Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card. On a working day the line also covers the closed days that follow (a Saturday birthday shows on Friday as "Mabel (Saturday)").
 - Dashboard at `/dashboard` (needs `ADMIN_TOKEN`): room overview, tablet status, messages, display on/off, alerts with a test-alert button, the running version and the current weather. It has the same Orlando Foods look as the displays.
 
@@ -31,7 +31,7 @@ dependencies; Node.js 22 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 158 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 167 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`. Updating a running server: run `scripts/deploy-on-server.sh` on the server (it pulls from GitHub, tests, backs up, copies, restarts only if needed, checks, and rolls back by itself if a check fails); the step-by-step version and the first-time setup are in `DEPLOY-CHECKLIST.md`.

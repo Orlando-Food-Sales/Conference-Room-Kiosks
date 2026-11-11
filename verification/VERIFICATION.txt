@@ -2,7 +2,7 @@ Verification notes (updated 2026-11-11)
 
 Checked automatically (npm run check):
   node --check on src/*.js and public/*.js: PASS
-  158 offline tests: PASS on Node.js 22.16, 24.22 and 26.13 (settings, holidays, birthdays, weather, bookings and holiday block,
+  167 offline tests: PASS on Node.js 22.16, 24.22 and 26.13 (settings, holidays, birthdays, weather, bookings and holiday block,
     change detection, tablet alerts, Teams alert delivery against a fake Microsoft, secret expiry
     reminders, live-connection ping, tablet auto-heal and kiosk mode logic, daylight saving changes, Easter dates, ice weather, official weather warnings, the logo, the preview page controls, version reporting, the dashboard look, the sleeping Snoopy engine and wiring (9 engine tests from Codex),
     no third-party packages and one Node version everywhere, admin controls,
@@ -13,6 +13,8 @@ Checked by hand:
   Sleeping Snoopy in Chrome at 1006x600 with the real artwork: asleep with Zs, tap, all wake clips in order, awake
     15 seconds, drowsy and back to sleep, normal Snoopy hidden meanwhile, no console errors or failed requests
     (not yet seen on the real tablet)
+  Sleeping Snoopy extras (shrug, thinking, glance, sleepy droop) and the self-wake: unit-tested; in Chrome a tap showed the
+    shrug and the hand-on-chin; the glance, the droop and the self-wake were not watched in a browser
   Sleeping Snoopy sheet rebuilt at 288x312 cells and compared with Codex's 192x208 one in Chrome at 1006x600 @1.33x:
     18 of 18 clip scales identical to Codex's, no frame touches a cell edge, outlines within 2 px of Codex's when
     shrunk back, on-screen edge contrast +18% to +31%; tools/rebuild_sleep_hq.py regenerates the installed files
