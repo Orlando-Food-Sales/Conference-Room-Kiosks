@@ -1,6 +1,6 @@
 # Microsoft 365 Room Display
 
-Multi-room meeting-room display for tablets, with an operations dashboard. It reads room calendars
+Multi-room meeting-room display for tablets, with a control dashboard. It reads room calendars
 from Microsoft 365 (Microsoft Graph), or runs in demo mode with sample meetings. No runtime
 dependencies; Node.js 22 or later.
 
@@ -30,7 +30,7 @@ dependencies; Node.js 22 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 135 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 137 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`. Updating a running server step by step (backup, copy, settings, restart, checks, rollback): `DEPLOY-CHECKLIST.md`.

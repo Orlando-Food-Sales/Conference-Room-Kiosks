@@ -19,7 +19,7 @@ test('the dashboard uses the same colours as the room displays (dark theme)', ()
 });
 
 test('the dashboard shows the Orlando Foods logo, with a name for screen readers', () => {
-  assert.match(html, /<img class="logo" src="\/logo\/orlando-foods-white\.png" alt="Orlando Foods"/);
+  assert.match(html, /<img class="logo" src="\/logo\/orlando-foods-white\.png" srcset="[^"]+" sizes="[^"]+" alt="Orlando Foods"/);
   assert.ok(fs.existsSync(new URL('../public/logo/orlando-foods-white.png', import.meta.url)));
   assert.match(html, /<meta name="theme-color" content="#120b0d">/);
   assert.match(css, /\.logo\{[^}]*height:clamp/);
@@ -37,4 +37,12 @@ test('buttons and links are easy to tap and show where the keyboard is', () => {
   assert.match(css, /button:focus-visible[^{]*\{outline:2px solid var\(--accent\)/);
   assert.match(css, /@media \(max-width:560px\)/, 'there is a layout for phones');
   assert.match(css, /minmax\(min\(300px,100%\),1fr\)/, 'room cards never overflow a narrow screen');
+});
+
+test('the dashboard heading and browser tab title say the same thing', () => {
+  const heading = html.match(/<h1>([^<]+)<\/h1>/)[1];
+  const title = html.match(/<title>([^<]+)<\/title>/)[1];
+  assert.equal(heading, 'Room Display Control');
+  assert.equal(title, heading, 'the tab title matches the heading');
+  assert.doesNotMatch(html, /Operations dashboard/);
 });

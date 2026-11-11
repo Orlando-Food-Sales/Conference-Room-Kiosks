@@ -100,7 +100,9 @@ test('the Orlando Foods logo files exist, are small web-ready PNGs with transpar
   assert.match(html, /logo-for-dark" src="\/logo\/orlando-foods-white\.png"/, 'white logo for the dark theme');
   assert.match(html, /logo-for-light" src="\/logo\/orlando-foods-color\.png"/, 'colour logo for the light theme (its dark text would vanish on dark)');
   assert.match(css, /:root\[data-theme="light"\] \.brand-logo \.logo-for-dark \{ display: none; \}/);
-  assert.match(css, /@media \(max-width: 800px\), \(max-height: 540px\) \{ \.topbar > \.brand-logo \{ display: none; \} \}/, 'hidden where there is no room');
+  assert.match(css, /@media \(max-width: 800px\) \{ \.topbar > \.brand-logo \{ display: none; \} \}/, 'hidden on narrow portrait screens');
+  assert.doesNotMatch(css, /max-height: 540px\)[^{]*\{ \.topbar > \.brand-logo \{ display: none/, 'but still shown on short landscape screens such as the real tablet (about 893x500)');
+  assert.match(css, /@media \(max-height: 540px\) \{ \.brand-logo \{ height: clamp\(30px, 9vh, 44px\); \} \}/, 'a little smaller there');
   assert.ok(fs.existsSync(new URL('../assets/logo/Orlando-Foods_Logo_NoTagline_Color.png', import.meta.url)), 'the full-size originals are kept outside the served folder');
 });
 
@@ -135,7 +137,7 @@ test('every weather in the preview has a background mood, and the tour covers th
 
 test('the preview offers the real tablet size and the warning examples the display understands', () => {
   const screens = options('screen').map(o => o.value);
-  for (const size of ['1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
+  for (const size of ['893x500', '500x893', '1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
   const warnings = options('warning').map(o => o.value);
   assert.ok(warnings.some(w => w.includes(';')), 'several warnings at once');
   assert.ok(warnings.some(w => w.endsWith('|watch')) && warnings.some(w => w && w !== 'none' && !w.includes('|')), 'both red and amber');
@@ -156,4 +158,20 @@ test('the favicon and touch icon are real files with the right sizes, and every 
     assert.match(text, /<link rel="icon" href="\/favicon\.ico"/, `${page} links the favicon`);
     assert.match(text, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"/, `${page} links the touch icon`);
   }
+});
+
+test('every logo size named in a srcset exists at exactly the width it claims, so the browser never has to shrink a big image', () => {
+  const pngWidth = file => fs.readFileSync(new URL(`../public${file}`, import.meta.url)).readUInt32BE(16);
+  for (const [name, text] of [['index.html', html], ['dashboard.html', fs.readFileSync(new URL('../public/dashboard.html', import.meta.url), 'utf8')]]) {
+    const sets = [...text.matchAll(/srcset="([^"]+)"/g)].map(m => m[1]);
+    assert.ok(sets.length >= 1, `${name} uses srcset`);
+    for (const set of sets) {
+      const entries = set.split(',').map(e => e.trim().split(/\s+/));
+      assert.deepEqual(entries.map(e => e[1]), ['200w', '300w', '400w', '600w', '800w'], 'five sizes, smallest first');
+      for (const [file, descriptor] of entries) assert.equal(pngWidth(file), Number(descriptor.slice(0, -1)), `${file} is ${descriptor}`);
+    }
+  }
+  const logoSizes = [...html.matchAll(/<img[^>]* sizes="([^"]+)"/g)].map(m => m[1]);
+  assert.equal(logoSizes.length, 4, 'picker and top bar, dark and light');
+  assert.ok(logoSizes.every(value => /^clamp\(/.test(value)), 'sizes follow the CSS height of the logo');
 });

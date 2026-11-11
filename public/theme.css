@@ -585,7 +585,8 @@ body.display-off::before, body.display-off::after { display: none; }
 @media (max-height: 700px) { .weather-alert { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
 
 /* Orlando Foods logo: white version on the dark theme, colour version on the light theme (the colour one has dark
-   lettering that would vanish on dark). It sits in the middle of the top bar and is hidden where there is no room. */
+   lettering that would vanish on dark). It sits in the middle of the top bar, a little smaller on short landscape screens (the real Galaxy Tab A7 Lite is
+   about 893x500 CSS pixels at 1.5x), and is hidden on narrow portrait screens. srcset gives the browser pre-scaled copies. */
 .brand-logo { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center; height: clamp(34px, 8.5vh, 76px); }
 .brand-logo img { height: 100%; width: auto; display: block; }
 .brand-logo .logo-for-light { display: none; }
@@ -594,4 +595,5 @@ body.display-off::before, body.display-off::after { display: none; }
 .topbar > :first-child, .topbar > .clock-block { flex: 1 1 0; min-width: 0; }
 .topbar > .clock-block { text-align: right; }
 .brand-logo-picker { justify-content: flex-start; height: clamp(40px, 8vh, 72px); margin-bottom: 18px; }
-@media (max-width: 800px), (max-height: 540px) { .topbar > .brand-logo { display: none; } }
+@media (max-width: 800px) { .topbar > .brand-logo { display: none; } }
+@media (max-height: 540px) { .brand-logo { height: clamp(30px, 9vh, 44px); } }
