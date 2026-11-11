@@ -660,3 +660,19 @@ test('checking warnings never throws, whatever the weather service does', async 
   await plain.state.checkWeatherAlerts();
   assert.equal(plain.state.alerts.length, 0);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Version reporting
+// ---------------------------------------------------------------------------------------------
+
+test('healthz and the dashboard overview report the version that is running', async t => {
+  const { version } = JSON.parse((await import('node:fs')).readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.match(version, /^\d+\.\d+\.\d+$/);
+  const { base } = await start(t);
+  const health = await (await json(base, '/healthz')).json();
+  assert.equal(health.status, 'ok');
+  assert.equal(health.version, version, 'healthz shows the package.json version');
+  assert.equal((await (await json(base, '/api/admin/overview', { token: TOKEN })).json()).version, version, 'so does the dashboard overview');
+  const head = await fetch(`${base}/healthz`, { method: 'HEAD' });
+  assert.equal(head.status, 200, 'HEAD still works for uptime monitors');
+});

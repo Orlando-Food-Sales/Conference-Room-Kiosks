@@ -13,6 +13,8 @@ import { TeamsAlerts } from './teams-alerts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
+// The version in package.json, shown by /healthz and on the dashboard so you can tell which release is running.
+const VERSION = (() => { try { return String(JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || 'unknown'); } catch { return 'unknown'; } })();
 const PING_SECONDS = 25;   // how often the live connection to each tablet gets a "ping" event (tablets reconnect when they stop)
 
 function loadDotEnv(file = path.join(ROOT, '.env')) {
@@ -304,7 +306,7 @@ export function createAppServer(options = {}) {
     const url = new URL(req.url, 'http://localhost');
     const isHead = req.method === 'HEAD';
     try {
-      if ((req.method === 'GET' || isHead) && url.pathname === '/healthz') return sendJson(res, 200, { status: 'ok', mode: config.demoMode ? 'demo' : 'm365', rooms: config.rooms.length, uptimeSeconds: Math.round(process.uptime()) }, isHead);
+      if ((req.method === 'GET' || isHead) && url.pathname === '/healthz') return sendJson(res, 200, { status: 'ok', version: VERSION, mode: config.demoMode ? 'demo' : 'm365', rooms: config.rooms.length, uptimeSeconds: Math.round(process.uptime()) }, isHead);
       if (req.method === 'GET' && url.pathname === '/api/celebrations') {
         const room = roomById.get(url.searchParams.get('room') || '');
         const today = await celebrations.get();
@@ -379,7 +381,7 @@ export function createAppServer(options = {}) {
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
             return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: controls.get(room.id), error };
           }));
-          return sendJson(res, 200, { rooms, alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { version: VERSION, rooms, alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';

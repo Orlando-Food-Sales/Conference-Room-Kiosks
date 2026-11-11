@@ -354,6 +354,8 @@ sudo systemctl start m365-room-display
 sudo -u m365room /opt/m365-room-display/scripts/smoke-test.sh
 ```
 
+The smoke test prints `Running version X.Y.Z` (the same number `curl http://127.0.0.1:3000/healthz` shows, and the dashboard status line starts with), the weather it can see and any active official weather warnings. It fails if a page, a logo file or the warnings list is missing. Check that the version is the one you meant to install: if it still shows the old number, the service has not restarted on the new code.
+
 To roll back, stop the service, extract the selected verified archive, restore its matching systemd and Nginx files, run `systemctl daemon-reload`, validate Nginx, and restart both services.
 
 ## 16. Troubleshooting

@@ -24,13 +24,13 @@ dependencies; Node.js 22 or later.
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
 - Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, St. Patrick's Day, Easter, July 4th, Halloween, Thanksgiving), pajamas when the display says Closed, then weather and feels-like temperature (storm raincoat, raincoat, winter coat, Hawaiian shirt), and a chef hat on otherwise plain Fridays. Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
 - Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card. On a working day the line also covers the closed days that follow (a Saturday birthday shows on Friday as "Mabel (Saturday)").
-- Dashboard at `/dashboard` (needs `ADMIN_TOKEN`): room overview, tablet status, messages, display on/off.
+- Dashboard at `/dashboard` (needs `ADMIN_TOKEN`): room overview, tablet status, messages, display on/off, alerts with a test-alert button, the running version and the current weather. It has the same Orlando Foods look as the displays.
 
 ## Run it
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 125 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 132 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`.

@@ -1,7 +1,54 @@
-:root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#07111f;color:#f6f8fb}body{margin:0}main{max-width:1200px;margin:auto;padding:2rem}header{display:flex;justify-content:space-between;align-items:center}.eyebrow{color:#57a5ff;letter-spacing:.15em;font-weight:800}button,input{font:inherit;padding:.7rem;border-radius:8px;border:1px solid #31445f}button{cursor:pointer;background:#57a5ff;color:#06111f;font-weight:800}input{background:#0d1b2c;color:#fff}.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem}.room{background:#0d1b2c;border:1px solid #26364b;border-radius:16px;padding:1.25rem}.ok{color:#35d07f}.bad,#error{color:#ff8b8b}.controls{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}.controls input{width:100%}.muted,#meta{color:#9badc3}
-
-.links{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin-top:1rem}.links a{color:#57a5ff;font-weight:700}.links code{color:#9badc3;font-size:.8rem;word-break:break-all}.links button{margin-left:auto}.live{margin-top:1rem;overflow:hidden;border-radius:10px;border:1px solid #26364b;background:#000;width:100%;aspect-ratio:16/10;position:relative}.live iframe{position:absolute;top:0;left:0;width:1280px;height:800px;border:0;transform-origin:0 0}
-.warn{color:#ffbf47}.live-label{position:absolute;inset:0;display:grid;place-items:center;color:#64748b;font-weight:800;letter-spacing:.25em;pointer-events:none}
-.alerts{margin:0 0 1rem}.alerts h2{margin:.5rem 0;font-size:1rem;color:#ff8b8b}.alerts p{margin:.25rem 0;padding:.6rem .8rem;border:1px solid #6b2b2b;border-radius:10px;background:#1b1114;color:#f6f8fb}.alerts time{color:#ff8b8b;font-weight:800;margin-right:.5rem}
-.devices{list-style:none;margin:.25rem 0 0;padding:0;font-size:.85rem;color:#9badc3}.devices li{margin:.2rem 0}.devices .on{color:#8fe3b4}.devices .off{color:#ff8b8b}
-.alert-tools{margin:.5rem 0 .25rem}#alertResult{margin:.25rem 0 .75rem;word-break:break-word}
+/* Orlando Foods look, shared with the room displays (same colours as theme.css, dark). */
+:root{color-scheme:dark;--bg:#120b0d;--panel:#1d1215;--card:#170e11;--line:#3b2429;--text:#faf5f5;--muted:#bda8ab;--accent:#ef5b62;--on-accent:#1a0507;--green:#35d07f;--red:#ff6b6b;--amber:#ffbf47;--glow:#4a1a22;font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 85% -10%,var(--glow) 0,transparent 45%),var(--bg)}
+main{max-width:1200px;margin:auto;padding:clamp(1rem,3vw,2rem)}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:1rem 1.5rem;padding-bottom:1rem;margin-bottom:1.25rem;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:clamp(1rem,3vw,2rem);min-width:0}
+.logo{height:clamp(40px,7vw,64px);width:auto;display:block;flex:none}
+.brand-text{border-left:1px solid var(--line);padding-left:clamp(1rem,3vw,2rem);min-width:0}
+.eyebrow{margin:0 0 .25rem;color:var(--accent);letter-spacing:.15em;font-weight:800;font-size:.8rem}
+h1{margin:0;font-size:clamp(1.4rem,3vw,2rem);letter-spacing:-.01em}
+button,input{font:inherit;padding:.7rem 1rem;border-radius:10px;border:1px solid var(--line)}
+button{cursor:pointer;background:var(--accent);color:var(--on-accent);font-weight:800;min-height:44px}
+button:hover{filter:brightness(1.08)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input{background:var(--card);color:var(--text)}
+input::placeholder{color:var(--muted)}
+#login{display:flex;flex-wrap:wrap;align-items:end;gap:.75rem;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1rem 1.25rem;margin-bottom:1rem}
+#login label{display:grid;gap:.4rem;color:var(--muted);font-size:.9rem;flex:1 1 260px}
+#meta,#weather{margin:.25rem 0}
+.muted,#meta{color:var(--muted)}
+.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:1rem}
+.room{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1.25rem;box-shadow:0 8px 24px #0005}
+.room h2{margin:0 0 .35rem;font-size:1.25rem}
+.room p{margin:.25rem 0}
+.ok,.bad,.warn{font-weight:800}
+.ok{color:var(--green)}
+.bad,#error{color:var(--red)}
+.warn{color:var(--amber)}
+.controls{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+.controls input{width:100%}
+.controls button,.links button{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:700}
+.controls button:hover,.links button:hover{border-color:var(--accent);color:var(--accent);filter:none}
+.links{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin-top:1rem}
+.links a{color:var(--accent);font-weight:700}
+.links code{color:var(--muted);font-size:.8rem;word-break:break-all}
+.links button{margin-left:auto}
+.live{margin-top:1rem;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:#000;width:100%;aspect-ratio:16/10;position:relative}
+.live iframe{position:absolute;top:0;left:0;width:1280px;height:800px;border:0;transform-origin:0 0}
+.live-label{position:absolute;inset:0;display:grid;place-items:center;color:#8d767a;font-weight:800;letter-spacing:.25em;pointer-events:none}
+.alerts{margin:0 0 1rem}
+.alerts h2{margin:.5rem 0;font-size:1rem;color:var(--red)}
+.alerts p{margin:.25rem 0;padding:.6rem .8rem;border:1px solid #6b2b2b;border-radius:10px;background:#251317;color:var(--text)}
+.alerts time{color:var(--red);font-weight:800;margin-right:.5rem}
+.devices{list-style:none;margin:.25rem 0 0;padding:0;font-size:.85rem;color:var(--muted)}
+.devices li{margin:.2rem 0}
+.devices .on{color:#8fe3b4}
+.devices .off{color:var(--red)}
+.alert-tools{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin:.75rem 0 .25rem}
+.alert-tools button{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:700}
+.alert-tools button:hover{border-color:var(--accent);color:var(--accent);filter:none}
+#alertResult{margin:.25rem 0 .75rem;word-break:break-word}
+@media (max-width:560px){.brand-text{border-left:0;padding-left:0}.brand{flex-wrap:wrap}.links button{margin-left:0}}

@@ -25,3 +25,15 @@ test('the supported Node version is the same everywhere it is written down', () 
   assert.match(read('INSTALL-UBUNTU.md'), new RegExp(`Node\\.js ${major} or later`));
   assert.ok(Number(process.versions.node.split('.')[0]) >= major, 'these tests run on a supported Node');
 });
+
+test('the version is the same in package.json and the lock file, and the changelog has a section for it', () => {
+  const lock = JSON.parse(read('package-lock.json'));
+  assert.equal(lock.version, pkg.version);
+  assert.equal(lock.packages[''].version, pkg.version);
+  assert.match(read('CHANGELOG.md'), new RegExp(`^## ${pkg.version.replace(/\./g, '\\.')}\\b`, 'm'), `CHANGELOG.md has a "## ${pkg.version}" heading`);
+});
+
+test('the smoke test checks the version, the logo, the dashboard files and the weather warnings', () => {
+  const smoke = read('scripts/smoke-test.sh');
+  for (const needle of ['/healthz', 'version', '/logo/orlando-foods-white.png', '/logo/orlando-foods-color.png', '/dashboard.css', '/dashboard.js', '/preview.html', '/api/weather', 'alerts']) assert.ok(smoke.includes(needle), `smoke-test.sh mentions ${needle}`);
+});

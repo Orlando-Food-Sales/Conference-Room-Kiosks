@@ -1,6 +1,6 @@
 # Release manifest
 
-Based on the verified v2.0.0 known-good deployment baseline, including the tablet compatibility correction (the browser never calls `crypto.randomUUID()` unconditionally). Everything added since is listed in `CHANGELOG.md` under "Unreleased".
+Based on the verified v2.0.0 known-good deployment baseline, including the tablet compatibility correction (the browser never calls `crypto.randomUUID()` unconditionally). Everything added since is listed in `CHANGELOG.md` (the 2.1.0 section).
 
 ## Files that describe a release
 

@@ -1,6 +1,6 @@
 {
   "name": "m365-meeting-room-display",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Multi-room Microsoft 365 meeting-room display and administration dashboard",
   "type": "module",

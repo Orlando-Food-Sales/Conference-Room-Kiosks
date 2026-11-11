@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 — 2026-11-11
 
+- `/healthz` now reports the running `version` (and so does the dashboard status line, "v2.1.0 · M365 · Updated ..."), so after a deploy you can see which release the server is on. The project version is now 2.1.0.
+- The dashboard has the Orlando Foods look: the logo, the same colours as the room displays, outlined secondary buttons, tap-sized buttons, keyboard focus outlines and a phone layout.
+- `scripts/smoke-test.sh` now also checks the version, the logo files, the dashboard and preview files, and that `/api/weather` includes the official warnings list (it prints the current weather and any active warnings).
 - Orlando Foods theme, dark by default; `?theme=light|auto`. Background mood follows the weather
   (`/api/weather`, cached 10 minutes, source described below; `WEATHER_*` settings; default location Glen Rock, NJ).
 - Schedule rows rebuilt as single-line rows with NOW and NEXT badges; page markup and stylesheet
@@ -41,7 +44,7 @@
 - Client secret expiry reminders: set `CLIENT_SECRET_EXPIRES=YYYY-MM-DD` and an alert goes out (dashboard, Teams, webhook) at 30, 14, 7, 3 and 1 days before, and when it has expired, during office hours. A restart repeats the current stage once.
 - Daylight saving: the "No more meetings today. Next: tomorrow" label added 24 hours to the clock, which is wrong on the two 23 and 25 hour days a year; it now counts calendar days. New tests run office-hours alerts and the secret expiry count across the March and November 2027 clock changes.
 - Node.js 22 or later is now required (`engines`, the installer and the docs): Node.js 20 reached end of life on 30 April 2026. Tests pass on Node.js 22, 24 and 26. A new test keeps the project free of third-party packages and the Node version consistent in every file.
-- Tests: 125 automatic tests (was 3) covering settings, holidays and birthdays, weather, bookings and the holiday block, instant change detection, tablet alerts, admin controls, security headers, and the outfit rules file (unique ids, real dates, image sizes, priority order). They run offline in about 7 seconds with `npm test`.
+- Tests: 132 automatic tests (was 3) covering settings, holidays and birthdays, weather, bookings and the holiday block, instant change detection, tablet alerts, admin controls, security headers, and the outfit rules file (unique ids, real dates, image sizes, priority order). They run offline in about 7 seconds with `npm test`.
 - `scripts/update-manifests.sh` regenerates `MANIFEST.txt` and `SHA256SUMS` from the tracked files (they were stale). Removed the partial `CHECKSUMS.sha256`. Rewrote `RELEASE_MANIFEST.md`, `UPDATING-GITHUB.md` and `verification/VERIFICATION.txt` to match the current project.
 - Fixed a race where a slow outfit image could replace the outfit chosen after it.
 - Added `.env.example` (the installer needs it), `.gitignore`, and updated docs.
