@@ -1,11 +1,29 @@
-Verification date: 2026-11-09
-Fixture: exact known-good JavaScript target block plus recovered base stylesheet
-git apply --unidiff-zero --check: PASS
-node --check public/app.js: PASS
-git diff --check: PASS
-python3 tools/apply_single_line_update.py --check .: PASS
-  public/app.js: already current; syntax valid
-  public/styles.css: already current
-  CHECK OK: repository is compatible; no files changed.
-Updater idempotency check: PASS (updated files recognized as already current)
-Secrets scan: bundle intentionally contains no production credentials or room configuration.
+Verification notes (updated 2026-11-11)
+
+Checked automatically (npm run check):
+  node --check on src/*.js and public/*.js: PASS
+  89 offline tests: PASS (settings, holidays, birthdays, weather, bookings and holiday block,
+    change detection, tablet alerts, Teams alert delivery against a fake Microsoft, admin controls,
+    security headers, outfit rules file)
+  Deliberate-break (mutation) testing: 22 changes to the code, all caught by the tests
+
+Checked by hand:
+  Room display, dashboard and preview pages in a browser against demo mode (screenshots)
+  Azure side of Teams alerts with the Azure CLI: Graph permissions granted with admin consent, Azure Bot
+    created (single tenant) with the Teams channel on, Teams app package uploaded and listed in the catalog
+
+NOT verified:
+  Real delivery of a Teams alert to a person. The Teams flow has only run against a fake Microsoft.
+    Use "Send test alert" on the dashboard after deploying; it reports per person why a delivery failed.
+  Whether Teams admin policies block the app for particular users (needs the Teams admin center)
+  The latest changes on the production server: they are on main but not yet deployed
+
+Secrets scan: the repository intentionally contains no production credentials, room configuration or
+  real email addresses. Run scripts/update-manifests.sh before committing to refresh SHA256SUMS.
+
+History (earlier single-line meeting rows update, 2026-11-09):
+  git apply --unidiff-zero --check: PASS
+  node --check public/app.js: PASS
+  git diff --check: PASS
+  python3 tools/apply_single_line_update.py --check .: PASS
+  Updater idempotency check: PASS

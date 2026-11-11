@@ -19,8 +19,6 @@ dependencies; Node.js 20 or later.
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
 - Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, St. Patrick's Day, Easter, July 4th, Halloween, Thanksgiving), pajamas when the display says Closed, then weather and feels-like temperature (storm raincoat, raincoat, winter coat, Hawaiian shirt), and a chef hat on otherwise plain Fridays. Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
-  (winter coat, raincoat, Hawaiian shirt). See `public/snoopy/outfits.json` and
-  `public/snoopy/outfits/README.md`.
 - Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card. On a working day the line also covers the closed days that follow (a Saturday birthday shows on Friday as "Mabel (Saturday)").
 - Dashboard at `/dashboard` (needs `ADMIN_TOKEN`): room overview, tablet status, messages, display on/off.
 
@@ -40,7 +38,7 @@ All settings are environment variables; see `.env.example`.
 
 - Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `ROOMS_FILE`
 - Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`, `CHANGE_CHECK_SECONDS`
-- Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`, and for Teams `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `TEAMS_BOT_TENANT_ID`, `TEAMS_ALERT_EMAILS`
+- Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`, and for Teams `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `TEAMS_BOT_TENANT_ID`, `TEAMS_BOT_CATALOG_ID` (the app's ID in the Teams admin center), `TEAMS_ALERT_EMAILS`, and rarely `TEAMS_BOT_SERVICE_URL`
 - Office hours: `OFFICE_HOURS_START`, `OFFICE_HOURS_END`, `OFFICE_DAYS`, or `OFFICE_HOURS=off`
 - Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms), `WEATHER_SOURCE` (auto, nws, open-meteo), `WEATHER_CONTACT`
 - Birthdays: `BIRTHDAY_CALENDAR_MAILBOX`, `BIRTHDAY_CALENDAR_NAME`, `BIRTHDAY_CALENDAR_ID`,

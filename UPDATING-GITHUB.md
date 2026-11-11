@@ -1,116 +1,46 @@
 # Update the GitHub repository
 
-These instructions assume the repository already contains the previously supplied
-v2 known-good source, including the `generateId()` browser compatibility fix.
+How changes get from your computer to GitHub and then to the kiosk server.
 
-## 1. Start from a clean branch
+## 1. Check and commit
 
 ```bash
-cd /path/to/meeting-room-display
+cd /path/to/Conference-Room-Kiosks
 git status --short
-git switch -c update/single-line-meeting-rows
+npm run check                  # syntax check and all offline tests must pass
+git add <the files you changed>
+scripts/update-manifests.sh    # refreshes MANIFEST.txt and SHA256SUMS (new files must be git added first)
+git add MANIFEST.txt SHA256SUMS
+git commit -m "Describe the change"
 ```
 
-If `git status --short` prints unrelated changes, commit or stash them first.
+Do not add `.env`, `config/rooms.json`, `teams-app-build/`, backups or logs; `.gitignore` already skips them. If `git status` shows anything that looks like a secret, stop and remove it before committing.
 
-## 2. Copy in the updater
+## 2. Push
 
-From this extracted bundle:
+Small changes can go straight to `main`. For anything risky, use a branch and a pull request:
 
 ```bash
-mkdir -p tools
-cp /path/to/bundle/tools/apply_single_line_update.py tools/
-chmod 755 tools/apply_single_line_update.py
+git switch -c my-change
+git push -u origin my-change
 ```
 
-Optionally also copy the review artifacts:
+Then open a pull request on GitHub and merge it when you are happy.
+
+## 3. Put it on the server
+
+Pushing to GitHub does not change the kiosks. Deploy as described in `INSTALL-UBUNTU.md` (section 15, "Update and rollback"): back up `/opt/m365-room-display`, copy the new files in without touching `.env`, `config/rooms.json` or `node_modules`, run `npm run check` on the server, restart with `sudo systemctl restart m365-room-display`, and open `/dashboard` to confirm. Changes that only touch files in `public/` need no restart, but tablets pick them up only when they reload (the nightly reload or the refresh button).
+
+A change that adds a new setting needs the matching line in the server's `.env` first (see `.env.example`).
+
+## 4. Roll back
 
 ```bash
-mkdir -p docs/updates
-cp /path/to/bundle/README.md docs/updates/single-line-meeting-rows.md
-cp /path/to/bundle/patches/0001-single-line-upcoming-meetings.patch docs/updates/
+git revert <commit>     # on your computer, then push and deploy again
 ```
 
-## 3. Compatibility check (does not modify files)
+On the server, restore the backup tarball you took before deploying and restart the service.
 
-```bash
-python3 tools/apply_single_line_update.py --check .
-```
+## Earlier one-time update
 
-Expected ending:
-
-```text
-CHECK OK: repository is compatible; no files changed.
-```
-
-The updater refuses to proceed unless it finds either the exact known-good old
-rendering block or the exact validated new block. It also syntax-checks the
-resulting JavaScript with Node.js before writing.
-
-## 4. Apply the update
-
-```bash
-python3 tools/apply_single_line_update.py --apply .
-```
-
-Expected ending:
-
-```text
-APPLY OK: updated repository files.
-```
-
-Running the command again is safe and reports a no-op.
-
-## 5. Review and validate
-
-```bash
-node --check public/app.js
-git diff --check
-git diff -- public/app.js public/styles.css
-```
-
-Confirm the diff contains these dedicated classes:
-
-```text
-meeting-row
-meeting-indicator
-meeting-time
-meeting-subject
-meeting-organizer
-```
-
-Run the repository's normal automated tests if it defines them. Do not replace
-`.env`, `config/rooms.json`, systemd, Nginx, or Microsoft Entra configuration for
-this UI-only update.
-
-## 6. Commit and push
-
-```bash
-git add public/app.js public/styles.css tools/apply_single_line_update.py
-git commit -m "Improve upcoming meeting row layout"
-git push -u origin update/single-line-meeting-rows
-```
-
-Open a pull request and verify in the browser that desktop rows show
-**indicator | time | subject | organizer**. At widths up to 800 px, verify that
-the organizer is hidden and the remaining text is not scrambled.
-
-## Alternative: apply the patch
-
-Instead of using the updater:
-
-```bash
-git apply --unidiff-zero --check /path/to/bundle/patches/0001-single-line-upcoming-meetings.patch
-git apply --unidiff-zero /path/to/bundle/patches/0001-single-line-upcoming-meetings.patch
-node --check public/app.js
-git diff --check
-```
-
-Use one method only. The updater is recommended because it performs stricter
-content and idempotency checks.
-
-## Rollback before committing
-
-```bash
-git restore public/app.js public/styles.css
-```
+The single-line meeting rows update (`tools/apply_single_line_update.py`, `patches/`, `snippets/`) was applied long ago and is kept only for history. See `RELEASE_MANIFEST.md`.

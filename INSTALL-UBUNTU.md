@@ -284,20 +284,21 @@ Alerts (a tablet offline, a room calendar that cannot be read) can arrive as a T
 
 You need three kinds of access, which may be different people: someone who can create an **Azure Bot** resource, a **Microsoft Entra administrator** who can grant admin consent, and a **Teams administrator** who can upload an app. Microsoft changes these portals often, so names below may differ slightly.
 
-1. **Create the bot's Entra app.** In Microsoft Entra: **App registrations > New registration**, name it `Room Display Alerts`, choose **Accounts in this organizational directory only**. Record the **Application (client) ID** and **Directory (tenant) ID**. Under **Certificates & secrets**, create a client secret and record its **Value** straight away. Use a separate app from the calendar app so their permissions stay separate.
-2. **Create the Azure Bot.** In the Azure portal create an **Azure Bot** resource. Choose **Single Tenant** and **Use existing app registration**, and give the Application ID and tenant ID from step 1. Messaging endpoint: the bot never receives anything, but if the portal asks for one, any `https://` address works. Then open **Channels** and add **Microsoft Teams**.
+1. **Choose the bot's Entra app.** Either reuse the room display's own app (single tenant; simplest, one secret to rotate, and `TEAMS_BOT_APP_SECRET` is the same value as `CLIENT_SECRET`), or create a separate one for tighter separation: **App registrations > New registration**, name it `Room Display Alerts`, choose **Accounts in this organizational directory only**, and create a client secret under **Certificates & secrets**. Record the **Application (client) ID** and **Directory (tenant) ID**. With a reused app, a leaked secret exposes both calendar and Teams access, so a separate app is safer if that matters to you.
+2. **Create the Azure Bot.** In the Azure portal create an **Azure Bot** resource. Choose **Single Tenant** and **Use existing app registration**, and give the Application ID and tenant ID from step 1. Messaging endpoint: the bot never receives anything, but if the portal asks for one, any `https://` address works. Then open **Channels** and add **Microsoft Teams**. With the Azure CLI (signed in as an administrator) this is: `az provider register -n Microsoft.BotService`, `az group create -n rg-room-display -l eastus`, `az bot create -g rg-room-display -n YOUR-BOT-NAME --appid BOT-APP-ID --app-type SingleTenant --tenant-id TENANT-ID --sku F0 --endpoint https://example.com/api/messages`, then `az bot msteams create -g rg-room-display -n YOUR-BOT-NAME`.
 3. **Let the bot find its own chat with each person.** On the app registration open **API permissions > Add a permission > Microsoft Graph > Application permissions** and add `TeamsAppInstallation.ReadWriteSelfForUser.All`, then **Grant admin consent**. (Only if you want the server to install the app for people itself and look it up in your catalog, also add `AppCatalog.Read.All`. Otherwise skip it and let each person add the app in step 5.)
 4. **Build and upload the Teams app.** On a computer with this repository:
    ```bash
    scripts/build-teams-app.sh BOT-APP-ID https://your-company-website "Your Company Name"
    ```
-   This writes `teams-app-build/room-display-alerts.zip`. In the **Teams admin center > Teams apps > Manage apps > Upload new app**, upload it. If the upload is blocked, a Teams administrator must allow custom apps for the organisation (**Teams apps > Setup policies / Org-wide app settings**).
+   This writes `teams-app-build/room-display-alerts.zip`. In the **Teams admin center > Teams apps > Manage apps > Upload new app**, upload it. Open the uploaded app in Manage apps and note its **App ID**: it is different from the bot's application ID and is your `TEAMS_BOT_CATALOG_ID` (step 6). If the upload is blocked, a Teams administrator must allow custom apps for the organisation (**Teams apps > Setup policies / Org-wide app settings**).
 5. **Add the app for each person.** Either each person opens Teams > **Apps > Built for your org > Room Display Alerts > Add**, or (with `AppCatalog.Read.All` from step 3) the server installs it the first time it sends.
 6. **Configure the server.** In `/opt/m365-room-display/.env` set:
    ```ini
    TEAMS_BOT_APP_ID=APPLICATION-CLIENT-ID
    TEAMS_BOT_APP_SECRET=CLIENT-SECRET-VALUE
    TEAMS_BOT_TENANT_ID=DIRECTORY-TENANT-ID
+   TEAMS_BOT_CATALOG_ID=APP-ID-FROM-TEAMS-ADMIN-CENTER
    TEAMS_ALERT_EMAILS=first.person@yourcompany.com,second.person@yourcompany.com
    ```
    Use each person's sign-in name (their user principal name, usually their email address). Then `sudo systemctl restart m365-room-display`.
