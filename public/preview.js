@@ -54,6 +54,9 @@
     if (weather) q.set('weather', weather);
     if (selected) q.set('snoopy', selected);
     if ($('outfit').value) q.set('outfit', $('outfit').value);
+    if ($('date').value) q.set('date', $('date').value);
+    if ($('temp').value) q.set('temp', $('temp').value);
+    if ($('day').value) q.set('day', $('day').value);
     if ($('celebrate').value) q.set('celebrate', $('celebrate').value);
     if ($('quickbook').value) q.set('quickbook', $('quickbook').value);
     if ($('display').value) q.set('display', $('display').value);
@@ -82,11 +85,11 @@
     if (frame.getAttribute('src') !== target) frame.setAttribute('src', target);
     $('link').setAttribute('href', target.replace('&nostream=1', ''));
     var anim = ANIMATIONS.filter(function (a) { return a.id === selected; })[0];
-    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto'), 'celebrate: ' + ($('celebrate').value === 'none' ? 'hidden' : $('celebrate').value), 'booking buttons: ' + ({ '': 'auto', '1': 'shown', '0': 'hidden' }[$('quickbook').value]), 'hours: ' + ($('hours').value || 'auto'), 'holiday: ' + ($('holiday').value === 'none' ? 'no' : $('holiday').value), 'screen: ' + ($('display').value || 'on') + ($('message').value ? ' + message' : '')].join(' · ');
+    $('caption').textContent = [anim.label, $('theme').value, 'weather: ' + ($('weather').value || 'live'), STATE_LABELS[$('state').value], 'outfit: ' + ($('outfit').value || 'auto') + ($('date').value ? ' (date ' + $('date').value + ')' : ''), 'celebrate: ' + ($('celebrate').value === 'none' ? 'hidden' : $('celebrate').value), 'booking buttons: ' + ({ '': 'auto', '1': 'shown', '0': 'hidden' }[$('quickbook').value]), 'hours: ' + ($('hours').value || 'auto'), 'holiday: ' + ($('holiday').value === 'none' ? 'no' : $('holiday').value), 'screen: ' + ($('display').value || 'on') + ($('message').value ? ' + message' : '')].join(' · ');
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday', 'closedsoon'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday', 'closedsoon', 'temp', 'day', 'date'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis
@@ -117,14 +120,18 @@
   $('tourNext').addEventListener('click', function () { stopTour(); showCombo(tourIndex + 1); });
   $('tourPrev').addEventListener('click', function () { stopTour(); showCombo(tourIndex - 1); });
 
-  // Outfit choices come from snoopy/outfits.json.
+  // Outfit choices come from snoopy/outfits.json; outfits whose art is not there yet are left out.
   fetch('/snoopy/outfits.json').then(function (r) { return r.json(); }).then(function (data) {
-    (data.outfits || []).forEach(function (o) {
+    var seen = {};
+    return Promise.all((data.outfits || []).filter(function (o) { if (seen[o.id]) return false; seen[o.id] = true; return true; }).map(function (o) {
+      return fetch('/snoopy/' + o.file, { method: 'HEAD' }).then(function (r) { return r.ok ? o : null; }).catch(function () { return null; });
+    }));
+  }).then(function (list) {
+    list.filter(Boolean).forEach(function (o) {
       var option = document.createElement('option');
       option.value = o.id; option.textContent = o.label || o.id;
       $('outfit').appendChild(option);
     });
   }).catch(function () {});
-
   update();
 })();

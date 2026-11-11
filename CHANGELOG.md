@@ -26,6 +26,10 @@
 - "Closed tomorrow" heads-up on the status card when the next working day is a company holiday ("Closed tomorrow through Friday: Thanksgiving", "Closed Monday: ...").
 - Tablet offline alerts: a tablet that stops checking in for 10 minutes during office hours (`ALERT_AFTER_MINUTES`) raises an alert on the dashboard and, if `ALERT_WEBHOOK_URL` is set, posts it there; a "back online" message follows. Also alerts when a room has had no tablet since the server started. Tablets unseen for a week are forgotten.
 - Tablets report their screen size and zoom with each check-in; the dashboard lists every device per room (model, screen size, address, online or not), to explain why two displays look different.
+- More accurate weather: inside the US the server reads real station observations from the National Weather Service (nearest of Teterboro, Caldwell, Newark for Glen Rock), with Open-Meteo as the backup and outside the US (`WEATHER_SOURCE`). Conditions use what is actually falling (rain, snow, thunder, fog, cloud cover), feels-like temperature includes wind chill and heat index, day or night comes from the sun's position, and weather older than 3 hours is dropped. The dashboard shows the current reading and its source.
+- Snoopy's outfits now use feels-like temperature: winter coat when it snows or feels 4 C (39 F) or colder, Hawaiian shirt only when sunny, daytime and 18 C (64 F) or warmer, raincoat for rain or storms. Limits are in `public/snoopy/outfits.json`.
+- New outfits: party hat (birthday or work anniversary, beats everything), pajamas (when the display says Closed), and Valentine's Day (Feb 10 to 14). The seven earlier outfits now use the 11-row sheets, so Snoopy can look around in them too. St. Patrick's, Easter, July 4th and the storm raincoat are wired and wait for their art. Preview with `?date=MM-DD`.
+- Fixed a race where a slow outfit image could replace the outfit chosen after it.
 - Added `.env.example` (the installer needs it), `.gitignore`, and updated docs.
 
 ## 2.0.0 known-good baseline — 2026-11-06

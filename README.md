@@ -18,7 +18,7 @@ dependencies; Node.js 20 or later.
   mood that follows the weather (clear, clouds, rain, storm, snow, fog).
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
-- Snoopy outfits chosen by date (Christmas, New Year, Halloween, Thanksgiving) then by weather
+- Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, Halloween, Thanksgiving, and more as art arrives), pajamas when the display says Closed, then weather and feels-like temperature (raincoat, winter coat, Hawaiian shirt). Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
   (winter coat, raincoat, Hawaiian shirt). See `public/snoopy/outfits.json` and
   `public/snoopy/outfits/README.md`.
 - Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card. On a working day the line also covers the closed days that follow (a Saturday birthday shows on Friday as "Mabel (Saturday)").
@@ -42,7 +42,7 @@ All settings are environment variables; see `.env.example`.
 - Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`, `CHANGE_CHECK_SECONDS`
 - Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`
 - Office hours: `OFFICE_HOURS_START`, `OFFICE_HOURS_END`, `OFFICE_DAYS`, or `OFFICE_HOURS=off`
-- Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms)
+- Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms), `WEATHER_SOURCE` (auto, nws, open-meteo), `WEATHER_CONTACT`
 - Birthdays: `BIRTHDAY_CALENDAR_MAILBOX`, `BIRTHDAY_CALENDAR_NAME`, `BIRTHDAY_CALENDAR_ID`,
   `BIRTHDAY_NAME_STYLE`, `BIRTHDAY_TIME_ZONE`. Only titles containing "birthday", "b'day" or
   "anniversary" are used; PTO and holidays on the same calendar are ignored.
@@ -55,7 +55,7 @@ All settings are environment variables; see `.env.example`.
 celebration. It is a review tool; remove or block it on public kiosks if you prefer.
 
 Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
-`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `nostream=1`.
+`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `temp` (feels-like Celsius), `day` (1 or 0), `date` (MM-DD, pretend today), `nostream=1`.
 
 ## Security
 

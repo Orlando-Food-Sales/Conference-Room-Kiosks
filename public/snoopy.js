@@ -161,6 +161,7 @@
   // ---- Outfits: festive dates first, then weather (see snoopy/outfits.json) ----
   var outfits = [];
   var forcedOutfit = new URLSearchParams(location.search).get('outfit');   // id, or "none"
+  var forcedDate = (function () { var v = new URLSearchParams(location.search).get('date'); return /^\d\d-\d\d$/.test(v || '') ? v : ''; })();   // preview: ?date=12-25 pretends today is Dec 25
   var wornId = null;
   var known = {};                                                          // file -> true/false (loaded ok?)
 
@@ -171,25 +172,42 @@
   function chooseOutfit() {
     if (forcedOutfit) return outfits.filter(function (o) { return o.id === forcedOutfit && known[o.file] !== false; })[0] || null;
     var d = new Date();
-    var today = ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    var today = forcedDate || (('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2));
+    var root = document.documentElement.dataset;
+    var birthday = root.birthday === '1';
+    var closed = root.closed === '1';
     var weather = document.documentElement.dataset.weather || '';
     var isDay = document.documentElement.dataset.day !== '0';
+    var feels = Number(document.documentElement.dataset.temp);
+    var hasTemp = document.documentElement.dataset.temp !== undefined && Number.isFinite(feels);
     return outfits.filter(function (o) {
       if (known[o.file] === false) return false;                          // art not supplied yet
       if (o.from && o.to) return inRange(o.from, o.to, today);
-      if (o.weather) return o.weather.indexOf(weather) !== -1 && (!o.daytimeOnly || isDay);
+      if (o.event === 'birthday') return birthday;                         // a birthday or work anniversary is on the display today
+      if (o.closed) return closed && !o.weather;                           // the display says Closed (after hours, weekend, holiday)
+      if (o.weather || o.minTempC !== undefined || o.maxTempC !== undefined) {
+        if (o.weather && o.weather.indexOf(weather) === -1) return false;
+        if (o.daytimeOnly && !isDay) return false;
+        if (o.minTempC !== undefined && hasTemp && feels < o.minTempC) return false;      // unknown temperature passes a minimum
+        if (o.maxTempC !== undefined && (!hasTemp || feels > o.maxTempC)) return false;   // but never a maximum
+        return true;
+      }
       return false;
     })[0] || null;
   }
 
+  var wantedId = null;      // the outfit we most recently decided on; a slower, older image load must not override it
   function wear(outfit) {
     var id = outfit ? outfit.id : null;
+    wantedId = id;
     if (id === wornId) return;
     if (!outfit) { wornId = null; sheetRows = ROWS; el.style.backgroundImage = ''; el.style.backgroundSize = ''; reveal(); return; }
     var url = '/snoopy/' + outfit.file;
     var probe = new Image();
     probe.onload = function () {
-      known[outfit.file] = true; wornId = id;
+      known[outfit.file] = true;
+      if (wantedId !== id) return;                     // a newer choice was made while this image was loading
+      wornId = id;
       sheetRows = outfit.rows || ROWS;
       el.style.backgroundSize = '800% ' + (sheetRows * 100) + '%';
       el.style.backgroundImage = 'url(' + url + ')';
@@ -205,7 +223,7 @@
   fetch('/snoopy/outfits.json').then(function (r) { return r.ok ? r.json() : { outfits: [] }; })
     .then(function (data) { outfits = data.outfits || []; refreshOutfit(); })
     .catch(function () { });
-  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day'] });
+  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-closed'] });
   setInterval(refreshOutfit, 60000);                                       // catches midnight / date changes
 
   draw();

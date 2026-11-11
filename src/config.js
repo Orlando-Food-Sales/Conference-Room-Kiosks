@@ -132,7 +132,11 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
       enabled: booleanValue(env.WEATHER_ENABLED, true),
       // Defaults to Glen Rock, NJ.
       latitude: floatValue(env.WEATHER_LATITUDE, 40.9595, -90, 90),
-      longitude: floatValue(env.WEATHER_LONGITUDE, -74.1252, -180, 180)
+      longitude: floatValue(env.WEATHER_LONGITUDE, -74.1252, -180, 180),
+      // auto: the US National Weather Service (real airport observations) inside the US, Open-Meteo elsewhere or as backup.
+      source: ['auto', 'nws', 'open-meteo'].includes(String(env.WEATHER_SOURCE || '').toLowerCase()) ? String(env.WEATHER_SOURCE).toLowerCase() : 'auto',
+      // NWS asks API users to identify themselves, for example an IT email address. Optional.
+      contact: String(env.WEATHER_CONTACT || '').trim().slice(0, 100)
     },
     rooms: loadRooms(env, cwd)
   };

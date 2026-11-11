@@ -12,7 +12,7 @@ Prepare:
 
 - A new Ubuntu Server 22.04 or 24.04 LTS host with a static/reserved IP.
 - A sudo-capable administrator account and working DNS/NTP.
-- Outbound HTTPS access to `login.microsoftonline.com`, `graph.microsoft.com`, `api.open-meteo.com` (display weather; optional), and `nodejs.org`.
+- Outbound HTTPS access to `login.microsoftonline.com`, `graph.microsoft.com`, `api.weather.gov` and `api.open-meteo.com` (display weather; optional), and `nodejs.org`.
 - The Microsoft 365 room mailbox addresses and IANA time zones (for example, `America/New_York`).
 - A Microsoft Entra administrator who can grant application permissions.
 
@@ -186,7 +186,7 @@ Tablet offline alerts: a tablet that has not checked in for `ALERT_AFTER_MINUTES
 
 Office hours use each room's `timeZone`. Outside them (and on days not in `OFFICE_DAYS`, where 0 is Sunday) the display shows "Closed" instead of "Available". A meeting still in progress shows "In use". Set `OFFICE_HOURS=off` to always show availability.
 
-Weather uses one location for all rooms (the defaults are Glen Rock, NJ; set `WEATHER_ENABLED=false` to turn it off). The other optional settings are listed in `.env.example`.
+Weather comes from the US National Weather Service (real readings from the nearest airport station) with Open-Meteo as the backup; set `WEATHER_SOURCE=open-meteo` to use only the backup. Weather uses one location for all rooms (the defaults are Glen Rock, NJ; set `WEATHER_ENABLED=false` to turn it off). The other optional settings are listed in `.env.example`.
 
 Birthdays and work anniversaries come from a shared Microsoft 365 mailbox. Set `BIRTHDAY_CALENDAR_MAILBOX` to its address; leave it empty to turn the feature off. The app registration needs `Calendars.Read` for that mailbox as well (include it in the Application RBAC scope). Only event titles containing "birthday", "b'day" or "anniversary" are shown, so PTO and holiday events in the same mailbox are ignored. Use `BIRTHDAY_CALENDAR_NAME` to read only calendars whose name contains some text.
 
