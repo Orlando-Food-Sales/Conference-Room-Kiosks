@@ -6,6 +6,36 @@ your password manager or the Entra and Teams admin centers.
 
 Do it at a quiet time (early morning or after hours). A restart takes seconds, but every tablet reconnects at once.
 
+## The easy way: run one script on the server itself
+
+`scripts/deploy-on-server.sh` does sections 1 to 4 and 7 below by itself, on the server, so nobody needs to copy files from a laptop.
+It downloads the new version from GitHub into a temporary folder, runs all the tests there with the server's own Node,
+shows what will change, backs up the running app, copies the files (never `.env`, `config/rooms.json` or `node_modules`),
+restarts the service only if server code changed, checks `/healthz` shows the new version, runs the smoke test, and puts the
+old version back automatically if the restart or the smoke test fails.
+
+The first time (the script is not on the server yet), log in to the server and run:
+
+```bash
+sudo apt install -y git rsync curl python3          # only if one of them is missing
+curl -fsSL https://raw.githubusercontent.com/Orlando-Food-Sales/Conference-Room-Kiosks/main/scripts/deploy-on-server.sh -o ~/deploy-on-server.sh
+bash ~/deploy-on-server.sh --dry-run                # shows what would change, changes nothing
+bash ~/deploy-on-server.sh                          # asks to confirm, then deploys (asks for your sudo password once, for the restart)
+```
+
+After that first deploy the script lives in the app folder, so every later update is just:
+
+```bash
+/opt/m365-room-display/scripts/deploy-on-server.sh --dry-run
+/opt/m365-room-display/scripts/deploy-on-server.sh
+```
+
+Options: `--ref v2.1.0` (a tag or branch instead of main), `--yes` (no question), `--restart` / `--no-restart`. `--help` lists the
+settings. New settings still go into `.env` by hand (section 3); the script lists the ones your `.env` does not have yet.
+The Teams test alert (section 6) and looking at a tablet (section 5) are still yours to do afterwards.
+
+The manual steps below are the same thing done from a laptop, and they are the fallback if the server cannot reach github.com.
+
 ## 0. Before you start
 
 - [ ] `main` is what you want to deploy: `git log --oneline -1`, and `npm run check` passes on your computer.
@@ -28,12 +58,12 @@ The backup includes `.env` and `config/rooms.json`. Keep it until the next deplo
 From the repository folder on your computer. `.env`, `config/rooms.json` and `node_modules` are never touched.
 
 ```bash
-rsync -rltcE --exclude .git --exclude .env --exclude config/rooms.json --exclude node_modules \
+rsync -rltc --executability --exclude .git --exclude .env --exclude config/rooms.json --exclude node_modules \
   --exclude .DS_Store --exclude .agents --exclude teams-app-build \
   ./ USER@SERVER:/opt/m365-room-display/
 ```
 
-Add `-n` for a dry run that only lists what would change. (`-E` keeps scripts executable; the checklist runs them with `bash` anyway, so a missing executable bit never stops a deploy.)
+Add `-n` for a dry run that only lists what would change. Use `--executability` as written and never a bare `-E`: on a Mac `-E` means "send extended attributes", which makes rsync try to send a junk `._file` for every file and fail. (The checklist runs the scripts with `bash` anyway, so a missing executable bit never stops a deploy.)
 
 ## 3. Add the new settings to the server `.env`
 

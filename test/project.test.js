@@ -48,3 +48,26 @@ test('the deploy checklist matches the project and holds no addresses, passwords
   assert.doesNotMatch(list, /[\w.+-]+@(?!SERVER)[\w-]+\.[a-z]{2,}/i, 'no email addresses');
   assert.match(list, /USER@SERVER/, 'placeholders are used instead');
 });
+
+test('the server-side deploy script keeps the safety rules that protect the live server', () => {
+  const script = read('scripts/deploy-on-server.sh');
+  assert.match(script, /^#!\/usr\/bin\/env bash\nset -Eeuo pipefail|^#!\/usr\/bin\/env bash\n(#.*\n)+set -Eeuo pipefail/m, 'fails on the first error');
+  for (const keep of ['--exclude .env', '--exclude config/rooms.json', '--exclude node_modules']) assert.ok(script.includes(keep), `never overwrites: ${keep}`);
+  assert.ok(!/rsync -[a-zA-Z]*E[a-zA-Z]* /.test(script), 'no bare -E (on a Mac it means extended attributes and fills the copy with ._ junk files)');
+  assert.ok(script.includes('--executability'));
+  const order = ['git clone', 'npm run check', 'Backing up', 'Copying the new files', 'Restarting the service', 'Smoke test', 'ROLLING BACK'].map(text => script.indexOf(text));
+  assert.ok(order.every(position => position > 0), 'every stage is there');
+  assert.deepEqual([...order.slice(0, 6)].sort((a, b) => a - b), order.slice(0, 6), 'download, test, back up, copy, restart, smoke test, in that order');
+  assert.match(script, /rsync -rltc --executability "\$\{EXCLUDES\[@\]\}" "\$WORK\/new\/" "\$APP_DIR\/" \|\| rollback/, 'a failed copy rolls back');
+  assert.match(script, /eval "\$RESTART_CMD" \|\| rollback/, 'a failed restart rolls back');
+  assert.match(script, /\[\[ \$EUID -ne 0 \]\]/, 'refuses to run as root');
+  assert.match(script, /node_major\b.*-ge 22/s, 'needs Node 22 or later like the app');
+  assert.match(script, /\.\.\.|dry-run/i);
+  assert.ok(!/H@|password\s*=|PASSWORD=/i.test(script), 'no passwords in the script');
+});
+
+test('the deploy script is documented for the server and is executable in git', () => {
+  for (const name of ['DEPLOY-CHECKLIST.md', 'README.md']) assert.ok(read(name).includes('deploy-on-server.sh'), `${name} mentions the script`);
+  assert.match(read('DEPLOY-CHECKLIST.md'), /raw\.githubusercontent\.com\/Orlando-Food-Sales\/Conference-Room-Kiosks\/main\/scripts\/deploy-on-server\.sh/, 'how to get it onto the server the first time');
+  assert.ok(fs.statSync(new URL('../scripts/deploy-on-server.sh', import.meta.url)).mode & 0o111, 'executable on disk');
+});
