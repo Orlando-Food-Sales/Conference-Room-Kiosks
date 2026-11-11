@@ -45,3 +45,16 @@ test('kiosk mode (?kiosk=1) hides the refresh and message buttons and nothing el
   assert.match(html, /id="refreshButton"/);
   assert.match(html, /id="messageButton"/);
 });
+
+test('"tomorrow" is worked out by calendar day, so the 23 and 25 hour daylight saving days cannot break it', () => {
+  const fn = app.match(/function nextDayKey\([\s\S]*?\n\}/);
+  assert.ok(fn, 'nextDayKey is in public/app.js');
+  const nextDayKey = new Function(`${fn[0]}\nreturn nextDayKey;`)();
+  assert.equal(nextDayKey('2026-11-10'), '2026-11-11');
+  assert.equal(nextDayKey('2026-11-30'), '2026-12-01', 'month end');
+  assert.equal(nextDayKey('2026-12-31'), '2027-01-01', 'year end');
+  assert.equal(nextDayKey('2028-02-28'), '2028-02-29', 'leap day');
+  assert.equal(nextDayKey('2027-03-14'), '2027-03-15', 'the day clocks go forward (23 hours long)');
+  assert.equal(nextDayKey('2027-11-07'), '2027-11-08', 'the day clocks go back (25 hours long)');
+  assert.doesNotMatch(app, /dayKey\(now \+ 86400000\)/, 'no more adding 24 hours to a clock time');
+});

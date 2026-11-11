@@ -292,9 +292,16 @@ function previewControl(control) {
 }
 
 // "Today's schedule" only lists today. When nothing is left, mention the next meeting on a later day.
+// The day after a YYYY-MM-DD key, by calendar arithmetic. Adding 24 hours to a clock time is wrong on the two
+// daylight saving days a year (23 and 25 hours long); noon UTC keeps the arithmetic clear of them.
+function nextDayKey(key) {
+  var d = new Date(key + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
 function noMoreText(now, todayKey) {
   var later = state.events.find(function (event) { return dayKey(event.start) > todayKey; });
   if (!later) return 'No more meetings today.';
-  var label = dayKey(later.start) === dayKey(now + 86400000) ? 'tomorrow' : new Intl.DateTimeFormat([], { weekday: 'long', timeZone: state.room.timeZone }).format(new Date(later.start));
+  var label = dayKey(later.start) === nextDayKey(todayKey) ? 'tomorrow' : new Intl.DateTimeFormat([], { weekday: 'long', timeZone: state.room.timeZone }).format(new Date(later.start));
   return 'No more meetings today. Next: ' + label + ' at ' + formatTime(later.start) + '.';
 }

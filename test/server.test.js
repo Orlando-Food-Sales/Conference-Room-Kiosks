@@ -565,3 +565,42 @@ test('the live connection sends a named ping event so tablets can tell it is ali
   await waitFor(() => stream.text().includes('event: ping'), 'a ping');
   await stream.stop();
 });
+
+// ---------------------------------------------------------------------------------------------
+// Daylight saving time. New York moves clocks forward on 14 March 2027 and back on 7 November 2027.
+// A server that assumed a fixed offset from UTC would be an hour off the Monday after each change.
+// ---------------------------------------------------------------------------------------------
+
+test('office-hours alerts follow the clock on the Monday after clocks go forward and back', async t => {
+  const cases = [
+    // [label, time in UTC, expect an alert]. The office opens at 8:00 local and alerts wait 10 minutes.
+    ['Mon 15 Mar 2027, 8:05 AM EDT (just after spring forward)', '2027-03-15T12:05:00Z', false],
+    ['Mon 15 Mar 2027, 8:20 AM EDT', '2027-03-15T12:20:00Z', true],
+    ['Mon 15 Mar 2027, 7:20 AM EDT is not "8:20 EST"', '2027-03-15T11:20:00Z', false],
+    ['Mon 8 Nov 2027, 8:05 AM EST (just after fall back)', '2027-11-08T13:05:00Z', false],
+    ['Mon 8 Nov 2027, 8:20 AM EST', '2027-11-08T13:20:00Z', true],
+    ['Mon 8 Nov 2027, 7:20 AM EST', '2027-11-08T12:20:00Z', false],
+    ['Mon 8 Nov 2027, 4:55 PM EST, before closing', '2027-11-08T21:55:00Z', true],
+    ['Mon 8 Nov 2027, 5:05 PM EST, after closing', '2027-11-08T22:05:00Z', false],
+    ['Sun 14 Mar 2027, midday: weekend', '2027-03-14T17:00:00Z', false],
+    ['Sun 7 Nov 2027, midday: weekend', '2027-11-07T17:00:00Z', false]
+  ];
+  for (const [label, iso, shouldAlert] of cases) {
+    const { state } = await withAlerts(t);
+    const ms = Date.parse(iso);
+    state.tablets.set('front:t1', tablet('front', 't1', 'Front tablet', ms - 3 * 3600000));
+    state.tablets.set('back:t2', tablet('back', 't2', 'Back tablet', ms - 10000));
+    await state.checkTablets(ms);
+    assert.equal(state.alerts.length > 0, shouldAlert, label);
+  }
+});
+
+test('secret expiry counts calendar days in the room time zone across a clock change', async t => {
+  const { state } = await withAlerts(t, { env: { CLIENT_SECRET_EXPIRES: '2027-03-15' } });
+  const days = iso => state.secretStatus(Date.parse(iso)).daysLeft;
+  assert.equal(days('2027-03-13T15:00:00Z'), 2, 'Saturday morning');
+  assert.equal(days('2027-03-14T14:00:00Z'), 1, 'Sunday, after the clocks went forward');
+  assert.equal(days('2027-03-15T16:00:00Z'), 0, 'Monday');
+  assert.equal(days('2027-03-14T04:30:00Z'), 2, '11:30 PM Saturday in New York is still Saturday');
+  assert.equal(days('2027-03-15T03:30:00Z'), 1, '11:30 PM Sunday EDT is still Sunday');
+});

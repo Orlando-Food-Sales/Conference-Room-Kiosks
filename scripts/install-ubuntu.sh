@@ -14,7 +14,7 @@ apt-get install -y ca-certificates curl xz-utils nginx openssl
 node_ok=false
 if command -v node >/dev/null 2>&1; then
   major=$(node -p 'Number(process.versions.node.split(".")[0])')
-  [[ $major -ge 20 ]] && node_ok=true
+  [[ $major -ge 22 ]] && node_ok=true   # Node 20 reached end of life on 2026-04-30
 fi
 if [[ $node_ok != true ]]; then
   case "$(dpkg --print-architecture)" in amd64) arch=x64;; arm64) arch=arm64;; *) echo "Unsupported architecture: $(dpkg --print-architecture)" >&2; exit 1;; esac

@@ -2,11 +2,12 @@ Verification notes (updated 2026-11-11)
 
 Checked automatically (npm run check):
   node --check on src/*.js and public/*.js: PASS
-  97 offline tests: PASS (settings, holidays, birthdays, weather, bookings and holiday block,
+  102 offline tests: PASS on Node.js 22.16, 24.22 and 26.13 (settings, holidays, birthdays, weather, bookings and holiday block,
     change detection, tablet alerts, Teams alert delivery against a fake Microsoft, secret expiry
-    reminders, live-connection ping, tablet auto-heal and kiosk mode logic, admin controls,
+    reminders, live-connection ping, tablet auto-heal and kiosk mode logic, daylight saving changes,
+    no third-party packages and one Node version everywhere, admin controls,
     security headers, outfit rules file)
-  Deliberate-break (mutation) testing: 33 changes to the code, all caught by the tests
+  Deliberate-break (mutation) testing: 40 changes to the code, all caught by the tests except one that turned out to be harmless
 
 Checked by hand:
   Room display, dashboard and preview pages in a browser against demo mode (screenshots)

@@ -4,7 +4,7 @@
 
 This procedure installs the v2.0.0 known-good application in `/opt/m365-room-display`, runs it as the unprivileged `m365room` account, publishes it through Nginx, and manages it with systemd. The release includes the confirmed compatibility fix for browsers that do not implement `crypto.randomUUID()`.
 
-Tested during packaging with Node.js 24.22.1. The application declares Node.js 20 or later, the CI matrix covers Node.js 20/22/24/26, and the installer pins the current Node.js 26.13.0 LTS release. The application uses no third-party runtime packages.
+The application needs Node.js 22 or later (Node.js 20 reached end of life on 30 April 2026 and no longer gets security fixes). The automatic tests pass on Node.js 22, 24 and 26, and the installer pins Node.js 26.13.0 (LTS). The application uses no third-party runtime packages: it imports only Node's own modules, so there is nothing to `npm install` and no package vulnerabilities to patch, only Node.js, Ubuntu and Nginx updates. Check `node -v` after any server update and when Node.js 22 leaves maintenance (30 April 2027).
 
 ## 2. Before you begin
 
@@ -55,7 +55,7 @@ sudo bash scripts/install-ubuntu.sh
 The installer:
 
 1. Installs Nginx and required operating-system utilities.
-2. Uses an existing Node.js 20+ runtime or downloads the pinned Node.js 26.13.0 LTS official Linux binary and verifies its SHA-256 checksum.
+2. Uses an existing Node.js 22+ runtime or downloads the pinned Node.js 26.13.0 LTS official Linux binary and verifies its SHA-256 checksum.
 3. Creates the non-login `m365room` service account.
 4. Copies the application to `/opt/m365-room-display`.
 5. Creates protected configuration files from the sanitized examples.
