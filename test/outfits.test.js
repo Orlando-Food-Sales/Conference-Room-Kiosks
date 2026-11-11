@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const SNOOPY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'snoopy');
 const { outfits } = JSON.parse(fs.readFileSync(path.join(SNOOPY, 'outfits.json'), 'utf8'));
 
-const RULE_KEYS = ['from', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'maxTempC'];
+const RULE_KEYS = ['from', 'easter', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'maxTempC'];
 const KNOWN_KEYS = new Set(['id', 'label', 'file', 'rows', 'to', 'year', 'daytimeOnly', ...RULE_KEYS]);
 const WEATHER = new Set(['clear', 'clouds', 'rain', 'storm', 'snow', 'fog']);
 
@@ -74,11 +74,70 @@ test('the base sprite sheet is 8 columns by 11 rows', () => {
 test('the rules that must win do come first', () => {
   const index = id => outfits.findIndex(outfit => outfit.id === id);
   assert.equal(outfits[0].event, 'birthday', 'the party hat is the first rule, so a birthday always shows');
-  const lastFestive = Math.max(...outfits.filter(o => o.from).map(o => outfits.indexOf(o)));
+  const lastFestive = Math.max(...outfits.filter(o => o.from || o.easter).map(o => outfits.indexOf(o)));
   assert.ok(index('pajamas') > lastFestive, 'festive outfits beat pajamas');
   const firstWeather = Math.min(...outfits.filter(o => o.weather || o.maxTempC !== undefined).map(o => outfits.indexOf(o)));
   assert.ok(index('pajamas') < firstWeather, 'pajamas beat weather outfits');
   assert.ok(index('storm') < index('spring-raincoat'), 'the storm coat comes before the plain raincoat');
   const chef = outfits.find(o => o.weekdays);
   assert.equal(outfits.indexOf(chef), outfits.length - 1, 'the Friday outfit is last so weather and festive outfits win');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Easter is worked out, not listed
+// ---------------------------------------------------------------------------------------------
+
+const snoopyCode = fs.readFileSync(path.join(SNOOPY, '..', 'snoopy.js'), 'utf8');
+function loadEaster() {
+  const easter = snoopyCode.match(/function easterSunday\([\s\S]*?\n  \}/);
+  const rule = snoopyCode.match(/function easterRuleMatches\([\s\S]*?\n  \}/);
+  assert.ok(easter && rule, 'easterSunday and easterRuleMatches are in public/snoopy.js');
+  return new Function(`${easter[0]}\n${rule[0]}\nreturn { easterSunday, easterRuleMatches };`)();
+}
+
+test('Easter Sunday is worked out correctly for any year', () => {
+  const { easterSunday } = loadEaster();
+  const known = {   // published dates of Easter Sunday in the Gregorian calendar: [month, day]
+    2000: [4, 23], 2011: [4, 24], 2016: [3, 27], 2018: [4, 1], 2019: [4, 21], 2022: [4, 17], 2023: [4, 9],
+    2024: [3, 31], 2025: [4, 20], 2026: [4, 5], 2027: [3, 28], 2028: [4, 16], 2029: [4, 1], 2030: [4, 21],
+    2031: [4, 13], 2032: [3, 28], 2033: [4, 17], 2034: [4, 9], 2035: [3, 25], 2036: [4, 13], 2037: [4, 5],
+    2038: [4, 25], 2040: [4, 1], 2285: [3, 22]
+  };
+  for (const [year, [month, day]] of Object.entries(known)) assert.deepEqual(easterSunday(Number(year)), { month, day }, `Easter ${year}`);
+  for (let year = 1900; year <= 2200; year += 1) {
+    const { month, day } = easterSunday(year);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    assert.equal(date.getUTCDay(), 0, `Easter ${year} is a Sunday`);
+    assert.ok(date >= new Date(Date.UTC(year, 2, 22)) && date <= new Date(Date.UTC(year, 3, 25)), `Easter ${year} falls between 22 March and 25 April`);
+  }
+});
+
+test('the Easter rule covers the week before through Easter Sunday, in every year, and nothing else', () => {
+  const { easterSunday, easterRuleMatches } = loadEaster();
+  const rule = outfits.find(o => o.easter).easter;
+  assert.deepEqual(rule, { before: 7, after: 0 });
+  const dayMs = 86400000;
+  for (const year of [2026, 2027, 2028, 2029, 2030, 2031, 2035, 2038, 2040, 2100]) {
+    const { month, day } = easterSunday(year);
+    const sunday = Date.UTC(year, month - 1, day);
+    for (let offset = -10; offset <= 3; offset += 1) {
+      const d = new Date(sunday + offset * dayMs);
+      const expected = offset >= -7 && offset <= 0;
+      assert.equal(easterRuleMatches(rule, d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()), expected, `${year}: ${offset} days from Easter`);
+    }
+  }
+  assert.equal(easterRuleMatches(rule, 2027, 3, 21), true, 'first day, Sunday a week before');
+  assert.equal(easterRuleMatches(rule, 2027, 3, 28), true, 'Easter Sunday 2027');
+  assert.equal(easterRuleMatches(rule, 2027, 3, 29), false, 'Easter Monday');
+  assert.equal(easterRuleMatches(rule, 2027, 12, 25), false, 'not at Christmas');
+  assert.equal(easterRuleMatches({ before: 1, after: 1 }, 2027, 3, 29), true, 'the window can be widened in the rules file');
+});
+
+test('there is a single Easter rule, with no per-year entries left to run out', () => {
+  assert.equal(outfits.filter(o => o.easter).length, 1);
+  assert.equal(outfits.filter(o => /^easter-\d/.test(o.id)).length, 0);
+  const easter = outfits.find(o => o.easter);
+  assert.equal(easter.from, undefined);
+  assert.equal(easter.year, undefined);
+  assert.match(snoopyCode, /if \(o\.easter\) return easterRuleMatches\(/, 'the outfit chooser uses the Easter rule');
 });

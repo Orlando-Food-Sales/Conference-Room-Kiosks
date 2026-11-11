@@ -165,6 +165,24 @@
   var wornId = null;
   var known = {};                                                          // file -> true/false (loaded ok?)
 
+  // Easter moves every year, so it is worked out instead of listed: Easter Sunday of the Gregorian calendar
+  // (the Meeus/Jones/Butcher method, correct for every year from 1583). Months are 1 to 12.
+  function easterSunday(year) {
+    var a = year % 19, b = Math.floor(year / 100), c = year % 100;
+    var d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4;
+    var l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    var month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+    return { month: month, day: day };
+  }
+  // A rule like { "before": 7, "after": 0 }: from 7 days before Easter Sunday through Easter Sunday itself.
+  // Whole days are counted from UTC dates, so daylight saving cannot move a day.
+  function easterRuleMatches(rule, year, month, day) {
+    var easter = easterSunday(year);
+    var offset = Math.round((Date.UTC(year, month - 1, day) - Date.UTC(year, easter.month - 1, easter.day)) / 86400000);
+    return offset >= -(rule.before || 0) && offset <= (rule.after || 0);
+  }
+
   function inRange(from, to, today) {
     return from <= to ? (today >= from && today <= to) : (today >= from || today <= to);   // wraps the new year
   }
@@ -192,6 +210,7 @@
       if (o.year && o.year !== year) return false;                        // a rule for one particular year (Easter moves)
       if (o.weekdays && o.weekdays.indexOf(weekday) === -1) return false;  // 0 = Sunday ... 5 = Friday
       if (o.from && o.to) return inRange(o.from, o.to, today);
+      if (o.easter) return easterRuleMatches(o.easter, year, Number(today.slice(0, 2)), Number(today.slice(3, 5)));   // around Easter, whichever date that is this year
       if (o.weekdays && !o.weather && !o.closed && !o.event) return true;  // a plain weekday rule (chef on Fridays)
       if (o.event === 'birthday') return birthday;                         // a birthday or work anniversary is on the display today
       if (o.closed) return closed && !o.weather;                           // the display says Closed (after hours, weekend, holiday)

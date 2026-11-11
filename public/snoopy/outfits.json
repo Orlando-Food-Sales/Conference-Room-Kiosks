@@ -1,5 +1,5 @@
 {
-  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday' (a birthday or work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year (Easter moves, so each year has its own entry); 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
+  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday' (a birthday or work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
   "outfits": [
     {
       "id": "party-hat",
@@ -41,40 +41,14 @@
       "to": "03-17"
     },
     {
-      "id": "easter-2027",
-      "label": "Easter 2027 (the week before through Easter Sunday)",
+      "id": "easter",
+      "label": "Easter (the week before through Easter Sunday, worked out for any year)",
       "file": "outfits/easter.png",
       "rows": 11,
-      "year": 2027,
-      "from": "03-21",
-      "to": "03-28"
-    },
-    {
-      "id": "easter-2028",
-      "label": "Easter 2028 (the week before through Easter Sunday)",
-      "file": "outfits/easter.png",
-      "rows": 11,
-      "year": 2028,
-      "from": "04-09",
-      "to": "04-16"
-    },
-    {
-      "id": "easter-2029",
-      "label": "Easter 2029 (the week before through Easter Sunday)",
-      "file": "outfits/easter.png",
-      "rows": 11,
-      "year": 2029,
-      "from": "03-25",
-      "to": "04-01"
-    },
-    {
-      "id": "easter-2030",
-      "label": "Easter 2030 (the week before through Easter Sunday)",
-      "file": "outfits/easter.png",
-      "rows": 11,
-      "year": 2030,
-      "from": "04-14",
-      "to": "04-21"
+      "easter": {
+        "before": 7,
+        "after": 0
+      }
     },
     {
       "id": "july-4th",

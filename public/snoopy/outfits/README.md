@@ -9,7 +9,8 @@ Still to draw: the sleeping animation (`../sleep.png`).
 
 Rules live in `../outfits.json`, first match wins, top to bottom:
 1. `event: "birthday"`: a birthday or work anniversary is on the display today (party hat). It is first, so it beats everything.
-2. `from` / `to` (MM-DD): festive dates, may wrap the new year. Add `year` for a rule that only applies in one year. Easter moves, so each year has its own entry (2027 to 2030 are in the file; add the next years before 2031).
+2. `from` / `to` (MM-DD): festive dates, may wrap the new year. Add `year` for a rule that only applies in one year.
+   `easter: { "before": 7, "after": 0 }`: from that many days before Easter Sunday to that many days after it. Easter moves every year, so the display works the date out itself; the one rule works for every year and never needs updating.
 3. `closed: true`: the display says Closed (after hours, weekend, holiday).
 4. `weather` (clear, clouds, rain, storm, snow, fog), `daytimeOnly`, and feels-like temperature limits `minTempC` / `maxTempC` in Celsius.
 5. `weekdays` (0 = Sunday ... 5 = Friday): the chef hat on Fridays, last so weather and festive outfits win.

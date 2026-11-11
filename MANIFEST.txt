@@ -1,6 +1,6 @@
 .env.example	3496 bytes
 .gitignore	85 bytes
-CHANGELOG.md	8699 bytes
+CHANGELOG.md	8889 bytes
 INSTALL-UBUNTU.md	20750 bytes
 README.md	6177 bytes
 RELEASE_MANIFEST.md	1563 bytes
@@ -24,10 +24,10 @@ public/index.html	4550 bytes
 public/preview.css	2238 bytes
 public/preview.html	6407 bytes
 public/preview.js	7433 bytes
-public/snoopy.js	11329 bytes
+public/snoopy.js	12694 bytes
 public/snoopy/README.md	384 bytes
-public/snoopy/outfits.json	4543 bytes
-public/snoopy/outfits/README.md	1680 bytes
+public/snoopy/outfits.json	3981 bytes
+public/snoopy/outfits/README.md	1809 bytes
 public/snoopy/outfits/autumn-thanksgiving.png	1807627 bytes
 public/snoopy/outfits/chef.png	1995574 bytes
 public/snoopy/outfits/christmas.png	1923782 bytes
@@ -64,11 +64,11 @@ src/teams-alerts.js	9082 bytes
 src/weather.js	11174 bytes
 test/celebrations.test.js	9661 bytes
 test/config.test.js	8189 bytes
-test/outfits.test.js	4895 bytes
+test/outfits.test.js	8440 bytes
 test/project.test.js	1703 bytes
 test/server.test.js	36944 bytes
 test/tablet-page.test.js	3568 bytes
 test/teams-alerts.test.js	11179 bytes
 test/weather.test.js	9840 bytes
 tools/apply_single_line_update.py	6931 bytes
-verification/VERIFICATION.txt	1884 bytes
+verification/VERIFICATION.txt	1898 bytes

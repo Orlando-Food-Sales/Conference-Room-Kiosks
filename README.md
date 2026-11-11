@@ -28,7 +28,7 @@ dependencies; Node.js 22 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 102 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 105 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`.
