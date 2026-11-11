@@ -161,7 +161,7 @@
   // ---- Outfits: festive dates first, then weather (see snoopy/outfits.json) ----
   var outfits = [];
   var forcedOutfit = new URLSearchParams(location.search).get('outfit');   // id, or "none"
-  var forcedDate = (function () { var v = new URLSearchParams(location.search).get('date'); return /^\d\d-\d\d$/.test(v || '') ? v : ''; })();   // preview: ?date=12-25 pretends today is Dec 25
+  var forcedDate = (function () { var v = new URLSearchParams(location.search).get('date'); return /^(\d{4}-)?\d\d-\d\d$/.test(v || '') ? v : ''; })();   // preview: ?date=12-25 or ?date=2027-03-25 pretends that is today
   var wornId = null;
   var known = {};                                                          // file -> true/false (loaded ok?)
 
@@ -172,7 +172,14 @@
   function chooseOutfit() {
     if (forcedOutfit) return outfits.filter(function (o) { return o.id === forcedOutfit && known[o.file] !== false; })[0] || null;
     var d = new Date();
-    var today = forcedDate || (('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2));
+    var year = d.getFullYear(), weekday = d.getDay();
+    var today = ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    if (forcedDate) {
+      var parts = forcedDate.split('-');
+      today = parts.slice(-2).join('-');
+      if (parts.length === 3) year = Number(parts[0]);
+      weekday = new Date(year, Number(parts[parts.length - 2]) - 1, Number(parts[parts.length - 1])).getDay();
+    }
     var root = document.documentElement.dataset;
     var birthday = root.birthday === '1';
     var closed = root.closed === '1';
@@ -182,7 +189,10 @@
     var hasTemp = document.documentElement.dataset.temp !== undefined && Number.isFinite(feels);
     return outfits.filter(function (o) {
       if (known[o.file] === false) return false;                          // art not supplied yet
+      if (o.year && o.year !== year) return false;                        // a rule for one particular year (Easter moves)
+      if (o.weekdays && o.weekdays.indexOf(weekday) === -1) return false;  // 0 = Sunday ... 5 = Friday
       if (o.from && o.to) return inRange(o.from, o.to, today);
+      if (o.weekdays && !o.weather && !o.closed && !o.event) return true;  // a plain weekday rule (chef on Fridays)
       if (o.event === 'birthday') return birthday;                         // a birthday or work anniversary is on the display today
       if (o.closed) return closed && !o.weather;                           // the display says Closed (after hours, weekend, holiday)
       if (o.weather || o.minTempC !== undefined || o.maxTempC !== undefined) {

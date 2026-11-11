@@ -98,6 +98,28 @@ function loadRooms(env, cwd) {
   return rooms;
 }
 
+const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+// Alerts from a named Teams bot. All of it is optional; leave TEAMS_BOT_APP_ID empty to turn it off.
+function loadTeamsAlerts(env, tenantId) {
+  const appId = String(env.TEAMS_BOT_APP_ID || '').trim();
+  const appSecret = String(env.TEAMS_BOT_APP_SECRET || '').trim();
+  const emails = String(env.TEAMS_ALERT_EMAILS || '').split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean);
+  const botTenant = String(env.TEAMS_BOT_TENANT_ID || '').trim() || tenantId;
+  const serviceUrl = String(env.TEAMS_BOT_SERVICE_URL || '').trim() || 'https://smba.trafficmanager.net/teams/';
+  const catalogId = String(env.TEAMS_BOT_CATALOG_ID || '').trim();
+  if (!appId && !appSecret && !emails.length) return { enabled: false, appId: '', appSecret: '', tenantId: botTenant, recipients: [], serviceUrl, catalogId };
+  if (!appId || !appSecret || !emails.length) throw new Error('Teams alerts need TEAMS_BOT_APP_ID, TEAMS_BOT_APP_SECRET and TEAMS_ALERT_EMAILS together (or none of them).');
+  if (!GUID.test(appId)) throw new Error('TEAMS_BOT_APP_ID must be the bot\'s application (client) ID, a GUID.');
+  if (!GUID.test(botTenant)) throw new Error('Teams alerts need a tenant ID: set TEAMS_BOT_TENANT_ID (or TENANT_ID) to the directory (tenant) ID, a GUID.');
+  if (catalogId && !GUID.test(catalogId)) throw new Error('TEAMS_BOT_CATALOG_ID must be a GUID.');
+  for (const email of emails) if (!EMAIL.test(email)) throw new Error(`TEAMS_ALERT_EMAILS has an invalid address: ${email}`);
+  if (emails.length > 10) throw new Error('TEAMS_ALERT_EMAILS can list at most 10 people.');
+  if (!/^https:\/\//i.test(serviceUrl)) throw new Error('TEAMS_BOT_SERVICE_URL must start with https://');
+  return { enabled: true, appId, appSecret, tenantId: botTenant, recipients: [...new Set(emails)], serviceUrl, catalogId };
+}
+
 export function loadConfig(env = process.env, cwd = process.cwd()) {
   const demoMode = booleanValue(env.DEMO_MODE, false);
   const config = {
@@ -119,6 +141,8 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     // ALERT_WEBHOOK_URL is optional (Teams, Slack or similar incoming webhook); alerts always show on the dashboard.
     alertAfterMinutes: integerValue(env.ALERT_AFTER_MINUTES, 10, 1, 1440),
     alertWebhookUrl: String(env.ALERT_WEBHOOK_URL || '').trim(),
+    // Alerts from a named Teams bot to specific people (see INSTALL-UBUNTU.md, "Teams alerts").
+    teamsAlerts: null,   // filled below, once the tenant ID is known
     // Outside these hours the display shows "Closed" instead of "Available". null turns it off.
     officeHours: loadOfficeHours(env),
     birthdays: {
@@ -140,6 +164,7 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     },
     rooms: loadRooms(env, cwd)
   };
+  config.teamsAlerts = loadTeamsAlerts(env, config.tenantId);
   if (config.alertWebhookUrl && !/^https:\/\//i.test(config.alertWebhookUrl)) throw new Error('ALERT_WEBHOOK_URL must start with https://');
   const birthdayZone = String(env.BIRTHDAY_TIME_ZONE || '').trim() || config.rooms[0].timeZone;
   try { new Intl.DateTimeFormat('en-US', { timeZone: birthdayZone }).format(); }

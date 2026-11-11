@@ -279,6 +279,36 @@ unset NEW_TOKEN
 sudo systemctl restart m365-room-display
 ```
 
+## 12b. Teams alerts from a named bot (optional)
+Alerts (a tablet offline, a room calendar that cannot be read) can arrive as a Teams message from a bot with its own name, for example **Room Display Alerts**, sent to specific people. It is one-way: nobody can reply to it and it cannot read anyone's chats. Without this, alerts still appear on the dashboard and, if `ALERT_WEBHOOK_URL` is set, in a chat channel.
+
+You need three kinds of access, which may be different people: someone who can create an **Azure Bot** resource, a **Microsoft Entra administrator** who can grant admin consent, and a **Teams administrator** who can upload an app. Microsoft changes these portals often, so names below may differ slightly.
+
+1. **Create the bot's Entra app.** In Microsoft Entra: **App registrations > New registration**, name it `Room Display Alerts`, choose **Accounts in this organizational directory only**. Record the **Application (client) ID** and **Directory (tenant) ID**. Under **Certificates & secrets**, create a client secret and record its **Value** straight away. Use a separate app from the calendar app so their permissions stay separate.
+2. **Create the Azure Bot.** In the Azure portal create an **Azure Bot** resource. Choose **Single Tenant** and **Use existing app registration**, and give the Application ID and tenant ID from step 1. Messaging endpoint: the bot never receives anything, but if the portal asks for one, any `https://` address works. Then open **Channels** and add **Microsoft Teams**.
+3. **Let the bot find its own chat with each person.** On the app registration open **API permissions > Add a permission > Microsoft Graph > Application permissions** and add `TeamsAppInstallation.ReadWriteSelfForUser.All`, then **Grant admin consent**. (Only if you want the server to install the app for people itself and look it up in your catalog, also add `AppCatalog.Read.All`. Otherwise skip it and let each person add the app in step 5.)
+4. **Build and upload the Teams app.** On a computer with this repository:
+   ```bash
+   scripts/build-teams-app.sh BOT-APP-ID https://your-company-website "Your Company Name"
+   ```
+   This writes `teams-app-build/room-display-alerts.zip`. In the **Teams admin center > Teams apps > Manage apps > Upload new app**, upload it. If the upload is blocked, a Teams administrator must allow custom apps for the organisation (**Teams apps > Setup policies / Org-wide app settings**).
+5. **Add the app for each person.** Either each person opens Teams > **Apps > Built for your org > Room Display Alerts > Add**, or (with `AppCatalog.Read.All` from step 3) the server installs it the first time it sends.
+6. **Configure the server.** In `/opt/m365-room-display/.env` set:
+   ```ini
+   TEAMS_BOT_APP_ID=APPLICATION-CLIENT-ID
+   TEAMS_BOT_APP_SECRET=CLIENT-SECRET-VALUE
+   TEAMS_BOT_TENANT_ID=DIRECTORY-TENANT-ID
+   TEAMS_ALERT_EMAILS=first.person@yourcompany.com,second.person@yourcompany.com
+   ```
+   Use each person's sign-in name (their user principal name, usually their email address). Then `sudo systemctl restart m365-room-display`.
+7. **Test it.** Open the dashboard and click **Send test alert**. It reports, per person, whether the message was delivered and, if not, why.
+
+Notes:
+- The sender name and icon come from the app you uploaded in step 4. To rename the bot, change `name` in `deploy/teams-app/manifest.template.json`, raise `version`, rebuild and upload again.
+- If a person blocks or removes the app, the dashboard test shows that; the other people still get the message.
+- The Azure Bot, the app registration and the admin consent do not need the kiosk server to be reachable from the internet. It only makes outbound HTTPS calls to `login.microsoftonline.com`, `graph.microsoft.com` and `smba.trafficmanager.net`.
+- Common test messages: "could not sign in" means a wrong app ID, secret or tenant; "refused permission" means step 3 is missing or not consented; "could not find the person" usually means the address is not that person's sign-in name; "not installed for this person" means step 5 is not done for them.
+
 ## 13. HTTPS (recommended)
 
 Keep the application on loopback port 3000 and terminate TLS at Nginx. Use your organization's certificate process or Certbot when the host has public DNS. After enabling HTTPS:

@@ -12,3 +12,4 @@
 
 Report suspected vulnerabilities privately to the repository owner. Do not open a public issue containing secrets or tenant details.
 - `ALERT_WEBHOOK_URL` is a secret (anyone with it can post into your channel). Keep it in `.env` only. Alerts contain room and tablet names but no calendar details.
+- `TEAMS_BOT_APP_SECRET` is a secret. Keep it in `.env` only, rotate it before it expires, and give the bot's Entra app only the `TeamsAppInstallation.ReadWriteSelfForUser.All` permission (plus `AppCatalog.Read.All` if you want the server to install the app itself). The Teams bot is notification-only: it cannot read chats and it ignores replies. Alert messages contain room and tablet names and error summaries, never calendar details.

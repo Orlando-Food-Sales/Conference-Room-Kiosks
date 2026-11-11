@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "__BOT_APP_ID__",
+  "developer": {
+    "name": "__COMPANY_NAME__",
+    "websiteUrl": "__WEBSITE__",
+    "privacyUrl": "__WEBSITE__",
+    "termsOfUseUrl": "__WEBSITE__"
+  },
+  "name": {
+    "short": "Room Display Alerts",
+    "full": "Room Display Alerts"
+  },
+  "description": {
+    "short": "Tells you when a conference room display needs attention.",
+    "full": "Sends one-way notifications when a conference room display tablet goes offline or a room calendar cannot be read. It does not read your chats and you cannot message it."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#B22234",
+  "bots": [
+    {
+      "botId": "__BOT_APP_ID__",
+      "scopes": ["personal"],
+      "isNotificationOnly": true,
+      "supportsFiles": false
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": [],
+  "webApplicationInfo": {
+    "id": "__BOT_APP_ID__",
+    "resource": "api://botid-__BOT_APP_ID__"
+  }
+}

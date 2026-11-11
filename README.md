@@ -12,13 +12,13 @@ dependencies; Node.js 20 or later.
 - Company holidays from the same shared calendar as birthdays: an all-day event titled "Holiday - Christmas" (anything starting with "Holiday") shows "Closed" with the holiday name and hides all booking that day; the server refuses bookings on those days as well. A bare "HOLIDAY" takes its name from the public holidays calendar. Public holidays alone (Veterans Day and so on) do not close the office.
 - Calendar changes (new, moved or cancelled meetings, even made in Outlook) reach the tablets within about 15 seconds: the server checks each room's calendar itself and pushes changes over the live connection. `CHANGE_CHECK_SECONDS` sets the interval, 0 turns it off.
 - "Closed tomorrow: Thanksgiving" heads-up on the day before a company holiday (it looks past weekends: on Friday it can say "Closed Monday: ...").
-- Tablet offline alerts: if a tablet stops checking in during office hours for `ALERT_AFTER_MINUTES` (default 10), the dashboard lists an alert and, when `ALERT_WEBHOOK_URL` is set, the same text is posted there as `{"text": "..."}`. A "back online" message follows.
+- Tablet offline alerts: if a tablet stops checking in during office hours for `ALERT_AFTER_MINUTES` (default 10), the dashboard lists an alert and, when `ALERT_WEBHOOK_URL` is set, the same text is posted there as `{"text": "..."}`. A "back online" message follows. Alerts can also go to named people in Teams from a bot with its own name (`TEAMS_BOT_*`, `TEAMS_ALERT_EMAILS`; setup in `INSTALL-UBUNTU.md`, section 12b), and the dashboard has a "Send test alert" button. A room calendar that cannot be read for 10 minutes also raises an alert.
 - Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
   mood that follows the weather (clear, clouds, rain, storm, snow, fog).
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
-- Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, Halloween, Thanksgiving, and more as art arrives), pajamas when the display says Closed, then weather and feels-like temperature (raincoat, winter coat, Hawaiian shirt). Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
+- Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, St. Patrick's Day, Easter, July 4th, Halloween, Thanksgiving), pajamas when the display says Closed, then weather and feels-like temperature (storm raincoat, raincoat, winter coat, Hawaiian shirt), and a chef hat on otherwise plain Fridays. Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
   (winter coat, raincoat, Hawaiian shirt). See `public/snoopy/outfits.json` and
   `public/snoopy/outfits/README.md`.
 - Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card. On a working day the line also covers the closed days that follow (a Saturday birthday shows on Friday as "Mabel (Saturday)").
@@ -28,7 +28,7 @@ dependencies; Node.js 20 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests
+npm run check                # syntax check and tests (npm test runs only the 89 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`.
@@ -40,7 +40,7 @@ All settings are environment variables; see `.env.example`.
 
 - Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `ROOMS_FILE`
 - Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`, `CHANGE_CHECK_SECONDS`
-- Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`
+- Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`, and for Teams `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `TEAMS_BOT_TENANT_ID`, `TEAMS_ALERT_EMAILS`
 - Office hours: `OFFICE_HOURS_START`, `OFFICE_HOURS_END`, `OFFICE_DAYS`, or `OFFICE_HOURS=off`
 - Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms), `WEATHER_SOURCE` (auto, nws, open-meteo), `WEATHER_CONTACT`
 - Birthdays: `BIRTHDAY_CALENDAR_MAILBOX`, `BIRTHDAY_CALENDAR_NAME`, `BIRTHDAY_CALENDAR_ID`,
@@ -55,7 +55,7 @@ All settings are environment variables; see `.env.example`.
 celebration. It is a review tool; remove or block it on public kiosks if you prefer.
 
 Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
-`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `temp` (feels-like Celsius), `day` (1 or 0), `date` (MM-DD, pretend today), `nostream=1`.
+`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `temp` (feels-like Celsius), `day` (1 or 0), `date` (MM-DD or YYYY-MM-DD, pretend today), `nostream=1`.
 
 ## Security
 

@@ -9,6 +9,7 @@ import { GraphCalendar, GraphTokenProvider } from './graph-calendar.js';
 import { SubscriptionManager } from './subscription-manager.js';
 import { WeatherService } from './weather.js';
 import { CelebrationService } from './celebrations.js';
+import { TeamsAlerts } from './teams-alerts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -104,6 +105,7 @@ export function createAppServer(options = {}) {
   config.rooms.forEach((room, index) => calendars.set(room.id, config.demoMode ? new DemoCalendar(room, index) : new GraphCalendar(config, room, tokenProvider, options.fetchImpl || fetch)));
 
   const weather = options.weather || new WeatherService(config, options.fetchImpl || fetch);
+  const teams = options.teamsAlerts || new TeamsAlerts(config.teamsAlerts, options.fetchImpl || fetch);
   const celebrations = options.celebrations || new CelebrationService(config, tokenProvider, options.fetchImpl || fetch);
   const sseClients = new Set();
   const tablets = new Map();
@@ -118,9 +120,11 @@ export function createAppServer(options = {}) {
   // Latest events per room. One fetch serves every tablet for a few seconds, and any difference from the
   // previous fetch is pushed to the tablets straight away (this is what makes updates feel instant).
   const latest = new Map();
+  const calendarProblems = new Map();       // roomId -> { since, error } while the room calendar cannot be read
   async function refreshRoom(roomId) {
     const window = roomWindow();
     const events = await calendars.get(roomId).listEvents(window.start, window.end);
+    calendarProblems.delete(roomId);
     const key = JSON.stringify(events.map(e => [e.id, e.subject, e.start, e.end, e.organizer, e.isPrivate]));
     const previous = latest.get(roomId);
     latest.set(roomId, { at: Date.now(), events, key });
@@ -137,15 +141,29 @@ export function createAppServer(options = {}) {
   const alerts = [];
   const alertState = new Map();            // key -> alerted?
   const startedAt = Date.now();
+  // Delivers one alert to every channel that is set up and reports what happened to each.
+  // It never throws: a broken channel must not stop the others or the server.
+  async function deliver(text, { title = 'Room Display alert' } = {}) {
+    const outcome = { webhook: { configured: Boolean(config.alertWebhookUrl) }, teams: { configured: teams.enabled, results: [] } };
+    if (config.alertWebhookUrl) {
+      try {
+        const response = await (options.fetchImpl || fetch)(config.alertWebhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(5000) });
+        outcome.webhook.ok = response.ok;
+        if (!response.ok) { outcome.webhook.error = `The webhook answered ${response.status}.`; logger.error?.(`Alert webhook answered ${response.status}`); }
+      } catch (error) { outcome.webhook.ok = false; outcome.webhook.error = error.message; logger.error?.(`Alert webhook failed: ${error.message}`); }
+    }
+    if (teams.enabled) {
+      try { outcome.teams.results = await teams.send(text, { title }); }
+      catch (error) { outcome.teams.results = [{ recipient: '(all)', ok: false, error: error.message }]; }
+      for (const result of outcome.teams.results) if (!result.ok) logger.error?.(`Teams alert to ${result.recipient} failed (${result.step || 'sending'}): ${result.error}`);
+    }
+    return outcome;
+  }
   async function sendAlert(text) {
     alerts.unshift({ at: new Date().toISOString(), text });
     alerts.length = Math.min(alerts.length, 20);
     logger.warn?.(`ALERT: ${text}`);
-    if (!config.alertWebhookUrl) return;
-    try {
-      const response = await (options.fetchImpl || fetch)(config.alertWebhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(5000) });
-      if (!response.ok) logger.error?.(`Alert webhook answered ${response.status}`);
-    } catch (error) { logger.error?.(`Alert webhook failed: ${error.message}`); }
+    await deliver(text);
   }
   function localClock(timeZone, ms) {
     const parts = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', hour: 'numeric', minute: 'numeric', hourCycle: 'h23' }).formatToParts(new Date(ms));
@@ -182,6 +200,15 @@ export function createAppServer(options = {}) {
           await sendAlert(`${room.name}: the tablet "${tablet.name}" is back online.`);
         }
       }
+      const calendarKey = `${room.id}:calendar`;
+      const problem = calendarProblems.get(room.id);
+      if (problem && ms - problem.since >= delay && !alertState.get(calendarKey)) {
+        alertState.set(calendarKey, true);
+        await sendAlert(`${room.name}: the room calendar cannot be read (${problem.error}). The display may be showing old meetings. Check the Microsoft 365 app secret and permissions.`);
+      } else if (!problem && alertState.get(calendarKey)) {
+        alertState.delete(calendarKey);
+        await sendAlert(`${room.name}: the room calendar can be read again.`);
+      }
       const noneKey = `${room.id}:none`;
       if (!roomTablets.length && ms - startedAt >= delay && !alertState.get(noneKey)) {
         alertState.set(noneKey, true);
@@ -204,7 +231,7 @@ export function createAppServer(options = {}) {
       busy = true;
       for (const room of config.rooms) {
         try { await refreshRoom(room.id); }
-        catch (error) { if (Date.now() - lastWatchError > 60000) { lastWatchError = Date.now(); logger.error?.(`Calendar change check failed for ${room.id}: ${error.message}`); } }
+        catch (error) { if (!calendarProblems.has(room.id)) calendarProblems.set(room.id, { since: Date.now(), error: String(error.message || error).slice(0, 140) }); if (Date.now() - lastWatchError > 60000) { lastWatchError = Date.now(); logger.error?.(`Calendar change check failed for ${room.id}: ${error.message}`); } }
       }
       busy = false;
     };
@@ -311,7 +338,13 @@ export function createAppServer(options = {}) {
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
             return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: controls.get(room.id), error };
           }));
-          return sendJson(res, 200, { rooms, alerts, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { rooms, alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+        }
+        if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
+          const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
+          alerts.unshift({ at: new Date().toISOString(), text: `Test alert sent from the dashboard.` });
+          alerts.length = Math.min(alerts.length, 20);
+          return sendJson(res, 200, await deliver(text, { title: 'Room Display test alert' }));
         }
         const match = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/control$/);
         if (req.method === 'POST' && match) {
@@ -342,7 +375,7 @@ export function createAppServer(options = {}) {
   });
 
   server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
-  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, alerts };
+  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) { monitor = setInterval(() => checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`)), 60000); monitor.unref?.(); }
   if (options.startSubscriptions !== false) subscriptions.start().catch(error => logger.error('Subscriptions did not start:', error.message));

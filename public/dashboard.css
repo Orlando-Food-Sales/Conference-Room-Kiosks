@@ -4,3 +4,4 @@
 .warn{color:#ffbf47}.live-label{position:absolute;inset:0;display:grid;place-items:center;color:#64748b;font-weight:800;letter-spacing:.25em;pointer-events:none}
 .alerts{margin:0 0 1rem}.alerts h2{margin:.5rem 0;font-size:1rem;color:#ff8b8b}.alerts p{margin:.25rem 0;padding:.6rem .8rem;border:1px solid #6b2b2b;border-radius:10px;background:#1b1114;color:#f6f8fb}.alerts time{color:#ff8b8b;font-weight:800;margin-right:.5rem}
 .devices{list-style:none;margin:.25rem 0 0;padding:0;font-size:.85rem;color:#9badc3}.devices li{margin:.2rem 0}.devices .on{color:#8fe3b4}.devices .off{color:#ff8b8b}
+.alert-tools{margin:.5rem 0 .25rem}#alertResult{margin:.25rem 0 .75rem;word-break:break-word}
