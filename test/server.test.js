@@ -222,11 +222,11 @@ test('refuses to book a company holiday, but never blocks when the holiday check
 test('records tablet check-ins with their screen size and ignores junk screen values', async t => {
   const { base, state } = await start(t);
   const beat = body => json(base, '/api/tablets/heartbeat', { method: 'POST', body, headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14; SM-T220)' } });
-  const ok = await beat({ roomId: 'front', tabletId: 't1', name: 'Front tablet', screen: '893x500 @1.5' });
+  const ok = await beat({ roomId: 'front', tabletId: 't1', name: 'Front tablet', screen: '1006x600 @1.33' });
   assert.equal(ok.status, 200);
-  assert.equal(state.tablets.get('front:t1').screen, '893x500 @1.5');
+  assert.equal(state.tablets.get('front:t1').screen, '1006x600 @1.33');
   await beat({ roomId: 'front', tabletId: 't1', name: 'Front tablet', screen: '<script>alert(1)</script>' });
-  assert.equal(state.tablets.get('front:t1').screen, '893x500 @1.5', 'junk is ignored and the last good value is kept');
+  assert.equal(state.tablets.get('front:t1').screen, '1006x600 @1.33', 'junk is ignored and the last good value is kept');
   assert.equal((await beat({ roomId: 'nowhere', tabletId: 't1' })).status, 404);
   assert.equal((await beat({ roomId: 'front' })).status, 400);
 });
@@ -255,11 +255,11 @@ test('the dashboard API needs the administrator token', async t => {
 
 test('the dashboard overview lists rooms, tablets, alerts and the current weather', async t => {
   const { base, state } = await start(t, { weather: { get: async () => ({ condition: 'clear', temperatureC: 16, source: 'nws KTEB' }) } });
-  state.tablets.set('front:t1', { tabletId: 't1', roomId: 'front', name: 'Front tablet', lastSeen: new Date().toISOString(), connectedAt: new Date().toISOString(), ip: '10.0.0.5', userAgent: 'ua', screen: '893x500 @1.5' });
+  state.tablets.set('front:t1', { tabletId: 't1', roomId: 'front', name: 'Front tablet', lastSeen: new Date().toISOString(), connectedAt: new Date().toISOString(), ip: '10.0.0.5', userAgent: 'ua', screen: '1006x600 @1.33' });
   const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
   assert.deepEqual(overview.rooms.map(r => r.id), ['front', 'back']);
   assert.equal(overview.rooms[0].onlineTablets, 1);
-  assert.equal(overview.rooms[0].tablets[0].screen, '893x500 @1.5');
+  assert.equal(overview.rooms[0].tablets[0].screen, '1006x600 @1.33');
   assert.equal(overview.rooms[1].onlineTablets, 0);
   assert.ok(Array.isArray(overview.alerts));
   assert.equal(overview.weather.source, 'nws KTEB');

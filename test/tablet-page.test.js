@@ -101,7 +101,7 @@ test('the Orlando Foods logo files exist, are small web-ready PNGs with transpar
   assert.match(html, /logo-for-light" src="\/logo\/orlando-foods-color\.png"/, 'colour logo for the light theme (its dark text would vanish on dark)');
   assert.match(css, /:root\[data-theme="light"\] \.brand-logo \.logo-for-dark \{ display: none; \}/);
   assert.match(css, /@media \(max-width: 800px\) \{ \.topbar > \.brand-logo \{ display: none; \} \}/, 'hidden on narrow portrait screens');
-  assert.doesNotMatch(css, /max-height: 540px\)[^{]*\{ \.topbar > \.brand-logo \{ display: none/, 'but still shown on short landscape screens such as the real tablet (about 893x500)');
+  assert.doesNotMatch(css, /max-height: 540px\)[^{]*\{ \.topbar > \.brand-logo \{ display: none/, 'but still shown on short landscape screens (540 px tall or less); the real tablet is 1006x600 and gets the normal size');
   assert.match(css, /@media \(max-height: 540px\) \{ \.brand-logo \{ height: clamp\(30px, 9vh, 44px\); \} \}/, 'a little smaller there');
   assert.ok(fs.existsSync(new URL('../assets/logo/Orlando-Foods_Logo_NoTagline_Color.png', import.meta.url)), 'the full-size originals are kept outside the served folder');
 });
@@ -137,7 +137,7 @@ test('every weather in the preview has a background mood, and the tour covers th
 
 test('the preview offers the real tablet size and the warning examples the display understands', () => {
   const screens = options('screen').map(o => o.value);
-  for (const size of ['893x500', '500x893', '1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
+  for (const size of ['1006x600', '600x1006', '1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
   const warnings = options('warning').map(o => o.value);
   assert.ok(warnings.some(w => w.includes(';')), 'several warnings at once');
   assert.ok(warnings.some(w => w.endsWith('|watch')) && warnings.some(w => w && w !== 'none' && !w.includes('|')), 'both red and amber');
