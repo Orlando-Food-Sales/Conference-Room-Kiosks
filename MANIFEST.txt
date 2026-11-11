@@ -1,7 +1,7 @@
 .env.example	3733 bytes
 .gitignore	85 bytes
 CHANGELOG.md	12530 bytes
-DEPLOY-CHECKLIST.md	5974 bytes
+DEPLOY-CHECKLIST.md	6108 bytes
 INSTALL-UBUNTU.md	21169 bytes
 README.md	7495 bytes
 RELEASE_MANIFEST.md	1658 bytes

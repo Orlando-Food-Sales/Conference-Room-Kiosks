@@ -28,12 +28,12 @@ The backup includes `.env` and `config/rooms.json`. Keep it until the next deplo
 From the repository folder on your computer. `.env`, `config/rooms.json` and `node_modules` are never touched.
 
 ```bash
-rsync -rltc --exclude .git --exclude .env --exclude config/rooms.json --exclude node_modules \
+rsync -rltcE --exclude .git --exclude .env --exclude config/rooms.json --exclude node_modules \
   --exclude .DS_Store --exclude .agents --exclude teams-app-build \
   ./ USER@SERVER:/opt/m365-room-display/
 ```
 
-Add `-n` for a dry run that only lists what would change.
+Add `-n` for a dry run that only lists what would change. (`-E` keeps scripts executable; the checklist runs them with `bash` anyway, so a missing executable bit never stops a deploy.)
 
 ## 3. Add the new settings to the server `.env`
 
@@ -66,7 +66,7 @@ grep -E '^(TEAMS_|CLIENT_SECRET_EXPIRES|WEATHER_)' .env | sed 's/\(SECRET=\).*/\
 ```bash
 ssh USER@SERVER 'cd /opt/m365-room-display && npm run check'          # all tests must pass on the server's Node
 ssh -t USER@SERVER 'sudo systemctl restart m365-room-display && systemctl is-active m365-room-display'
-ssh USER@SERVER '/opt/m365-room-display/scripts/smoke-test.sh'        # must end with "Smoke test passed."
+ssh USER@SERVER 'cd /opt/m365-room-display && bash scripts/smoke-test.sh'   # must end with "Smoke test passed."
 ```
 
 - [ ] The smoke test prints `Running version 2.1.0`. If it shows the old number, the service did not restart on the new code.
