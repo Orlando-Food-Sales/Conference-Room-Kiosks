@@ -676,3 +676,14 @@ test('healthz and the dashboard overview report the version that is running', as
   const head = await fetch(`${base}/healthz`, { method: 'HEAD' });
   assert.equal(head.status, 200, 'HEAD still works for uptime monitors');
 });
+
+test('serves the favicon and touch icon with the right types instead of a 404', async t => {
+  const { base } = await start(t);
+  const ico = await fetch(`${base}/favicon.ico`);
+  assert.equal(ico.status, 200);
+  assert.equal(ico.headers.get('content-type'), 'image/x-icon');
+  assert.ok((await ico.arrayBuffer()).byteLength > 500, 'a real icon file');
+  const touch = await fetch(`${base}/apple-touch-icon.png`);
+  assert.equal(touch.status, 200);
+  assert.equal(touch.headers.get('content-type'), 'image/png');
+});

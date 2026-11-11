@@ -37,3 +37,14 @@ test('the smoke test checks the version, the logo, the dashboard files and the w
   const smoke = read('scripts/smoke-test.sh');
   for (const needle of ['/healthz', 'version', '/logo/orlando-foods-white.png', '/logo/orlando-foods-color.png', '/dashboard.css', '/dashboard.js', '/preview.html', '/api/weather', 'alerts']) assert.ok(smoke.includes(needle), `smoke-test.sh mentions ${needle}`);
 });
+
+test('the deploy checklist matches the project and holds no addresses, passwords or IDs', () => {
+  const list = read('DEPLOY-CHECKLIST.md');
+  assert.ok(list.includes(`Running version ${pkg.version}`), 'it tells you which version the smoke test should print');
+  for (const step of ['back up', 'smoke-test.sh', 'rsync', 'roll back', 'send test alert', 'systemctl restart', '--exclude .env']) assert.ok(list.toLowerCase().includes(step), `it covers: ${step}`);
+  const withoutLocalhost = list.replaceAll('127.0.0.1', '');
+  assert.doesNotMatch(withoutLocalhost, /\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/, 'no server IP address');
+  assert.doesNotMatch(list, /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i, 'no tenant, app or catalog IDs');
+  assert.doesNotMatch(list, /[\w.+-]+@(?!SERVER)[\w-]+\.[a-z]{2,}/i, 'no email addresses');
+  assert.match(list, /USER@SERVER/, 'placeholders are used instead');
+});

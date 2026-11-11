@@ -10,6 +10,7 @@ Based on the verified v2.0.0 known-good deployment baseline, including the table
 | `SHA256SUMS` | SHA-256 checksum of every tracked file except the two lists themselves |
 | `verification/VERIFICATION.txt` | What was checked, and what was not |
 | `CHANGELOG.md` | What changed |
+| `DEPLOY-CHECKLIST.md` | Step-by-step update of a running server, with checks and rollback |
 
 `MANIFEST.txt` and `SHA256SUMS` are generated. After your last change, run `git add` for any new files, then `scripts/update-manifests.sh`, and commit the result. To check a copy: `sha256sum -c SHA256SUMS` (macOS: `shasum -a 256 -c SHA256SUMS`).
 

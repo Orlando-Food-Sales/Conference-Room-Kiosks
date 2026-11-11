@@ -29,6 +29,8 @@ Then open a pull request on GitHub and merge it when you are happy.
 
 ## 3. Put it on the server
 
+Follow `DEPLOY-CHECKLIST.md` (backup, copy, settings, restart, smoke test, test alert, rollback). In short:
+
 Pushing to GitHub does not change the kiosks. Deploy as described in `INSTALL-UBUNTU.md` (section 15, "Update and rollback"): back up `/opt/m365-room-display`, copy the new files in without touching `.env`, `config/rooms.json` or `node_modules`, run `npm run check` on the server, restart with `sudo systemctl restart m365-room-display`, and open `/dashboard` to confirm. Changes that only touch files in `public/` need no restart, but tablets pick them up only when they reload (the nightly reload or the refresh button).
 
 A change that adds a new setting needs the matching line in the server's `.env` first (see `.env.example`).

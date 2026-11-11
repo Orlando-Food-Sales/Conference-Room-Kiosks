@@ -141,3 +141,19 @@ test('the preview offers the real tablet size and the warning examples the displ
   assert.ok(warnings.some(w => w.endsWith('|watch')) && warnings.some(w => w && w !== 'none' && !w.includes('|')), 'both red and amber');
   assert.match(app, /preview\.split\(';'\)/, 'the display understands several warnings in the address');
 });
+
+test('the favicon and touch icon are real files with the right sizes, and every page links them', () => {
+  const ico = fs.readFileSync(new URL('../public/favicon.ico', import.meta.url));
+  assert.deepEqual([ico.readUInt16LE(0), ico.readUInt16LE(2)], [0, 1], 'an ICO file header');
+  const count = ico.readUInt16LE(4);
+  const sizes = Array.from({ length: count }, (_, i) => ico[6 + i * 16] || 256).sort((a, b) => a - b);
+  assert.deepEqual(sizes, [16, 32, 48], 'it holds 16, 32 and 48 pixel icons');
+  const touch = fs.readFileSync(new URL('../public/apple-touch-icon.png', import.meta.url));
+  assert.equal(touch.subarray(1, 4).toString(), 'PNG');
+  assert.deepEqual([touch.readUInt32BE(16), touch.readUInt32BE(20)], [180, 180], 'the touch icon is 180x180');
+  for (const page of ['index.html', 'dashboard.html', 'preview.html']) {
+    const text = fs.readFileSync(new URL(`../public/${page}`, import.meta.url), 'utf8');
+    assert.match(text, /<link rel="icon" href="\/favicon\.ico"/, `${page} links the favicon`);
+    assert.match(text, /<link rel="apple-touch-icon" href="\/apple-touch-icon\.png"/, `${page} links the touch icon`);
+  }
+});

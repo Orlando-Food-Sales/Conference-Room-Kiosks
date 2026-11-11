@@ -18,7 +18,7 @@ dependencies; Node.js 22 or later.
 - Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
   mood that follows the weather (clear, clouds, rain, storm, snow, ice, fog). Freezing rain and sleet count as ice.
-- Orlando Foods logo in the middle of the top bar (white version on the dark theme, colour version on the light theme; hidden on narrow portrait screens). Files are in `public/logo/`, full-size originals in `assets/logo/`.
+- Orlando Foods logo in the middle of the top bar (white version on the dark theme, colour version on the light theme; hidden on narrow portrait screens). Files are in `public/logo/`, full-size originals in `assets/logo/`. The browser tab icon and home-screen icon are the white "O" of the logo on the brand burgundy.
 - Official weather warnings (US): Winter Storm Warning, Flood Watch, Heat Advisory and the like, from the National Weather Service for your location, appear as a banner on every tablet (red for warnings, amber for watches and advisories) and disappear when they end. Each Severe or Extreme warning is also sent once to the alert list (Teams and webhook). Turn off with `WEATHER_ALERTS=false`.
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
@@ -30,10 +30,10 @@ dependencies; Node.js 22 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 132 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 135 offline tests, about 8 seconds)
 ```
 
-Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`.
+Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`. Updating a running server step by step (backup, copy, settings, restart, checks, rollback): `DEPLOY-CHECKLIST.md`.
 Copy `.env.example` to `.env` and `config/rooms.example.json` to `config/rooms.json`.
 
 ## Settings
