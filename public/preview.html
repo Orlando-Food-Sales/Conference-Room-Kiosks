@@ -34,7 +34,7 @@
                     <option value="clouds">Clouds</option>
                     <option value="rain">Rain</option>
                     <option value="storm">Storm</option>
-                    <option value="snow">Snow</option>
+                    <option value="snow">Snow</option><option value="ice">Ice (freezing rain, sleet)</option>
                     <option value="fog">Fog</option>
                 </select>
             </label>
@@ -45,7 +45,7 @@
         <select id="temp"><option value="" selected>Auto (live)</option><option value="-8">Freezing, -8 C / 18 F</option><option value="2">Cold, 2 C / 36 F</option><option value="10">Cool, 10 C / 50 F</option><option value="20">Warm, 20 C / 68 F</option><option value="31">Hot, 31 C / 88 F</option></select>
       </label>
       <label>Pretend today is (for festive outfits)
-        <select id="date"><option value="" selected>Real date</option><option value="02-12">Feb 12 (Valentine's)</option><option value="03-15">Mar 15 (St. Patrick's)</option><option value="2027-03-25">Mar 25, 2027 (Easter week)</option><option value="07-02">Jul 2 (July 4th)</option><option value="10-25">Oct 25 (Halloween)</option><option value="11-25">Nov 25 (Thanksgiving)</option><option value="12-10">Dec 10 (Christmas)</option><option value="12-30">Dec 30 (New Year)</option><option value="2027-02-19">Friday Feb 19, 2027 (chef)</option></select>
+        <select id="date"><option value="" selected>Real date</option><option value="02-12">Feb 12 (Valentine's)</option><option value="03-15">Mar 15 (St. Patrick's)</option><option value="2027-03-25">Mar 25, 2027 (Easter week)</option><option value="2027-03-29">Mar 29, 2027 (Monday after Easter: no outfit)</option><option value="2031-04-10">Apr 10, 2031 (Easter week, worked out, not listed)</option><option value="2038-04-22">Apr 22, 2038 (latest possible Easter)</option><option value="07-02">Jul 2 (July 4th)</option><option value="10-25">Oct 25 (Halloween)</option><option value="11-25">Nov 25 (Thanksgiving)</option><option value="12-10">Dec 10 (Christmas)</option><option value="12-30">Dec 30 (New Year)</option><option value="2027-02-19">Friday Feb 19, 2027 (chef)</option></select>
       </label>
       <label>Snoopy outfit
                 <select id="outfit">
@@ -59,6 +59,9 @@
       <label>One-tap booking buttons
         <select id="quickbook"><option value="" selected>Auto (room setting)</option><option value="1">Show</option><option value="0">Hide</option></select>
       </label>
+      <label>Kiosk mode (wall tablets)
+        <select id="kiosk"><option value="" selected>Off (refresh and message buttons shown)</option><option value="1">On (buttons hidden)</option></select>
+      </label>
       <label>Screen power
         <select id="display"><option value="" selected>On</option><option value="off">Off (black screen)</option></select>
       </label>
@@ -67,6 +70,9 @@
       </label>
       <label>"Closed tomorrow" notice
         <select id="closedsoon"><option value="none" selected>Hide</option><option value="Thanksgiving">Show: Thanksgiving</option><option value="Christmas">Show: Christmas</option></select>
+      </label>
+      <label>Weather warning (National Weather Service)
+        <select id="warning"><option value="none" selected>Hide</option><option value="Winter Storm Warning">Show: Winter Storm Warning (red)</option><option value="Tornado Warning">Show: Tornado Warning (red)</option><option value="Flood Watch|watch">Show: Flood Watch (amber)</option><option value="Heat Advisory|watch">Show: Heat Advisory (amber)</option><option value="Winter Storm Warning;Flood Watch|watch;Wind Advisory|watch">Show: three at once (+2 more)</option></select>
       </label>
       <label>Company holiday
         <select id="holiday"><option value="none" selected>No holiday</option><option value="Thanksgiving">Thanksgiving</option><option value="Christmas">Christmas</option><option value="New Year's Day">New Year's Day</option></select>
@@ -87,6 +93,9 @@
             <label>Screen
                 <select id="screen">
                     <option value="1280x800" selected>Desktop 1280×800</option>
+                    <option value="1340x800">Samsung Galaxy Tab A7 Lite landscape 1340×800</option>
+                    <option value="800x1340">Samsung Galaxy Tab A7 Lite portrait 800×1340 (logo hidden)</option>
+                    <option value="1000x500">Short screen 1000×500</option>
                     <option value="1024x768">Tablet landscape 1024×768</option>
                     <option value="800x1280">Tablet portrait 800×1280</option>
                     <option value="420x800">Narrow 420×800</option>

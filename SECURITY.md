@@ -6,7 +6,7 @@
 - Scope application access to the room mailboxes with Exchange Online Application RBAC.
 - Rotate the Entra client secret and `ADMIN_TOKEN` on a defined schedule and after any suspected disclosure.
 - Use HTTPS when traffic crosses an untrusted network.
-- The server makes optional outbound calls for weather to `api.weather.gov` (US National Weather Service) and `api.open-meteo.com` (backup). Only the configured latitude and longitude are sent; disable it with `WEATHER_ENABLED=false`.
+- The server makes optional outbound calls for weather to `api.weather.gov` (US National Weather Service) and `api.open-meteo.com` (backup). The same `api.weather.gov` service also supplies official weather warnings (`/alerts/active`). Only the configured latitude and longitude are sent; disable weather with `WEATHER_ENABLED=false`, or just the warnings with `WEATHER_ALERTS=false`.
 - Birthdays and anniversaries are public on every tablet that shows them. Show first names only (the default) and set `"showCelebrations": false` on client-facing rooms.
 - Pages may be framed by the same origin only (`x-frame-options: SAMEORIGIN`), which the preview page needs. `/preview.html` is a review tool; block it in Nginx on public kiosks if you do not want it served.
 - `ALERT_WEBHOOK_URL` is a secret (anyone with it can post into your channel). Keep it in `.env` only. Alerts contain room and tablet names but no calendar details.

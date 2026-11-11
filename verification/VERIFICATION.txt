@@ -2,9 +2,9 @@ Verification notes (updated 2026-11-11)
 
 Checked automatically (npm run check):
   node --check on src/*.js and public/*.js: PASS
-  105 offline tests: PASS on Node.js 22.16, 24.22 and 26.13 (settings, holidays, birthdays, weather, bookings and holiday block,
+  125 offline tests: PASS on Node.js 22.16, 24.22 and 26.13 (settings, holidays, birthdays, weather, bookings and holiday block,
     change detection, tablet alerts, Teams alert delivery against a fake Microsoft, secret expiry
-    reminders, live-connection ping, tablet auto-heal and kiosk mode logic, daylight saving changes, Easter dates,
+    reminders, live-connection ping, tablet auto-heal and kiosk mode logic, daylight saving changes, Easter dates, ice weather, official weather warnings, the logo, the preview page controls,
     no third-party packages and one Node version everywhere, admin controls,
     security headers, outfit rules file)
   Deliberate-break (mutation) testing: 40 changes to the code, all caught by the tests except one that turned out to be harmless
@@ -15,6 +15,9 @@ Checked by hand:
     created (single tenant) with the Teams channel on, Teams app package uploaded and listed in the catalog
 
 NOT verified:
+  A real warning showing on the tablets: the parser was run against the live api.weather.gov feed (field names
+    match, and a real Flood Warning from another state parsed correctly), but there was no active warning at
+    Glen Rock to watch end to end. Check the first real one on the tablets.
   Real delivery of a Teams alert to a person. The Teams flow has only run against a fake Microsoft.
     Use "Send test alert" on the dashboard after deploying; it reports per person why a delivery failed.
   Whether Teams admin policies block the app for particular users (needs the Teams admin center)

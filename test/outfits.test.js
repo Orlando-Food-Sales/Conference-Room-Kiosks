@@ -9,7 +9,7 @@ const { outfits } = JSON.parse(fs.readFileSync(path.join(SNOOPY, 'outfits.json')
 
 const RULE_KEYS = ['from', 'easter', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'maxTempC'];
 const KNOWN_KEYS = new Set(['id', 'label', 'file', 'rows', 'to', 'year', 'daytimeOnly', ...RULE_KEYS]);
-const WEATHER = new Set(['clear', 'clouds', 'rain', 'storm', 'snow', 'fog']);
+const WEATHER = new Set(['clear', 'clouds', 'rain', 'storm', 'snow', 'ice', 'fog']);
 
 function pngSize(file) {
   const head = fs.readFileSync(file).subarray(0, 24);
@@ -140,4 +140,25 @@ test('there is a single Easter rule, with no per-year entries left to run out', 
   assert.equal(easter.from, undefined);
   assert.equal(easter.year, undefined);
   assert.match(snoopyCode, /if \(o\.easter\) return easterRuleMatches\(/, 'the outfit chooser uses the Easter rule');
+});
+
+test('freezing rain and sleet get the winter coat, never the raincoat', () => {
+  const wears = condition => outfits.filter(o => o.weather && o.weather.includes(condition)).map(o => o.id);
+  assert.deepEqual(wears('ice'), ['winter-snow']);
+  assert.ok(wears('rain').includes('spring-raincoat'));
+  assert.ok(!wears('rain').includes('winter-snow'));
+});
+
+test('the Easter dates offered on the preview page really fall inside or outside the Easter window', () => {
+  const { easterRuleMatches } = loadEaster();
+  const rule = outfits.find(o => o.easter).easter;
+  const html = fs.readFileSync(path.join(SNOOPY, '..', 'preview.html'), 'utf8');
+  const dates = [...html.matchAll(/<option value="(\d{4}-\d\d-\d\d)">([^<]*)<\/option>/g)].map(m => ({ value: m[1], label: m[2] }));
+  const easterOnes = dates.filter(d => /easter/i.test(d.label));
+  assert.ok(easterOnes.length >= 3, 'Easter examples are offered');
+  for (const { value, label } of easterOnes) {
+    const [year, month, day] = value.split('-').map(Number);
+    const wanted = !/no outfit/i.test(label);
+    assert.equal(easterRuleMatches(rule, year, month, day), wanted, `${value}: ${label}`);
+  }
 });

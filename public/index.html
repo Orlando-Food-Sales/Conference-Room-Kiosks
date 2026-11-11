@@ -14,6 +14,7 @@
 <body>
   <section id="picker" class="picker hidden" aria-labelledby="pickerTitle">
     <div class="picker-card">
+      <div class="brand-logo brand-logo-picker" role="img" aria-label="Orlando Foods"><img class="logo-for-dark" src="/logo/orlando-foods-white.png" alt="" width="800" height="295" decoding="async"><img class="logo-for-light" src="/logo/orlando-foods-color.png" alt="" width="800" height="295" decoding="async"></div>
       <p class="eyebrow">ROOM DISPLAY</p>
       <h1 id="pickerTitle">Choose a room</h1>
       <p class="muted">Select the conference room assigned to this tablet.</p>
@@ -26,6 +27,7 @@
         <p class="eyebrow">CONFERENCE ROOM</p>
         <h1 id="roomName">Loading…</h1>
       </div>
+      <div class="brand-logo" role="img" aria-label="Orlando Foods"><img class="logo-for-dark" src="/logo/orlando-foods-white.png" alt="" width="800" height="295" decoding="async"><img class="logo-for-light" src="/logo/orlando-foods-color.png" alt="" width="800" height="295" decoding="async"></div>
       <div class="clock-block"><strong id="clock">--:--</strong><span id="date">—</span></div>
     </header>
     <section id="availability" class="status-panel">
@@ -39,6 +41,7 @@
           <button type="button" data-minutes="60">60 min</button>
         </div>
         <div id="closedSoon" class="closed-soon hidden" aria-live="polite"></div>
+        <div id="weatherAlert" class="weather-alert hidden" role="status" aria-live="polite"></div>
         <div id="celebration" class="celebration hidden" aria-live="polite"></div>
       </div>
       <button id="reserveButton" class="reserve hidden" type="button">Reserve now</button>

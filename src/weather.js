@@ -6,11 +6,16 @@
 // Day or night always comes from the sun's position, so it is exact. Only coordinates leave the server.
 //
 // Result: { condition, code, temperatureC, feelsLikeC, precipitation, isDay, source, observedAt, updatedAt, stale }
-// condition is one of: clear, clouds, rain, storm, snow, fog.
+// condition is one of: clear, clouds, rain, storm, snow, ice (freezing rain, sleet), fog.
+//
+// Official warnings (Winter Storm Warning, Flood Warning, Heat Advisory, ...) come from the same service
+// (api.weather.gov/alerts) through alerts(); see parseAlerts().
 
 const FRESH_MS = 10 * 60 * 1000;          // reuse a result for 10 minutes
 const STALE_LIMIT_MS = 3 * 60 * 60 * 1000;   // never show weather older than 3 hours
 const RETRY_MS = 60 * 1000;               // after a failure wait a minute before asking again
+const ALERTS_FRESH_MS = 5 * 60 * 1000;    // warnings are reused for 5 minutes
+const ALERTS_STALE_LIMIT_MS = 30 * 60 * 1000;   // if the Weather Service is unreachable, keep the last warnings this long (they still drop off when they end)
 const STATIONS_MS = 24 * 60 * 60 * 1000;
 const OBSERVATION_MAX_AGE_MS = 100 * 60 * 1000;   // airport stations report about hourly
 
@@ -19,6 +24,7 @@ const OBSERVATION_MAX_AGE_MS = 100 * 60 * 1000;   // airport stations report abo
 export function conditionFromOpenMeteo({ code, precipitation = 0, rain = 0, showers = 0, snowfall = 0, cloudCover = null, temperatureC = null }) {
   if (code >= 95) return 'storm';
   const freezingRain = [56, 57, 66, 67].includes(code);
+  if (freezingRain) return 'ice';                       // freezing drizzle or freezing rain: glazes roads and steps
   if (!freezingRain && (snowfall > 0 || (code >= 71 && code <= 77) || code === 85 || code === 86)) return 'snow';
   const wet = precipitation > 0 || rain > 0 || showers > 0;
   if (wet) return !freezingRain && temperatureC !== null && temperatureC <= 0.5 ? 'snow' : 'rain';
@@ -31,11 +37,12 @@ export function conditionFromOpenMeteo({ code, precipitation = 0, rain = 0, show
 
 const NWS_PRESENT = {
   thunderstorms: 'storm', hail: 'storm', water_spouts: 'storm',
-  snow: 'snow', snow_grains: 'snow', snow_showers: 'snow', ice_pellets: 'snow', ice_crystals: 'snow', blowing_snow: 'snow',
-  rain: 'rain', rain_showers: 'rain', drizzle: 'rain', freezing_rain: 'rain', freezing_drizzle: 'rain', freezing_spray: 'rain',
+  freezing_rain: 'ice', freezing_drizzle: 'ice', freezing_spray: 'ice', ice_pellets: 'ice',
+  snow: 'snow', snow_grains: 'snow', snow_showers: 'snow', ice_crystals: 'snow', blowing_snow: 'snow',
+  rain: 'rain', rain_showers: 'rain', drizzle: 'rain',
   fog_mist: 'fog'
 };
-const NWS_RANK = { storm: 5, snow: 4, rain: 3, fog: 2 };
+const NWS_RANK = { storm: 6, ice: 5, snow: 4, rain: 3, fog: 2 };
 
 export function conditionFromNws(properties) {
   // 1. what is falling or hanging in the air right now
@@ -52,7 +59,8 @@ export function conditionFromNws(properties) {
   // 3. the station's own words
   const text = String(properties.textDescription || '').toLowerCase();
   if (/thunder|tstm/.test(text)) return 'storm';
-  if (/snow|sleet|flurr|ice pellet|blizzard/.test(text)) return 'snow';
+  if (/freezing|sleet|ice pellet|icy/.test(text)) return 'ice';
+  if (/snow|flurr|blizzard/.test(text)) return 'snow';
   if (/rain|drizzle|shower/.test(text)) return 'rain';
   if (/fog|mist/.test(text)) return 'fog';
   if (/overcast|cloudy/.test(text) && !/partly|mostly sunny|mostly clear/.test(text)) return 'clouds';
@@ -96,6 +104,37 @@ export function inUnitedStates(latitude, longitude) {
   return latitude >= 24.4 && latitude <= 49.5 && longitude >= -125 && longitude <= -66.5;
 }
 
+// Official National Weather Service warnings, watches and advisories for a point (api.weather.gov/alerts/active).
+// Returns the ones worth showing, most serious first: { id, event, severity, headline, ends, notify }.
+//   shown:  severity Moderate, Severe or Extreme (Minor ones such as Frost Advisory stay off the tablets)
+//   notify: Severe or Extreme (Warnings and the like), which are also sent to the people on the alert list
+// Test messages, cancellations and alerts that have already ended are dropped.
+const SEVERITY_RANK = { Minor: 1, Moderate: 2, Severe: 3, Extreme: 4 };
+export function parseAlerts(json, now = Date.now()) {
+  const found = [];
+  for (const feature of json?.features || []) {
+    const p = feature?.properties || {};
+    const rank = SEVERITY_RANK[p.severity] || 0;
+    if (rank < SEVERITY_RANK.Moderate) continue;
+    if (String(p.status || 'Actual') !== 'Actual' || String(p.messageType || 'Alert') === 'Cancel') continue;
+    const ends = Date.parse(p.ends || p.expires || '');
+    if (Number.isFinite(ends) && ends <= now) continue;
+    const event = String(p.event || '').trim().slice(0, 80);
+    if (!event) continue;
+    found.push({
+      id: String(p.id || feature.id || `${event}:${p.sent || ''}`),
+      event,
+      severity: p.severity,
+      headline: String(p.headline || '').trim().slice(0, 240),
+      ends: Number.isFinite(ends) ? new Date(ends).toISOString() : null,
+      notify: rank >= SEVERITY_RANK.Severe,
+      rank
+    });
+  }
+  found.sort((a, b) => b.rank - a.rank || (Date.parse(a.ends || '') || Infinity) - (Date.parse(b.ends || '') || Infinity));
+  return found.map(({ rank, ...alert }) => alert);
+}
+
 // ---------- the service ----------
 
 export class WeatherService {
@@ -108,6 +147,9 @@ export class WeatherService {
     this.retryAt = 0;
     this.stations = null;
     this.stationsAt = 0;
+    this.alertList = null;
+    this.alertsAt = 0;
+    this.alertsRetryAt = 0;
   }
 
   get settings() { return this.config.weather; }
@@ -194,6 +236,28 @@ export class WeatherService {
     };
   }
 
+  nwsHeaders() { return { accept: 'application/geo+json', 'user-agent': `m365-room-display (${this.settings.contact || 'local kiosk'})` }; }
+
+  // Active warnings for the configured location, or [] when alerts are off, the place is outside the US,
+  // or the Weather Service cannot be reached (a warning that has ended is never shown from the saved copy).
+  async alerts() {
+    const { enabled, alerts, latitude, longitude, source } = this.settings;
+    if (!enabled || alerts === false || source === 'open-meteo' || !inUnitedStates(latitude, longitude)) return [];
+    const now = this.clock();
+    const stillActive = list => list.filter(a => !a.ends || Date.parse(a.ends) > now);
+    if (this.alertList && now - this.alertsAt < ALERTS_FRESH_MS) return stillActive(this.alertList);
+    if (now < this.alertsRetryAt) return this.alertList && now - this.alertsAt < ALERTS_STALE_LIMIT_MS ? stillActive(this.alertList) : [];
+    try {
+      const json = await this.getJson(`https://api.weather.gov/alerts/active?point=${latitude.toFixed(4)},${longitude.toFixed(4)}`, this.nwsHeaders());
+      this.alertList = parseAlerts(json, now);
+      this.alertsAt = now;
+      return this.alertList;
+    } catch {
+      this.alertsRetryAt = now + RETRY_MS;
+      return this.alertList && now - this.alertsAt < ALERTS_STALE_LIMIT_MS ? stillActive(this.alertList) : [];
+    }
+  }
+
   async nwsStations(headers) {
     const now = this.clock();
     if (this.stations && now - this.stationsAt < STATIONS_MS) return this.stations;
@@ -208,7 +272,7 @@ export class WeatherService {
 
   // The nearest station with a recent, complete reading wins.
   async nwsObservation(now) {
-    const headers = { accept: 'application/geo+json', 'user-agent': `m365-room-display (${this.settings.contact || 'local kiosk'})` };
+    const headers = this.nwsHeaders();
     for (const id of await this.nwsStations(headers)) {
       let p;
       try { p = (await this.getJson(`https://api.weather.gov/stations/${id}/observations/latest`, headers)).properties; } catch { continue; }

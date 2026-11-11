@@ -1,5 +1,5 @@
 /* Orlando Foods theme: brand palette, automatic light/dark, weather moods.
-   theme.js sets <html data-theme="light|dark" data-weather="clear|clouds|rain|storm|snow|fog">.
+   theme.js sets <html data-theme="light|dark" data-weather="clear|clouds|rain|storm|snow|ice|fog">.
    Loaded after styles.css so it overrides the base palette. */
 
 :root,
@@ -87,6 +87,12 @@
   --glow: #e3eef7;
 }
 
+:root[data-weather="ice"][data-theme="dark"] {
+  --glow: #1d3a48;
+}
+:root[data-weather="ice"][data-theme="light"] {
+  --glow: #d4eaf2;
+}
 :root[data-weather="fog"][data-theme="dark"] {
   --glow: #2b2a2c;
 }
@@ -391,6 +397,7 @@ body::before {
 }
 
 :root[data-weather="rain"] body::before,
+:root[data-weather="ice"] body::before,
 :root[data-weather="storm"] body::before {
   opacity: .35;
   background-image: repeating-linear-gradient(105deg, transparent 0 14px, var(--blue) 14px 15px);
@@ -571,3 +578,20 @@ body.display-off::before, body.display-off::after { display: none; }
 /* "Closed tomorrow" heads-up on the status card. */
 .closed-soon { margin-top: 16px; padding: 8px 14px; border: 1px solid var(--amber, #ffbf47); border-radius: 12px; color: var(--amber, #ffbf47); font-weight: 800; font-size: clamp(1rem, 2vw, 1.4rem); width: fit-content; max-width: 100%; }
 @media (max-height: 700px) { .closed-soon { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
+
+/* Official weather warning (National Weather Service) on the status card. Amber for watches and advisories, red for warnings. */
+.weather-alert { margin-top: 16px; padding: 8px 14px; border: 1px solid var(--amber, #ffbf47); border-radius: 12px; color: var(--amber, #ffbf47); font-weight: 800; font-size: clamp(1rem, 2vw, 1.4rem); width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
+.weather-alert[data-level="severe"] { border-color: var(--red, #ff5f62); color: var(--red, #ff5f62); background: color-mix(in srgb, var(--red, #ff5f62) 14%, transparent); }
+@media (max-height: 700px) { .weather-alert { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
+
+/* Orlando Foods logo: white version on the dark theme, colour version on the light theme (the colour one has dark
+   lettering that would vanish on dark). It sits in the middle of the top bar and is hidden where there is no room. */
+.brand-logo { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center; height: clamp(34px, 8.5vh, 76px); }
+.brand-logo img { height: 100%; width: auto; display: block; }
+.brand-logo .logo-for-light { display: none; }
+:root[data-theme="light"] .brand-logo .logo-for-dark { display: none; }
+:root[data-theme="light"] .brand-logo .logo-for-light { display: block; }
+.topbar > :first-child, .topbar > .clock-block { flex: 1 1 0; min-width: 0; }
+.topbar > .clock-block { text-align: right; }
+.brand-logo-picker { justify-content: flex-start; height: clamp(40px, 8vh, 72px); margin-bottom: 18px; }
+@media (max-width: 800px), (max-height: 540px) { .topbar > .brand-logo { display: none; } }

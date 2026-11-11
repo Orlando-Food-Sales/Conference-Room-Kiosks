@@ -166,6 +166,8 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     },
     weather: {
       enabled: booleanValue(env.WEATHER_ENABLED, true),
+      // Official National Weather Service warnings (US only): a banner on the tablets and a Teams alert for serious ones.
+      alerts: booleanValue(env.WEATHER_ALERTS, true),
       // Defaults to Glen Rock, NJ.
       latitude: floatValue(env.WEATHER_LATITUDE, 40.9595, -90, 90),
       longitude: floatValue(env.WEATHER_LONGITUDE, -74.1252, -180, 180),

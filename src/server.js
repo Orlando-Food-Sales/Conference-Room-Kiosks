@@ -239,6 +239,26 @@ export function createAppServer(options = {}) {
     const when = status.daysLeft < 0 ? `expired on ${status.expires}` : status.daysLeft === 0 ? `expires today (${status.expires})` : `expires in ${status.daysLeft} ${status.daysLeft === 1 ? 'day' : 'days'} (${status.expires})`;
     await sendAlert(`The Microsoft 365 app secret ${when}. ${status.daysLeft < 0 ? 'Room calendars stop updating until it is replaced.' : 'Room calendars stop updating when it expires.'} Create a new client secret in Microsoft Entra (App registrations > Certificates & secrets), put it in CLIENT_SECRET${config.teamsAlerts?.enabled ? ' (and TEAMS_BOT_APP_SECRET if the bot uses the same app)' : ''}, set CLIENT_SECRET_EXPIRES to its new date and restart the service.`);
   }
+  // Official weather warnings for the location (empty when off, outside the US, or unreachable). Never throws.
+  async function currentWeatherAlerts() {
+    try { return (await weather.alerts?.()) || []; } catch { return []; }
+  }
+  // A Severe or Extreme warning (Winter Storm Warning, Flood Warning, Tornado Warning, ...) is sent to the alert
+  // list once, when it first appears, so someone can decide about the office before people set off. Moderate ones
+  // (watches, advisories) only show on the tablets. After a restart a warning that is still active is sent once more.
+  async function checkWeatherAlerts() {
+    const list = await currentWeatherAlerts();
+    const zone = config.rooms[0]?.timeZone || 'UTC';
+    const when = iso => new Intl.DateTimeFormat('en-US', { timeZone: zone, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso));
+    const live = new Set(list.map(a => `weather:${a.id}`));
+    for (const key of [...alertState.keys()]) if (key.startsWith('weather:') && !live.has(key)) alertState.delete(key);   // ended: forget it
+    for (const alert of list) {
+      const key = `weather:${alert.id}`;
+      if (!alert.notify || alertState.get(key)) continue;
+      alertState.set(key, true);
+      await sendAlert(`Weather: ${alert.event}${alert.ends ? ` until ${when(alert.ends)}` : ''}. ${alert.headline && !alert.headline.startsWith(alert.event) ? `${alert.headline}. ` : ''}The room displays are showing this warning. Check weather.gov or your local news before deciding about the office.`);
+    }
+  }
   let monitor = null;
 
   let watcher = null;
@@ -291,7 +311,7 @@ export function createAppServer(options = {}) {
         // Birthdays can be hidden per room; a company holiday always applies.
         return sendJson(res, 200, room && !room.showCelebrations ? { ...today, celebrations: [] } : today);
       }
-      if (req.method === 'GET' && url.pathname === '/api/weather') return sendJson(res, 200, { weather: await weather.get() });
+      if (req.method === 'GET' && url.pathname === '/api/weather') return sendJson(res, 200, { weather: await weather.get(), alerts: await currentWeatherAlerts() });
       if (req.method === 'GET' && url.pathname === '/api/rooms') return sendJson(res, 200, { rooms: config.rooms.map(publicRoom), refreshSeconds: config.eventRefreshSeconds });
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);
@@ -396,12 +416,13 @@ export function createAppServer(options = {}) {
   });
 
   server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
-  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, alerts, teams, calendarProblems };
+  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {
       checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`));
       checkSecretExpiry().catch(error => logger.error?.(`Secret expiry check failed: ${error.message}`));
+    checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
     }, 60000); monitor.unref?.();
   }
   if (options.startSubscriptions !== false) subscriptions.start().catch(error => logger.error('Subscriptions did not start:', error.message));

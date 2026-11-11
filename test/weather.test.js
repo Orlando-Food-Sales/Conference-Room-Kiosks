@@ -1,22 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { conditionFromOpenMeteo as meteo, conditionFromNws as nws, feelsLike, isDaylight, inUnitedStates, WeatherService } from '../src/weather.js';
+import { conditionFromOpenMeteo as meteo, conditionFromNws as nws, parseAlerts, feelsLike, isDaylight, inUnitedStates, WeatherService } from '../src/weather.js';
 
-// ---- turning raw readings into clear / clouds / rain / storm / snow / fog ----
+// ---- turning raw readings into clear / clouds / rain / storm / snow / ice / fog ----
 
-test('Open-Meteo readings map to the six display conditions', () => {
+test('Open-Meteo readings map to the seven display conditions', () => {
   const cases = [
     [{ code: 0 }, 'clear'], [{ code: 1 }, 'clear'], [{ code: 2, cloudCover: 30 }, 'clear'], [{ code: 2, cloudCover: 80 }, 'clouds'],
     [{ code: 3 }, 'clouds'], [{ code: 45 }, 'fog'], [{ code: 51, precipitation: 0.2 }, 'rain'], [{ code: 63, rain: 2 }, 'rain'],
     [{ code: 73 }, 'snow'], [{ code: 95 }, 'storm'], [{ code: 99 }, 'storm'], [{ code: 81, showers: 1 }, 'rain'],
     // what is actually falling beats what the model guessed
     [{ code: 3, snowfall: 0.4, precipitation: 0.3 }, 'snow'], [{ code: 1, rain: 0.6, temperatureC: 8 }, 'rain'],
-    [{ code: 61, precipitation: 1, temperatureC: -2 }, 'snow'], [{ code: 66, precipitation: 1, temperatureC: -1 }, 'rain']
+    [{ code: 61, precipitation: 1, temperatureC: -2 }, 'snow'], [{ code: 66, precipitation: 1, temperatureC: -1 }, 'ice'],
+    // freezing drizzle and freezing rain are ice, not rain or snow
+    [{ code: 56, precipitation: 0.1, temperatureC: -1 }, 'ice'], [{ code: 57 }, 'ice'], [{ code: 67, precipitation: 2, temperatureC: 0 }, 'ice'], [{ code: 96, precipitation: 2 }, 'storm']
   ];
   for (const [input, want] of cases) assert.equal(meteo(input), want, JSON.stringify(input));
 });
 
-test('National Weather Service observations map to the six display conditions', () => {
+test('National Weather Service observations map to the seven display conditions', () => {
   const cases = [
     [{ textDescription: 'Clear', cloudLayers: [{ amount: 'CLR' }] }, 'clear'],
     [{ cloudLayers: [{ amount: 'FEW' }] }, 'clear'], [{ cloudLayers: [{ amount: 'SCT' }] }, 'clear'],
@@ -24,7 +26,9 @@ test('National Weather Service observations map to the six display conditions', 
     [{ presentWeather: [{ weather: 'rain' }], cloudLayers: [{ amount: 'OVC' }] }, 'rain'],
     [{ presentWeather: [{ weather: 'rain' }, { weather: 'snow' }] }, 'snow'],
     [{ presentWeather: [{ weather: 'rain' }, { weather: 'thunderstorms' }] }, 'storm'],
-    [{ presentWeather: [{ weather: 'freezing_rain' }] }, 'rain'],
+    [{ presentWeather: [{ weather: 'freezing_rain' }] }, 'ice'], [{ presentWeather: [{ weather: 'freezing_drizzle' }] }, 'ice'], [{ presentWeather: [{ weather: 'ice_pellets' }] }, 'ice'],
+    [{ presentWeather: [{ weather: 'ice_pellets' }, { weather: 'snow' }] }, 'ice'], [{ presentWeather: [{ weather: 'freezing_rain' }, { weather: 'thunderstorms' }] }, 'storm'],
+    [{ textDescription: 'Freezing Rain' }, 'ice'], [{ textDescription: 'Light Sleet' }, 'ice'],
     [{ presentWeather: [{ weather: 'fog_mist' }], cloudLayers: [{ amount: 'VV' }] }, 'fog'],
     [{ presentWeather: [{ weather: 'haze' }], cloudLayers: [{ amount: 'CLR' }] }, 'clear'],
     [{ textDescription: 'Light Snow' }, 'snow'], [{ textDescription: 'Mostly Cloudy' }, 'clouds'], [{}, 'clear']
@@ -164,4 +168,108 @@ test('does nothing when weather is turned off', async () => {
   const fetchImpl = makeFetch();
   assert.equal(await new WeatherService(settings({ enabled: false }), fetchImpl, () => NOW).get(), null);
   assert.equal(fetchImpl.calls.length, 0);
+});
+
+// ---- official weather warnings ----
+
+const alert = (event, severity, extra = {}) => ({ id: `https://api.weather.gov/alerts/${event}`, properties: { id: `urn:oid:${event}`, event, severity, status: 'Actual', messageType: 'Alert', headline: `${event} issued for northern New Jersey`, ends: new Date(NOW + 5 * 3600000).toISOString(), ...extra } });
+
+test('picks the warnings worth showing, most serious first, and drops the rest', () => {
+  const json = { features: [
+    alert('Frost Advisory', 'Minor'),
+    alert('Flood Watch', 'Moderate', { ends: new Date(NOW + 9 * 3600000).toISOString() }),
+    alert('Winter Storm Warning', 'Severe'),
+    alert('Tornado Warning', 'Extreme', { ends: new Date(NOW + 1800000).toISOString() }),
+    alert('Heat Advisory', 'Moderate', { ends: new Date(NOW + 2 * 3600000).toISOString() }),
+    alert('Old Warning', 'Severe', { ends: new Date(NOW - 60000).toISOString() }),
+    alert('Exercise Warning', 'Severe', { status: 'Exercise' }),
+    alert('Cancelled Warning', 'Severe', { messageType: 'Cancel' }),
+    alert('Mystery', 'Unknown'),
+    alert('', 'Severe')
+  ] };
+  const result = parseAlerts(json, NOW);
+  assert.deepEqual(result.map(a => a.event), ['Tornado Warning', 'Winter Storm Warning', 'Heat Advisory', 'Flood Watch']);
+  assert.deepEqual(result.map(a => a.notify), [true, true, false, false], 'only Severe and Extreme are sent to people');
+  assert.equal(result[0].headline, 'Tornado Warning issued for northern New Jersey');
+  assert.ok(!('rank' in result[0]), 'internal sorting detail is not exposed');
+  assert.deepEqual(parseAlerts({}, NOW), []);
+  assert.deepEqual(parseAlerts(null, NOW), []);
+});
+
+test('a warning with no end time is kept, and falls back to its expiry time', () => {
+  const noEnd = alert('Special Weather Statement', 'Moderate', { ends: null, expires: null });
+  assert.equal(parseAlerts({ features: [noEnd] }, NOW)[0].ends, null);
+  const expires = alert('Wind Advisory', 'Moderate', { ends: null, expires: new Date(NOW + 3600000).toISOString() });
+  assert.equal(parseAlerts({ features: [expires] }, NOW)[0].ends, new Date(NOW + 3600000).toISOString());
+  const gone = alert('Wind Advisory', 'Moderate', { ends: null, expires: new Date(NOW - 1000).toISOString() });
+  assert.deepEqual(parseAlerts({ features: [gone] }, NOW), []);
+});
+
+function alertsFetch({ features = [alert('Winter Storm Warning', 'Severe')], fail = false } = {}) {
+  const calls = [];
+  const fn = async url => {
+    calls.push(String(url));
+    if (fail || !String(url).includes('/alerts/active')) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ features }) };
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test('asks the Weather Service for warnings at the configured point, and reuses the answer for 5 minutes', async () => {
+  const fetchImpl = alertsFetch();
+  const clock = clockAt(NOW);
+  const service = new WeatherService(settings({ contact: 'it@example.com' }), fetchImpl, clock);
+  const first = await service.alerts();
+  assert.equal(first.length, 1);
+  assert.equal(fetchImpl.calls[0], 'https://api.weather.gov/alerts/active?point=40.9595,-74.1252');
+  clock.now += 4 * 60000; await service.alerts();
+  assert.equal(fetchImpl.calls.length, 1, 'no new request within 5 minutes');
+  clock.now += 2 * 60000; await service.alerts();
+  assert.equal(fetchImpl.calls.length, 2, 'a new request after 5 minutes');
+});
+
+test('a warning disappears when it ends, even if the Weather Service is unreachable', async () => {
+  const features = [alert('Flood Watch', 'Moderate', { ends: new Date(NOW + 10 * 60000).toISOString() })];
+  const fetchImpl = alertsFetch({ features });
+  const clock = clockAt(NOW);
+  const service = new WeatherService(settings(), fetchImpl, clock);
+  assert.equal((await service.alerts()).length, 1);
+  const down = alertsFetch({ fail: true });
+  service.fetch = down;
+  clock.now += 6 * 60000;
+  assert.equal((await service.alerts()).length, 1, 'the saved warning is still showing when the service is down');
+  clock.now += 6 * 60000;
+  assert.equal((await service.alerts()).length, 0, 'but not once it has ended');
+});
+
+test('old warnings are not kept for ever when the Weather Service stays unreachable', async () => {
+  const fetchImpl = alertsFetch({ features: [alert('Winter Storm Warning', 'Severe', { ends: new Date(NOW + 12 * 3600000).toISOString() })] });
+  const clock = clockAt(NOW);
+  const service = new WeatherService(settings(), fetchImpl, clock);
+  assert.equal((await service.alerts()).length, 1);
+  service.fetch = alertsFetch({ fail: true });
+  clock.now += 31 * 60000;
+  assert.deepEqual(await service.alerts(), [], 'after 30 minutes of silence it shows nothing rather than something that may be wrong');
+});
+
+test('warnings are off when weather or alerts are off, outside the US, or Open-Meteo only', async () => {
+  for (const [label, extra] of [['alerts off', { alerts: false }], ['weather off', { enabled: false }], ['london', { latitude: 51.5, longitude: -0.12 }], ['open-meteo only', { source: 'open-meteo' }]]) {
+    const fetchImpl = alertsFetch();
+    assert.deepEqual(await new WeatherService(settings(extra), fetchImpl, () => NOW).alerts(), [], label);
+    assert.equal(fetchImpl.calls.length, 0, `${label}: nothing requested`);
+  }
+  assert.equal((await new WeatherService(settings({ alerts: true }), alertsFetch(), () => NOW).alerts()).length, 1);
+});
+
+test('a failed warnings request gives an empty list, not an error, and is retried after a minute', async () => {
+  const fetchImpl = alertsFetch({ fail: true });
+  const clock = clockAt(NOW);
+  const service = new WeatherService(settings(), fetchImpl, clock);
+  assert.deepEqual(await service.alerts(), []);
+  const calls = fetchImpl.calls.length;
+  clock.now += 30000; await service.alerts();
+  assert.equal(fetchImpl.calls.length, calls, 'waits before trying again');
+  clock.now += 40000; await service.alerts();
+  assert.ok(fetchImpl.calls.length > calls, 'tries again after a minute');
 });

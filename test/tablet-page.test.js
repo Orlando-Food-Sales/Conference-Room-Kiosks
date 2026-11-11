@@ -58,3 +58,86 @@ test('"tomorrow" is worked out by calendar day, so the 23 and 25 hour daylight s
   assert.equal(nextDayKey('2027-11-07'), '2027-11-08', 'the day clocks go back (25 hours long)');
   assert.doesNotMatch(app, /dayKey\(now \+ 86400000\)/, 'no more adding 24 hours to a clock time');
 });
+
+test('the weather warning banner says what, until when (in the room time zone), and how many more', () => {
+  const fn = app.match(/function weatherAlertText\([\s\S]*?\n\}/);
+  assert.ok(fn, 'weatherAlertText is in public/app.js');
+  const text = new Function(`${fn[0]}\nreturn weatherAlertText;`)();
+  assert.equal(text([], 'America/New_York'), '');
+  assert.equal(text(undefined, 'America/New_York'), '');
+  assert.match(text([{ event: 'Winter Storm Warning', ends: '2026-11-11T23:00:00Z' }], 'America/New_York'), /^\u26A0 Winter Storm Warning until Wed,? 6:00 PM$/);
+  assert.match(text([{ event: 'Heat Advisory', ends: '2026-07-15T16:00:00Z' }], 'America/Chicago'), /until Wed,? 11:00 AM$/, 'a different time zone gives a different clock time');
+  assert.equal(text([{ event: 'Flood Watch', ends: null }], 'America/New_York'), '\u26A0 Flood Watch', 'no end time: nothing after the name');
+  assert.match(text([{ event: 'Tornado Warning', ends: null }, { event: 'Flood Watch' }, { event: 'Wind Advisory' }], 'UTC'), /^\u26A0 Tornado Warning \(\+2 more\)$/);
+});
+
+test('the warning banner is red for warnings and amber for watches, and is on the page', () => {
+  assert.match(html, /id="weatherAlert"/);
+  assert.match(css, /\.weather-alert\[data-level="severe"\][^{]*\{[^}]*--red/);
+  assert.match(app, /box\.dataset\.level = [^;]*notify \? 'severe' : 'watch'/);
+  assert.match(app, /loadWeatherAlerts\(\); \}/, 'warnings are loaded when the room starts');
+  assert.match(app, /setInterval\(loadWeatherAlerts, 5 \* 60 \* 1000\)/, 'and refreshed every 5 minutes');
+  assert.match(app, /get\('warning'\)/, 'the preview option exists');
+});
+
+test('ice has its own background mood, like the other weather', () => {
+  for (const theme of ['dark', 'light']) assert.match(css, new RegExp(`:root\\[data-weather="ice"\\]\\[data-theme="${theme}"\\]`));
+  assert.match(css, /:root\[data-weather="ice"\] body::before/, 'freezing rain streaks');
+});
+
+test('the Orlando Foods logo files exist, are small web-ready PNGs with transparency, and match the page', () => {
+  const pngInfo = file => {
+    const b = fs.readFileSync(file);
+    assert.equal(b.subarray(1, 4).toString(), 'PNG', `${file} is a PNG`);
+    return { width: b.readUInt32BE(16), height: b.readUInt32BE(20), colorType: b[25], bytes: b.length };
+  };
+  for (const name of ['white', 'color', 'black']) {
+    const info = pngInfo(new URL(`../public/logo/orlando-foods-${name}.png`, import.meta.url));
+    assert.equal(info.colorType, 6, `${name} has a transparent background (RGBA)`);
+    assert.ok(info.width <= 1000 && info.bytes < 100 * 1024, `${name} is web-sized (${info.width}px, ${info.bytes} bytes)`);
+    assert.ok(Math.abs(info.width / info.height - 800 / 295) < 0.05, `${name} is trimmed to the logo`);
+  }
+  assert.match(html, /logo-for-dark" src="\/logo\/orlando-foods-white\.png"/, 'white logo for the dark theme');
+  assert.match(html, /logo-for-light" src="\/logo\/orlando-foods-color\.png"/, 'colour logo for the light theme (its dark text would vanish on dark)');
+  assert.match(css, /:root\[data-theme="light"\] \.brand-logo \.logo-for-dark \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 800px\), \(max-height: 540px\) \{ \.topbar > \.brand-logo \{ display: none; \} \}/, 'hidden where there is no room');
+  assert.ok(fs.existsSync(new URL('../assets/logo/Orlando-Foods_Logo_NoTagline_Color.png', import.meta.url)), 'the full-size originals are kept outside the served folder');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The preview page must keep up with the display: every control is wired up and every option works
+// ---------------------------------------------------------------------------------------------
+
+const previewHtml = fs.readFileSync(new URL('../public/preview.html', import.meta.url), 'utf8');
+const previewJs = fs.readFileSync(new URL('../public/preview.js', import.meta.url), 'utf8');
+const options = id => [...previewHtml.match(new RegExp(`<select id="${id}">([\\s\\S]*?)</select>`))[1].matchAll(/<option value="([^"]*)"[^>]*>([^<]*)<\/option>/g)].map(m => ({ value: m[1], label: m[2] }));
+
+test('every control on the preview page is listened to and sent to the display', () => {
+  const ids = [...previewHtml.matchAll(/<select id="([a-z]+)"/g)].map(m => m[1]);
+  assert.ok(ids.length >= 17, 'the controls were found');
+  const listened = previewJs.match(/\[('theme'[^\]]*)\]\.forEach/)[1];
+  const sent = previewJs.match(/function url\(\) \{[\s\S]*?\n  \}/)[0];
+  for (const id of ids) {
+    assert.ok(listened.includes(`'${id}'`), `${id} is listened to, so changing it updates the display`);
+    if (id !== 'screen') assert.ok(sent.includes(`$('${id}')`), `${id} is added to the display address`);
+  }
+  assert.ok(ids.includes('kiosk') && ids.includes('warning'), 'kiosk mode and weather warnings can be previewed');
+  assert.match(sent, /q\.set\('kiosk'/);
+});
+
+test('every weather in the preview has a background mood, and the tour covers them all', () => {
+  const weathers = options('weather').map(o => o.value).filter(v => v && v !== 'none');
+  assert.deepEqual(weathers, ['clear', 'clouds', 'rain', 'storm', 'snow', 'ice', 'fog']);
+  for (const kind of weathers) assert.match(css, new RegExp(`:root\\[data-weather="${kind}"\\]\\[data-theme="dark"\\]`), `${kind} has a mood`);
+  const tour = previewJs.match(/var WEATHERS = \[([^\]]*)\]/)[1];
+  for (const kind of weathers) assert.ok(tour.includes(`'${kind}'`), `the tour includes ${kind}`);
+});
+
+test('the preview offers the real tablet size and the warning examples the display understands', () => {
+  const screens = options('screen').map(o => o.value);
+  for (const size of ['1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
+  const warnings = options('warning').map(o => o.value);
+  assert.ok(warnings.some(w => w.includes(';')), 'several warnings at once');
+  assert.ok(warnings.some(w => w.endsWith('|watch')) && warnings.some(w => w && w !== 'none' && !w.includes('|')), 'both red and amber');
+  assert.match(app, /preview\.split\(';'\)/, 'the display understands several warnings in the address');
+});

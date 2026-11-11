@@ -109,7 +109,7 @@ test('weather endpoint passes the reading through, or null when there is none', 
   const withWeather = await start(t, { weather: { get: async () => reading } });
   assert.deepEqual((await (await json(withWeather.base, '/api/weather')).json()).weather, reading);
   const without = await start(t, { weather: { get: async () => null } });
-  assert.deepEqual(await (await json(without.base, '/api/weather')).json(), { weather: null });
+  assert.deepEqual(await (await json(without.base, '/api/weather')).json(), { weather: null, alerts: [] });
 });
 
 test('birthdays can be hidden per room but a company holiday still applies', async t => {
@@ -603,4 +603,60 @@ test('secret expiry counts calendar days in the room time zone across a clock ch
   assert.equal(days('2027-03-15T16:00:00Z'), 0, 'Monday');
   assert.equal(days('2027-03-14T04:30:00Z'), 2, '11:30 PM Saturday in New York is still Saturday');
   assert.equal(days('2027-03-15T03:30:00Z'), 1, '11:30 PM Sunday EDT is still Sunday');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Official weather warnings
+// ---------------------------------------------------------------------------------------------
+
+const warning = (id, event, notify, ends = new Date(Date.now() + 5 * 3600000).toISOString(), headline = `${event} issued for northern New Jersey`) => ({ id, event, severity: notify ? 'Severe' : 'Moderate', headline, ends, notify });
+test('the weather endpoint hands the tablets the active warnings, and an empty list if the lookup fails', async t => {
+  const list = [warning('a1', 'Winter Storm Warning', true), warning('a2', 'Flood Watch', false)];
+  const ok = await start(t, { weather: { get: async () => null, alerts: async () => list } });
+  assert.deepEqual((await (await json(ok.base, '/api/weather')).json()).alerts, list);
+  const broken = await start(t, { weather: { get: async () => null, alerts: async () => { throw new Error('weather.gov is down'); } } });
+  const response = await json(broken.base, '/api/weather');
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).alerts, []);
+  const old = await start(t, { weather: { get: async () => null } });
+  assert.deepEqual((await (await json(old.base, '/api/weather')).json()).alerts, [], 'a weather service without warnings is fine');
+});
+
+test('a serious warning is sent to the alert list once, and again only if a new one appears', async t => {
+  const posts = [];
+  let list = [warning('w1', 'Winter Storm Warning', true, '2026-11-11T23:00:00Z', 'Heavy snow expected tonight, 8 to 12 inches'), warning('w2', 'Flood Watch', false)];
+  const { state } = await start(t, {
+    env: { ALERT_WEBHOOK_URL: 'https://hooks.example.invalid/abc' },
+    weather: { get: async () => null, alerts: async () => list },
+    fetchImpl: async (url, init) => { posts.push(JSON.parse(init.body)); return { ok: true, status: 200 }; }
+  });
+  await state.checkWeatherAlerts();
+  assert.equal(state.alerts.length, 1, 'the Flood Watch (Moderate) is only shown on the tablets');
+  assert.match(state.alerts[0].text, /^Weather: Winter Storm Warning until Wed 6:00 PM\. /, 'times are in the room time zone');
+  assert.match(state.alerts[0].text, /Heavy snow expected tonight, 8 to 12 inches\. /, 'the headline is included');
+  assert.equal(posts.length, 1);
+
+  await state.checkWeatherAlerts(); await state.checkWeatherAlerts();
+  assert.equal(state.alerts.length, 1, 'no repeats while it stays active');
+
+  list = [list[0], warning('w3', 'Tornado Warning', true)];
+  await state.checkWeatherAlerts();
+  assert.equal(state.alerts.length, 2, 'a new warning is sent');
+  assert.match(state.alerts[0].text, /Tornado Warning/);
+  assert.doesNotMatch(state.alerts[0].text, /issued for northern/, 'a headline that only repeats the event name is left out');
+
+  list = [];
+  await state.checkWeatherAlerts();
+  list = [warning('w1', 'Winter Storm Warning', true)];
+  await state.checkWeatherAlerts();
+  assert.equal(state.alerts.length, 3, 'once a warning has ended and the same one is issued again it counts as new');
+});
+
+test('checking warnings never throws, whatever the weather service does', async t => {
+  const { state } = await start(t, { weather: { get: async () => null, alerts: async () => { throw new Error('boom'); } } });
+  await state.checkWeatherAlerts();
+  assert.equal(state.alerts.length, 0);
+  const plain = await start(t, { weather: { get: async () => null } });
+  await plain.state.checkWeatherAlerts();
+  assert.equal(plain.state.alerts.length, 0);
 });

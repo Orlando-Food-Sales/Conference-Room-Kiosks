@@ -60,7 +60,7 @@ async function loadEvents() { try { var data = await api('/api/events?room=' + e
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100) }) }); } catch (_) { } }
 function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
-async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); }
+async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); loadWeatherAlerts(); }
 
 $('reserveButton').addEventListener('click', function () { $('bookingPanel').classList.remove('hidden'); });
 $('cancelBooking').addEventListener('click', function () { $('bookingPanel').classList.add('hidden'); });
@@ -105,6 +105,36 @@ function showClosedSoon(info) {
   box.classList.toggle('hidden', !text);
   fitRows();
 }
+// Official weather warnings from the National Weather Service, shown on the status card. Preview: ?warning=Winter Storm Warning
+// (red; add |watch for the amber kind), several separated by ; (Winter Storm Warning;Flood Watch|watch), or ?warning=none.
+function weatherAlertText(alerts, timeZone) {
+  if (!alerts || !alerts.length) return '';
+  var first = alerts[0];
+  var until = '';
+  if (first.ends) until = ' until ' + new Intl.DateTimeFormat('en-US', { timeZone: timeZone, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(first.ends));
+  return '\u26A0 ' + first.event + until + (alerts.length > 1 ? ' (+' + (alerts.length - 1) + ' more)' : '');
+}
+function showWeatherAlert(alerts) {
+  var box = $('weatherAlert');
+  var text = weatherAlertText(alerts, state.room ? state.room.timeZone : undefined);
+  box.textContent = text;
+  box.dataset.level = alerts && alerts[0] && alerts[0].notify ? 'severe' : 'watch';
+  box.classList.toggle('hidden', !text);
+  fitRows();
+}
+async function loadWeatherAlerts() {
+  var preview = new URLSearchParams(location.search).get('warning');
+  if (preview !== null) {
+    var sample = preview && preview !== 'none' ? preview.split(';').map(function (item) {
+      var parts = item.split('|');
+      return { event: parts[0], notify: parts[1] !== 'watch', ends: new Date(Date.now() + 5 * 3600000).toISOString() };
+    }) : [];
+    return showWeatherAlert(sample);
+  }
+  if (!state.room || NO_STREAM) return;
+  try { showWeatherAlert((await api('/api/weather')).alerts || []); } catch (_) { /* keep what is showing */ }
+}
+setInterval(loadWeatherAlerts, 5 * 60 * 1000);
 async function loadCelebrations() {
   var closedPreview = new URLSearchParams(location.search).get('closedsoon');
   if (closedPreview !== null) showClosedSoon(closedPreview && closedPreview !== 'none' ? { name: closedPreview, dayLabel: 'tomorrow', through: null } : null);

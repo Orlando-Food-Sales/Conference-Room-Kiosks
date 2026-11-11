@@ -2,7 +2,7 @@
 // Dark by default. The background mood follows the current weather.
 // ?theme=light  forces light mode
 // ?theme=auto   light by day, dark by night at the display's location
-// ?weather=clear|clouds|rain|storm|snow|fog  previews a weather mood
+// ?weather=clear|clouds|rain|storm|snow|ice|fog  previews a weather mood
 // ?day=1|0  forces daytime or night (only for previews)
 // ?temp=-5  previews a feels-like temperature in Celsius (Snoopy's winter coat and Hawaiian shirt depend on it)
 (function () {

@@ -123,3 +123,9 @@ test('client secret expiry date is optional and must be a real YYYY-MM-DD date',
     assert.throws(() => loadConfig({ ...demo, CLIENT_SECRET_EXPIRES: bad }), /CLIENT_SECRET_EXPIRES/, bad);
   }
 });
+
+test('official weather warnings are on by default and can be turned off', () => {
+  assert.equal(loadConfig(demo).weather.alerts, true);
+  assert.equal(loadConfig({ ...demo, WEATHER_ALERTS: 'false' }).weather.alerts, false);
+  assert.equal(loadConfig({ ...demo, WEATHER_ALERTS: 'true' }).weather.alerts, true);
+});
