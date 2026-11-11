@@ -1,0 +1,121 @@
+{
+  "version": 2,
+  "cellWidth": 288,
+  "cellHeight": 312,
+  "columns": 8,
+  "rows": 19,
+  "wakeMs": 15000,
+  "atlas": "/snoopy/sleep.png",
+  "house": "/snoopy/sleep-house.png",
+  "zs": "/snoopy/sleep-zs.png",
+  "clips": {
+    "settle_on_roof": {
+      "row": 0,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "lie_down": {
+      "row": 1,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "eyes_close": {
+      "row": 2,
+      "count": 6,
+      "ms": 140,
+      "loop": false
+    },
+    "sleep_breathing": {
+      "row": 3,
+      "count": 8,
+      "ms": 360,
+      "loop": true
+    },
+    "sleep_ear_flick": {
+      "row": 4,
+      "count": 6,
+      "ms": 160,
+      "loop": false
+    },
+    "sleep_paw_twitch": {
+      "row": 5,
+      "count": 6,
+      "ms": 160,
+      "loop": false
+    },
+    "tap_reaction": {
+      "row": 6,
+      "count": 6,
+      "ms": 110,
+      "loop": false
+    },
+    "eyes_open": {
+      "row": 7,
+      "count": 6,
+      "ms": 110,
+      "loop": false
+    },
+    "head_raise": {
+      "row": 8,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "yawn": {
+      "row": 9,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "stretch": {
+      "row": 10,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "sit_up": {
+      "row": 11,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "sleepy_wave": {
+      "row": 12,
+      "count": 6,
+      "ms": 110,
+      "loop": false
+    },
+    "awake_idle": {
+      "row": 13,
+      "count": 8,
+      "ms": 240,
+      "loop": true
+    },
+    "look_around": {
+      "row": 14,
+      "count": 16,
+      "ms": 120,
+      "loop": false
+    },
+    "drowsy_blink": {
+      "row": 16,
+      "count": 6,
+      "ms": 140,
+      "loop": false
+    },
+    "return_to_lying": {
+      "row": 17,
+      "count": 8,
+      "ms": 110,
+      "loop": false
+    },
+    "rest_head_close_eyes": {
+      "row": 18,
+      "count": 8,
+      "ms": 140,
+      "loop": false
+    }
+  }
+}

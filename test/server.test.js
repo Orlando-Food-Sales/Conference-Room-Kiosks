@@ -687,3 +687,14 @@ test('serves the favicon and touch icon with the right types instead of a 404', 
   assert.equal(touch.status, 200);
   assert.equal(touch.headers.get('content-type'), 'image/png');
 });
+
+test('serves the sleep artwork, manifest, engine and styles with the right types', async t => {
+  const { base } = await start(t);
+  const expected = { '/snoopy/sleep-manifest.json': 'application/json; charset=utf-8', '/snoopy/sleep.png': 'image/png', '/snoopy/sleep-house.png': 'image/png', '/snoopy/sleep-zs.png': 'image/png', '/snoopy-sleep.js': 'text/javascript; charset=utf-8', '/snoopy-sleep-engine.js': 'text/javascript; charset=utf-8', '/snoopy-sleep.css': 'text/css; charset=utf-8' };
+  for (const [path, type] of Object.entries(expected)) {
+    const response = await fetch(`${base}${path}`);
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get('content-type'), type, path);
+    await response.arrayBuffer();
+  }
+});

@@ -3,6 +3,8 @@
 // A base mood follows the room state from app.js; random flourishes (look around, wave,
 // jump, walk) keep him lively; tapping the screen makes him look that way.
 // Debug: add ?snoopy=<animation> to the URL to hold one animation (e.g. ?snoopy=runRight).
+// Sleeping: while the display says Closed, snoopy-sleep.js (with snoopy-sleep-engine.js and the art in snoopy/sleep*.png)
+// owns the picture: Snoopy sleeps on his doghouse and a tap wakes him for 15 seconds. This file steps aside meanwhile.
 (function () {
   var COLS = 8, ROWS = 11;
 
@@ -120,8 +122,15 @@
     else start(pick, { repeat: 1, then: function () { start(baseMood()); } });
   }
 
+  // While the sleeping Snoopy is on screen this one is hidden and still; when the office reopens he carries on.
+  function sleepOwns() { return Boolean(globalThis.SnoopySleep && globalThis.SnoopySleep.ownsPlayback()); }
+  document.addEventListener('snoopy-sleep-mode', function (event) {
+    if (event.detail && event.detail.active) { clearTimeout(timer); plan = null; setX(0, 0); el.style.display = 'none'; }
+    else { el.style.display = ''; if (!forced) start(baseMood()); }
+  });
+
   function tick() {
-    if (forced) return;
+    if (forced || sleepOwns()) return;
     var now = Date.now();
     if (plan) return;                              // a one-shot is playing
     var mood = baseMood();
@@ -153,7 +162,7 @@
     start('jumping', { repeat: 1, then: function () { start(baseMood()); } });
   });
   document.addEventListener('pointerdown', function (event) {
-    if (forced || reduceMotion || event.target === el) return;
+    if (forced || reduceMotion || sleepOwns() || event.target === el) return;
     nextFlourishAt = Date.now() + 15000;
     lookAt(event.clientX, event.clientY);
   });
