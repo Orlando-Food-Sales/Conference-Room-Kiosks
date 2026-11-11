@@ -13,6 +13,8 @@ dependencies; Node.js 20 or later.
 - Calendar changes (new, moved or cancelled meetings, even made in Outlook) reach the tablets within about 15 seconds: the server checks each room's calendar itself and pushes changes over the live connection. `CHANGE_CHECK_SECONDS` sets the interval, 0 turns it off.
 - "Closed tomorrow: Thanksgiving" heads-up on the day before a company holiday (it looks past weekends: on Friday it can say "Closed Monday: ...").
 - Tablet offline alerts: if a tablet stops checking in during office hours for `ALERT_AFTER_MINUTES` (default 10), the dashboard lists an alert and, when `ALERT_WEBHOOK_URL` is set, the same text is posted there as `{"text": "..."}`. A "back online" message follows. Alerts can also go to named people in Teams from a bot with its own name (`TEAMS_BOT_*`, `TEAMS_ALERT_EMAILS`; setup in `INSTALL-UBUNTU.md`, section 12b), and the dashboard has a "Send test alert" button. A room calendar that cannot be read for 10 minutes also raises an alert.
+- Self-healing: the server pings each tablet every 25 seconds. A tablet whose live connection goes quiet reconnects, and after 5 minutes reloads itself (only when the server answers, at most every 10 minutes).
+- Kiosk mode: add `?kiosk=1` to a room URL to hide the refresh and message buttons on wall tablets.
 - Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
   mood that follows the weather (clear, clouds, rain, storm, snow, fog).
@@ -26,7 +28,7 @@ dependencies; Node.js 20 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 89 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 97 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`.
@@ -36,7 +38,7 @@ Copy `.env.example` to `.env` and `config/rooms.example.json` to `config/rooms.j
 
 All settings are environment variables; see `.env.example`.
 
-- Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `ROOMS_FILE`
+- Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `CLIENT_SECRET_EXPIRES` (YYYY-MM-DD; reminders at 30, 14, 7, 3 and 1 days and on expiry), `ROOMS_FILE`
 - Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`, `CHANGE_CHECK_SECONDS`
 - Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`, and for Teams `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `TEAMS_BOT_TENANT_ID`, `TEAMS_BOT_CATALOG_ID` (the app's ID in the Teams admin center), `TEAMS_ALERT_EMAILS`, and rarely `TEAMS_BOT_SERVICE_URL`
 - Office hours: `OFFICE_HOURS_START`, `OFFICE_HOURS_END`, `OFFICE_DAYS`, or `OFFICE_HOURS=off`
@@ -53,7 +55,7 @@ All settings are environment variables; see `.env.example`.
 celebration. It is a review tool; remove or block it on public kiosks if you prefer.
 
 Query options on a room URL: `theme`, `weather`, `preview` (free, soon, busy, ended, error),
-`snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `temp` (feels-like Celsius), `day` (1 or 0), `date` (MM-DD or YYYY-MM-DD, pretend today), `nostream=1`.
+`kiosk=1` (hide the refresh and message buttons), `snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `temp` (feels-like Celsius), `day` (1 or 0), `date` (MM-DD or YYYY-MM-DD, pretend today), `nostream=1`.
 
 ## Security
 

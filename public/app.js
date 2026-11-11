@@ -17,6 +17,9 @@ var NO_STREAM = new URLSearchParams(location.search).has('nostream');
 var savedTabletId = localStorage.getItem('tabletId');
 var state = { room: null, events: [], source: null, refreshTimer: null, tabletId: savedTabletId || generateId(), tabletName: localStorage.getItem('tabletName') || '' };
 localStorage.setItem('tabletId', state.tabletId);
+state.liveAt = Date.now();   // when the live connection last proved it was alive (see the auto-heal watchdog below)
+// Kiosk mode (?kiosk=1): hides the refresh and message buttons so visitors cannot tap them on a wall tablet.
+if (new URLSearchParams(location.search).get('kiosk') === '1') document.documentElement.classList.add('kiosk');
 
 function roomIdFromLocation() { var match = location.pathname.match(/^\/room\/([a-z0-9-]+)\/?$/); return match ? match[1] : localStorage.getItem('selectedRoomId'); }
 async function api(url, options) { var response = await fetch(url, Object.assign({ headers: { 'content-type': 'application/json' } }, options || {})); var data = await response.json().catch(function () { return {}; }); if (!response.ok) throw new Error(data.error || ('Request failed: ' + response.status)); return data; }
@@ -55,7 +58,7 @@ function fitRows() {
 window.addEventListener('resize', fitRows);
 async function loadEvents() { try { var data = await api('/api/events?room=' + encodeURIComponent(state.room.id)); state.events = data.events; state.events = previewEvents(state.events); $('syncState').textContent = new URLSearchParams(location.search).get('preview') === 'error' ? 'Calendar temporarily unavailable' : 'Updated ' + formatTime(data.generatedAt); render(); } catch (error) { $('syncState').textContent = 'Calendar temporarily unavailable'; showToast(error.message); } }
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100) }) }); } catch (_) { } }
-function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
+function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
 async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); }
 
@@ -222,6 +225,33 @@ function checkNightReload() {
   location.reload();
 }
 setInterval(checkNightReload, 60000);
+
+// Auto-heal a stuck live connection. The server sends a "ping" every 25 seconds; a connection that has gone
+// quiet without ever reporting an error (common after Wi-Fi drops or the tablet sleeps) is replaced, and if it
+// stays quiet for 5 minutes the page reloads itself. It only reloads when the server answers /healthz, so an
+// outage never leaves the kiosk on a browser error page, and at most once every 10 minutes.
+var STALE_MS = 75000, RELOAD_AFTER_MS = 5 * 60000, MIN_BETWEEN_RELOADS_MS = 10 * 60000;
+function healAction(silentMs, sinceReloadMs) {
+  if (silentMs < STALE_MS) return 'ok';
+  if (silentMs >= RELOAD_AFTER_MS && sinceReloadMs >= MIN_BETWEEN_RELOADS_MS) return 'reload';
+  return 'reconnect';
+}
+async function checkConnection() {
+  if (!state.room || NO_STREAM || !globalThis.EventSource) return;
+  var lastReload = Number(localStorage.getItem('lastHealReload') || 0);
+  var action = healAction(Date.now() - state.liveAt, Date.now() - lastReload);
+  if (action === 'ok') return;
+  $('syncState').textContent = 'Reconnecting live updates…';
+  if (action === 'reconnect') { connectStream(); return; }
+  if (!$('bookingPanel').classList.contains('hidden') || !$('messagePanel').classList.contains('hidden')) return;
+  try {
+    var response = await fetch('/healthz', { cache: 'no-store' });
+    if (!response.ok) throw new Error('server not ready');
+  } catch (_) { connectStream(); return; }
+  localStorage.setItem('lastHealReload', String(Date.now()));
+  location.reload();
+}
+setInterval(checkConnection, 30000);
 
 // Office hours: outside them the display says "Closed" (a meeting still in progress shows In use).
 // Preview: ?hours=open or ?hours=closed forces the state.

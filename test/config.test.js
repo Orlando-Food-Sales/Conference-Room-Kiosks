@@ -115,3 +115,11 @@ test('Teams alert settings must be complete and valid, or the server refuses to 
   const many = Array.from({ length: 11 }, (_, i) => `p${i}@example.com`).join(',');
   assert.throws(() => loadConfig({ ...demo, ...BOT, TEAMS_ALERT_EMAILS: many }), /at most 10/);
 });
+
+test('client secret expiry date is optional and must be a real YYYY-MM-DD date', () => {
+  assert.equal(loadConfig(demo).clientSecretExpires, '');
+  assert.equal(loadConfig({ ...demo, CLIENT_SECRET_EXPIRES: ' 2027-05-04 ' }).clientSecretExpires, '2027-05-04');
+  for (const bad of ['2027-02-30', '05/04/2027', '2027-5-4', 'soon', '2027-13-01']) {
+    assert.throws(() => loadConfig({ ...demo, CLIENT_SECRET_EXPIRES: bad }), /CLIENT_SECRET_EXPIRES/, bad);
+  }
+});

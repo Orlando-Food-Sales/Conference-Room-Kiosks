@@ -509,6 +509,8 @@ body::before {
 .heading-tools { display: flex; align-items: center; gap: 12px; }
 .icon-button { width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--text); font-size: 1.25rem; line-height: 1; cursor: pointer; opacity: .75; }
 .icon-button:hover, .icon-button:focus-visible { opacity: 1; border-color: var(--blue); color: var(--blue); }
+/* Kiosk mode (?kiosk=1): no refresh or message buttons for visitors to tap. */
+.kiosk #refreshButton, .kiosk #messageButton { display: none; }
 .modal-link { color: var(--muted); font-size: .85rem; text-align: center; }
 
 /* One-tap booking under "Free until". */

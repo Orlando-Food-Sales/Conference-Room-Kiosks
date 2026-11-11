@@ -13,6 +13,7 @@ import { TeamsAlerts } from './teams-alerts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
+const PING_SECONDS = 25;   // how often the live connection to each tablet gets a "ping" event (tablets reconnect when they stop)
 
 function loadDotEnv(file = path.join(ROOT, '.env')) {
   if (!fs.existsSync(file)) return;
@@ -219,6 +220,25 @@ export function createAppServer(options = {}) {
       }
     }
   }
+  // Reminds people before the Microsoft 365 client secret expires (CLIENT_SECRET_EXPIRES). One alert each time the
+  // remaining time drops to 30, 14, 7, 3 or 1 days, and one when it has expired. Sent during office hours only.
+  // After a restart the current stage is announced once more; that is deliberate, a reminder is better than silence.
+  function secretStatus(ms = Date.now()) {
+    if (!config.clientSecretExpires) return null;
+    const zone = config.rooms[0]?.timeZone || 'UTC';
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date(ms));
+    const daysLeft = Math.round((Date.parse(`${config.clientSecretExpires}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    const stage = daysLeft < 0 ? 'expired' : [1, 3, 7, 14, 30].find(limit => daysLeft <= limit) || null;
+    return { expires: config.clientSecretExpires, daysLeft, stage };
+  }
+  async function checkSecretExpiry(ms = Date.now()) {
+    const status = secretStatus(ms);
+    if (!status || !status.stage || alertState.get('secret') === status.stage) return;
+    if (config.rooms[0] && !officeSettled(config.rooms[0], ms)) return;
+    alertState.set('secret', status.stage);
+    const when = status.daysLeft < 0 ? `expired on ${status.expires}` : status.daysLeft === 0 ? `expires today (${status.expires})` : `expires in ${status.daysLeft} ${status.daysLeft === 1 ? 'day' : 'days'} (${status.expires})`;
+    await sendAlert(`The Microsoft 365 app secret ${when}. ${status.daysLeft < 0 ? 'Room calendars stop updating until it is replaced.' : 'Room calendars stop updating when it expires.'} Create a new client secret in Microsoft Entra (App registrations > Certificates & secrets), put it in CLIENT_SECRET${config.teamsAlerts?.enabled ? ' (and TEAMS_BOT_APP_SECRET if the bot uses the same app)' : ''}, set CLIENT_SECRET_EXPIRES to its new date and restart the service.`);
+  }
   let monitor = null;
 
   let watcher = null;
@@ -299,7 +319,8 @@ export function createAppServer(options = {}) {
         const client = { res, roomId, tabletId, connectedAt: Date.now() };
         sseClients.add(client);
         res.write(`event: connected\ndata: ${JSON.stringify({ roomId, at: new Date().toISOString() })}\n\n`);
-        const keepAlive = setInterval(() => res.write(': keepalive\n\n'), 25000);
+        // A named event (not a comment) so the tablet can see the connection is alive and notice when it is not.
+        const keepAlive = setInterval(() => res.write('event: ping\ndata: {}\n\n'), (options.pingSeconds ?? PING_SECONDS) * 1000);
         keepAlive.unref?.();
         req.on('close', () => { clearInterval(keepAlive); sseClients.delete(client); });
         return;
@@ -375,9 +396,14 @@ export function createAppServer(options = {}) {
   });
 
   server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
-  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, alerts, teams, calendarProblems };
+  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
-  if (options.startSubscriptions !== false) { monitor = setInterval(() => checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`)), 60000); monitor.unref?.(); }
+  if (options.startSubscriptions !== false) {
+    monitor = setInterval(() => {
+      checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`));
+      checkSecretExpiry().catch(error => logger.error?.(`Secret expiry check failed: ${error.message}`));
+    }, 60000); monitor.unref?.();
+  }
   if (options.startSubscriptions !== false) subscriptions.start().catch(error => logger.error('Subscriptions did not start:', error.message));
   return server;
 }

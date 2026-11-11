@@ -507,3 +507,61 @@ test('the background check notes a calendar that cannot be read and clears it wh
   await state.refreshRoom('front');
   assert.equal(state.calendarProblems.has('front'), false, 'cleared as soon as a read works');
 });
+
+// ---------------------------------------------------------------------------------------------
+// Client secret expiry reminders and the live-connection ping
+// ---------------------------------------------------------------------------------------------
+
+const DAY = 86400000;
+
+test('reminds people as the client secret gets close to expiring, once per stage', async t => {
+  const { state, posts } = await withAlerts(t, { env: { CLIENT_SECRET_EXPIRES: '2026-12-10' } });
+  assert.deepEqual(state.secretStatus(TUESDAY_3PM), { expires: '2026-12-10', daysLeft: 30, stage: 30 });
+  assert.equal(state.secretStatus(TUESDAY_3PM - DAY).stage, null, '31 days left: too early');
+
+  await state.checkSecretExpiry(TUESDAY_3PM - DAY);
+  assert.equal(state.alerts.length, 0);
+  await state.checkSecretExpiry(TUESDAY_3PM);
+  assert.equal(state.alerts.length, 1);
+  assert.match(state.alerts[0].text, /secret expires in 30 days \(2026-12-10\)/);
+  assert.match(state.alerts[0].text, /CLIENT_SECRET_EXPIRES/);
+  assert.equal(posts.length, 1, 'also sent to the chat webhook');
+  await state.checkSecretExpiry(TUESDAY_3PM + 60000);
+  assert.equal(state.alerts.length, 1, 'no repeat within the same stage');
+
+  await state.checkSecretExpiry(TUESDAY_3PM + 16 * DAY);       // Thursday 26 Nov, 14 days left
+  assert.equal(state.alerts.length, 2);
+  assert.match(state.alerts[0].text, /expires in 14 days/);
+  await state.checkSecretExpiry(TUESDAY_3PM + 29 * DAY);       // 1 day left
+  assert.match(state.alerts[0].text, /expires in 1 day \(/);
+  await state.checkSecretExpiry(TUESDAY_3PM + 35 * DAY);       // 15 Dec
+  assert.match(state.alerts[0].text, /expired on 2026-12-10/);
+  assert.equal(state.alerts.length, 4);
+});
+
+test('stage thresholds: 14, 7, 3 and 1 days, then expired', async t => {
+  const { state } = await withAlerts(t, { env: { CLIENT_SECRET_EXPIRES: '2026-12-10' } });
+  const stage = days => state.secretStatus(Date.parse('2026-12-10T17:00:00Z') - days * DAY).stage;
+  assert.deepEqual([31, 30, 15, 14, 8, 7, 4, 3, 2, 1, 0, -1].map(stage), [null, 30, 30, 14, 14, 7, 7, 3, 3, 1, 1, 'expired']);
+});
+
+test('secret reminders wait for office hours and do nothing when no date is set', async t => {
+  const { state } = await withAlerts(t, { env: { CLIENT_SECRET_EXPIRES: '2026-11-12' } });
+  await state.checkSecretExpiry(EST('2026-11-10T04:00:00Z'));            // 11 PM Monday night
+  assert.equal(state.alerts.length, 0);
+  await state.checkSecretExpiry(TUESDAY_3PM);                              // sent once the office is open
+  assert.equal(state.alerts.length, 1);
+  assert.match(state.alerts[0].text, /expires in 2 days/);
+
+  const none = await withAlerts(t);
+  assert.equal(none.state.secretStatus(TUESDAY_3PM), null);
+  await none.state.checkSecretExpiry(TUESDAY_3PM);
+  assert.equal(none.state.alerts.length, 0);
+});
+
+test('the live connection sends a named ping event so tablets can tell it is alive', async t => {
+  const { base } = await start(t, { pingSeconds: 0.05 });
+  const stream = await listen(base, 'front');
+  await waitFor(() => stream.text().includes('event: ping'), 'a ping');
+  await stream.stop();
+});

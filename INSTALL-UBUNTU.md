@@ -202,6 +202,8 @@ sudo grep -E '^(DEMO_MODE|PORT|ROOMS_FILE|EVENT_REFRESH_SECONDS|TABLET_OFFLINE_S
 
 Never print or commit `CLIENT_SECRET` or `ADMIN_TOKEN`.
 
+Client secrets expire (the Entra portal shows the date under **Certificates & secrets**). Write that date into `.env` as `CLIENT_SECRET_EXPIRES=YYYY-MM-DD` and the server sends an alert (dashboard, Teams and webhook, whichever are set up) at 30, 14, 7, 3 and 1 days before it expires and once more when it has. The app cannot read the date from Microsoft itself, so update it whenever you replace the secret. To replace a secret without a gap: create the new secret in Entra first, put its value in `CLIENT_SECRET` (and `TEAMS_BOT_APP_SECRET` if the bot uses the same app), set the new `CLIENT_SECRET_EXPIRES`, restart the service, check the dashboard, then delete the old secret.
+
 ## 10. Validate and start Microsoft 365 mode
 
 ```bash
@@ -254,7 +256,7 @@ http://SERVER-IP/room/front
 http://SERVER-IP/room/back
 ```
 
-Use a current Chrome/Edge/WebView and kiosk mode as appropriate. The compatibility fallback in `public/app.js` prevents the confirmed black-screen failure on browsers without `crypto.randomUUID()`.
+For wall tablets, add `?kiosk=1` to the address (for example `http://SERVER-IP/room/front?kiosk=1`). That hides the refresh and message buttons so visitors cannot tap them; booking buttons are controlled separately by `allowQuickBooking`. The page also heals itself: the server pings every 25 seconds, a tablet whose live connection goes quiet reconnects within about a minute and a half, and after 5 minutes it reloads the page (only if the server answers, at most every 10 minutes). Use a current Chrome/Edge/WebView and kiosk mode as appropriate. The compatibility fallback in `public/app.js` prevents the confirmed black-screen failure on browsers without `crypto.randomUUID()`.
 
 ## 12. Dashboard access
 
