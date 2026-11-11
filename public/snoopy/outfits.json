@@ -67,6 +67,14 @@
       "to": "10-31"
     },
     {
+      "id": "veterans-day",
+      "label": "Veterans Day (November 11)",
+      "file": "outfits/veterans-day.png",
+      "rows": 11,
+      "from": "11-11",
+      "to": "11-11"
+    },
+    {
       "id": "autumn-thanksgiving",
       "label": "Autumn / Thanksgiving",
       "file": "outfits/autumn-thanksgiving.png",

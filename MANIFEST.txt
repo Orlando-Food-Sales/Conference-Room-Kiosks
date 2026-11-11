@@ -1,9 +1,9 @@
 .env.example	3733 bytes
 .gitignore	85 bytes
-CHANGELOG.md	12535 bytes
+CHANGELOG.md	12724 bytes
 DEPLOY-CHECKLIST.md	6108 bytes
 INSTALL-UBUNTU.md	21169 bytes
-README.md	7495 bytes
+README.md	7509 bytes
 RELEASE_MANIFEST.md	1658 bytes
 REPO-FILE-MANIFEST.txt	329 bytes
 SECURITY.md	2423 bytes
@@ -40,12 +40,12 @@ public/logo/orlando-foods-white-400.png	11320 bytes
 public/logo/orlando-foods-white-600.png	17950 bytes
 public/logo/orlando-foods-white.png	29066 bytes
 public/preview.css	2238 bytes
-public/preview.html	8418 bytes
+public/preview.html	8470 bytes
 public/preview.js	7785 bytes
 public/snoopy.js	12694 bytes
 public/snoopy/README.md	384 bytes
-public/snoopy/outfits.json	4025 bytes
-public/snoopy/outfits/README.md	1871 bytes
+public/snoopy/outfits.json	4214 bytes
+public/snoopy/outfits/README.md	1887 bytes
 public/snoopy/outfits/autumn-thanksgiving.png	1807627 bytes
 public/snoopy/outfits/chef.png	1995574 bytes
 public/snoopy/outfits/christmas.png	1923782 bytes
@@ -60,6 +60,7 @@ public/snoopy/outfits/st-patricks.png	1867809 bytes
 public/snoopy/outfits/storm.png	2131144 bytes
 public/snoopy/outfits/summer-sunshine.png	1696400 bytes
 public/snoopy/outfits/valentines.png	1804663 bytes
+public/snoopy/outfits/veterans-day.png	2009864 bytes
 public/snoopy/outfits/winter-snow.png	1645204 bytes
 public/snoopy/snoopy.png	1548606 bytes
 public/styles.css	7911 bytes
@@ -83,7 +84,7 @@ src/weather.js	14798 bytes
 test/celebrations.test.js	9661 bytes
 test/config.test.js	8505 bytes
 test/dashboard-page.test.js	2743 bytes
-test/outfits.test.js	9608 bytes
+test/outfits.test.js	10533 bytes
 test/project.test.js	3471 bytes
 test/server.test.js	42030 bytes
 test/tablet-page.test.js	12431 bytes

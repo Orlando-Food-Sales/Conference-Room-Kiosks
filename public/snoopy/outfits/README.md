@@ -4,7 +4,7 @@ Each outfit is a full sprite sheet in this folder: 8 columns, 192x208 cells, tra
 
 - Sheets are 1536x2288 (11 rows, with the look-around animation). Older 1536x1872 sheets (9 rows) also work, but Snoopy skips look-around while wearing one. `"rows"` in `../outfits.json` must match (11 or 9).
 
-Ready: `party-hat`, `christmas`, `new-year`, `valentines`, `st-patricks`, `easter`, `july-4th`, `halloween`, `autumn-thanksgiving`, `pajamas`, `storm`, `spring-raincoat`, `winter-snow`, `summer-sunshine`, `chef`.
+Ready: `party-hat`, `christmas`, `new-year`, `valentines`, `st-patricks`, `easter`, `july-4th`, `halloween`, `veterans-day`, `autumn-thanksgiving`, `pajamas`, `storm`, `spring-raincoat`, `winter-snow`, `summer-sunshine`, `chef`.
 Still to draw: the sleeping animation (`../sleep.png`).
 
 Rules live in `../outfits.json`, first match wins, top to bottom:

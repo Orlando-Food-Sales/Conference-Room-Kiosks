@@ -22,7 +22,7 @@ dependencies; Node.js 22 or later.
 - Official weather warnings (US): Winter Storm Warning, Flood Watch, Heat Advisory and the like, from the National Weather Service for your location, appear as a banner on every tablet (red for warnings, amber for watches and advisories) and disappear when they end. Each Severe or Extreme warning is also sent once to the alert list (Teams and webhook). Turn off with `WEATHER_ALERTS=false`.
 - Snoopy, a 2D sprite companion that reacts to the room: resting, waiting before a meeting,
   thinking during one, plus waves, jumps, walks and look-around. Tap the screen and he looks at it.
-- Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, St. Patrick's Day, Easter, July 4th, Halloween, Thanksgiving), pajamas when the display says Closed, then weather and feels-like temperature (storm raincoat, raincoat, winter coat, Hawaiian shirt), and a chef hat on otherwise plain Fridays. Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
+- Snoopy outfits: a party hat on birthday and work anniversary days, festive outfits by date (Christmas, New Year, Valentine's Day, St. Patrick's Day, Easter, July 4th, Halloween, Veterans Day, Thanksgiving), pajamas when the display says Closed, then weather and feels-like temperature (storm raincoat, raincoat, winter coat, Hawaiian shirt), and a chef hat on otherwise plain Fridays. Rules and limits live in `public/snoopy/outfits.json`; see `public/snoopy/outfits/README.md`.
 - Birthdays and work anniversaries from a shared Microsoft 365 calendar, shown on the status card. On a working day the line also covers the closed days that follow (a Saturday birthday shows on Friday as "Mabel (Saturday)").
 - Dashboard at `/dashboard` (needs `ADMIN_TOKEN`): room overview, tablet status, messages, display on/off, alerts with a test-alert button, the running version and the current weather. It has the same Orlando Foods look as the displays.
 
@@ -30,7 +30,7 @@ dependencies; Node.js 22 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 137 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 138 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`. Updating a running server step by step (backup, copy, settings, restart, checks, rollback): `DEPLOY-CHECKLIST.md`.

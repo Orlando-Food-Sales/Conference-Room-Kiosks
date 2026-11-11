@@ -162,3 +162,16 @@ test('the Easter dates offered on the preview page really fall inside or outside
     assert.equal(easterRuleMatches(rule, year, month, day), wanted, `${value}: ${label}`);
   }
 });
+
+test('Veterans Day has its own outfit on November 11, and no other date rule overlaps that day', () => {
+  const veterans = outfits.find(o => o.id === 'veterans-day');
+  assert.ok(veterans, 'the outfit is in the rules');
+  assert.deepEqual([veterans.from, veterans.to], ['11-11', '11-11']);
+  assert.equal(veterans.file, 'outfits/veterans-day.png');
+  assert.ok(fs.existsSync(path.join(SNOOPY, veterans.file)), 'the sheet is in the project');
+  const covers = (o, day) => (o.from <= o.to ? day >= o.from && day <= o.to : day >= o.from || day <= o.to);
+  const overlapping = outfits.filter(o => o.from && covers(o, '11-11')).map(o => o.id);
+  assert.deepEqual(overlapping, ['veterans-day'], 'only Veterans Day applies on 11-11');
+  assert.ok(outfits.every(o => !o.from || covers(o, o.from)), 'sanity check of the overlap test');
+  for (const day of ['11-10', '11-12']) assert.ok(!covers(veterans, day), `not on ${day}`);
+});
