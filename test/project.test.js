@@ -71,3 +71,12 @@ test('the deploy script is documented for the server and is executable in git', 
   assert.match(read('DEPLOY-CHECKLIST.md'), /raw\.githubusercontent\.com\/Orlando-Food-Sales\/Conference-Room-Kiosks\/main\/scripts\/deploy-on-server\.sh/, 'how to get it onto the server the first time');
   assert.ok(fs.statSync(new URL('../scripts/deploy-on-server.sh', import.meta.url)).mode & 0o111, 'executable on disk');
 });
+
+test('the deploy script avoids shell patterns that behave differently on Ubuntu and kill it silently under set -e', () => {
+  const code = read('scripts/deploy-on-server.sh').split('\n').filter(line => !line.trim().startsWith('#')).join('\n');
+  assert.doesNotMatch(code, /\bcomm\b/, 'comm refuses input that sorts differently on Ubuntu ("not in sorted order") and then set -e ends the script');
+  assert.doesNotMatch(code, /\|\s*head\b/, 'a pipe into head can end the producer early (SIGPIPE) and pipefail then fails the script');
+  assert.match(code, /grep -vxFf/, 'the "settings you do not have yet" list uses a plain line match instead');
+  assert.match(code, /\|\| true\)/, 'that list can never stop the deploy');
+  assert.match(code, /\{ ls -1t [^\n]*done; \} \|\| true/, 'cleaning old backups can never fail a finished deploy');
+});

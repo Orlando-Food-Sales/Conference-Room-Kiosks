@@ -89,7 +89,7 @@ say "4. What would change"
 CHANGES=$(rsync -rlci --executability --dry-run "${EXCLUDES[@]}" "$WORK/new/" "$APP_DIR/" | grep -E '^[<>c]f' || true)
 count=$(printf '%s' "$CHANGES" | grep -c . || true)
 if [[ $count -eq 0 ]]; then echo "Nothing differs: $APP_DIR already matches $REF ($new_commit)."; exit 0; fi
-printf '%s\n' "$CHANGES" | awk '{print "  " $2}' | head -40
+printf '%s\n' "$CHANGES" | awk 'NR <= 40 {print "  " $2}'
 [[ $count -le 40 ]] || echo "  ... and $((count - 40)) more"
 echo "$count files differ. Version $old_version -> $new_version."
 needs_restart=no
@@ -99,7 +99,7 @@ printf '%s\n' "$CHANGES" | awk '{print $2}' | grep -E '^(src/|package(-lock)?\.j
 case $RESTART:$needs_restart in auto:yes) why=' (server code changed)' ;; auto:no) why=' (only web files changed)' ;; *) why=' (you asked for that)' ;; esac
 echo "Restart needed: $needs_restart$why"
 # Settings in the new .env.example that this server's .env does not have yet (informational: the app still starts, the feature is off).
-missing=$(comm -13 <(grep -oE '^[A-Z][A-Z0-9_]*=' "$APP_DIR/.env" | sort -u) <(grep -oE '^[A-Z][A-Z0-9_]*=' "$WORK/new/.env.example" | sort -u) | tr -d '=' | tr '\n' ' ')
+missing=$(grep -oE '^[A-Z][A-Z0-9_]*=' "$WORK/new/.env.example" | grep -vxFf <(grep -oE '^[A-Z][A-Z0-9_]*=' "$APP_DIR/.env" || true) | tr -d '=' | tr '\n' ' ' || true)
 [[ -z $missing ]] || echo "Settings in .env.example that your .env does not have (optional, features stay off): $missing"
 if [[ $DRY -eq 1 ]]; then echo; echo "Dry run: nothing was changed."; exit 0; fi
 
@@ -148,7 +148,7 @@ if eval "$SMOKE_CMD" > "$WORK/smoke.txt" 2>&1; then grep -E 'Running version|Smo
 else tail -15 "$WORK/smoke.txt"; echo "The smoke test failed."; rollback; fi
 
 # Keep the newest few backups only.
-ls -1t "$BACKUP_DIR"/room-display-*.tar.gz 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | while read -r old_backup; do rm -f "$old_backup"; done
+{ ls -1t "$BACKUP_DIR"/room-display-*.tar.gz 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | while read -r old_backup; do rm -f "$old_backup"; done; } || true
 
 say "Done: $old_version -> $new_version ($new_commit)"
 echo "Backup: $backup"

@@ -31,7 +31,7 @@ dependencies; Node.js 22 or later.
 
 ```bash
 DEMO_MODE=true npm start     # http://localhost:3000/room/room
-npm run check                # syntax check and tests (npm test runs only the 157 offline tests, about 8 seconds)
+npm run check                # syntax check and tests (npm test runs only the 158 offline tests, about 8 seconds)
 ```
 
 Production setup (Ubuntu, Nginx, systemd, Entra app): see `INSTALL-UBUNTU.md`. Updating a running server: run `scripts/deploy-on-server.sh` on the server (it pulls from GitHub, tests, backs up, copies, restarts only if needed, checks, and rolls back by itself if a check fails); the step-by-step version and the first-time setup are in `DEPLOY-CHECKLIST.md`.

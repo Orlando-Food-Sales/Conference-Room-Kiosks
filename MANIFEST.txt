@@ -1,6 +1,6 @@
 .env.example	3733 bytes
 .gitignore	85 bytes
-CHANGELOG.md	15109 bytes
+CHANGELOG.md	15475 bytes
 DEPLOY-CHECKLIST.md	8161 bytes
 INSTALL-UBUNTU.md	21169 bytes
 README.md	7950 bytes
@@ -75,7 +75,7 @@ public/theme.css	15329 bytes
 public/theme.js	2346 bytes
 scripts/backup.sh	889 bytes
 scripts/build-teams-app.sh	2118 bytes
-scripts/deploy-on-server.sh	9574 bytes
+scripts/deploy-on-server.sh	9582 bytes
 scripts/install-ubuntu.sh	2978 bytes
 scripts/smoke-test.sh	1721 bytes
 scripts/update-manifests.sh	1003 bytes
@@ -93,7 +93,7 @@ test/celebrations.test.js	9661 bytes
 test/config.test.js	8505 bytes
 test/dashboard-page.test.js	2743 bytes
 test/outfits.test.js	10533 bytes
-test/project.test.js	5647 bytes
+test/project.test.js	6488 bytes
 test/server.test.js	42790 bytes
 test/sleep-engine.test.mjs	4878 bytes
 test/sleep-page.test.js	5893 bytes
