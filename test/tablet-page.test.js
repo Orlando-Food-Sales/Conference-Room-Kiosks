@@ -36,7 +36,8 @@ test('the tablet page only reloads after /healthz answers, so an outage never le
 });
 
 test('kiosk mode (?kiosk=1) hides the refresh and message buttons and nothing else', () => {
-  assert.match(app, /get\('kiosk'\) === '1'[^\n]*classList\.add\('kiosk'\)/);
+  assert.match(app, /var IS_KIOSK = new URLSearchParams\(location\.search\)\.get\('kiosk'\) === '1';/);
+  assert.match(app, /if \(IS_KIOSK\) document\.documentElement\.classList\.add\('kiosk'\);/);
   const rule = css.match(/\.kiosk #refreshButton[^{]*\{[^}]*\}/);
   assert.ok(rule, 'rule exists');
   assert.match(rule[0], /#messageButton/);

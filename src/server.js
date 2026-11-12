@@ -215,7 +215,7 @@ export function createAppServer(options = {}) {
     }
     for (const room of config.rooms) {
       if (!officeSettled(room, ms)) continue;
-      const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id);
+      const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id && t.wallTablet !== false);   // desktop test browsers never alert
       for (const tablet of roomTablets) {
         const key = `${room.id}:${tablet.tabletId}`;
         const quietFor = ms - Date.parse(tablet.lastSeen);
@@ -309,6 +309,12 @@ export function createAppServer(options = {}) {
   const subscriptions = options.subscriptions || new SubscriptionManager({ onChange: value => notifyRoom(value.roomId || '*', 'graph.changed', value) });
 
   function clientIp(req) { return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(); }
+  // Wall tablets get offline alerts; a desktop browser someone opened to test or look at a room does not.
+  // A wall tablet is a phone/tablet browser, a touch screen (iPads in Safari say "Macintosh"), or any page opened with ?kiosk=1.
+  function isWallTablet(userAgent, body) {
+    const flag = value => value === true || value === '1' || value === 'true';
+    return flag(body.kiosk) || flag(body.touch) || /Android|iPad|iPhone|Mobile|Silk|Kindle/i.test(userAgent);
+  }
   function recordTablet(req, body, forcedRoomId) {
     const roomId = forcedRoomId || String(body.roomId || '');
     if (!roomById.has(roomId)) throw Object.assign(new Error('Unknown room.'), { status: 404 });
@@ -317,6 +323,7 @@ export function createAppServer(options = {}) {
     const key = `${roomId}:${tabletId}`;
     const previous = tablets.get(key);
     const tablet = { tabletId, roomId, name: String(body.name || previous?.name || 'Room tablet').trim().slice(0, 100), lastSeen: new Date().toISOString(), connectedAt: previous?.connectedAt || new Date().toISOString(), ip: clientIp(req), userAgent: String(req.headers['user-agent'] || '').slice(0, 300), screen: /^[0-9x@. ]{1,30}$/.test(String(body.screen || '')) ? String(body.screen) : (previous?.screen || '') };
+    tablet.wallTablet = isWallTablet(tablet.userAgent, body);
     tablets.set(key, tablet);
     return tablet;
   }
@@ -359,7 +366,7 @@ export function createAppServer(options = {}) {
         const roomId = url.searchParams.get('room') || '';
         if (roomId !== '*' && !roomById.has(roomId)) return sendJson(res, 404, { error: 'Unknown room.' });
         const tabletId = url.searchParams.get('tabletId');
-        if (tabletId && roomId !== '*') recordTablet(req, { tabletId, name: url.searchParams.get('name') || 'Room tablet' }, roomId);
+        if (tabletId && roomId !== '*') recordTablet(req, { tabletId, name: url.searchParams.get('name') || 'Room tablet', kiosk: url.searchParams.get('kiosk'), touch: url.searchParams.get('touch') }, roomId);
         securityHeaders(res);
         res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'keep-alive', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
         const client = { res, roomId, tabletId, connectedAt: Date.now() };

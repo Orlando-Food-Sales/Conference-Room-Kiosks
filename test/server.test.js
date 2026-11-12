@@ -787,3 +787,35 @@ test('end of day is midnight in the room\'s time zone, also on daylight saving d
   assert.equal(at('2026-11-12T15:00:00Z', 'UTC'), '2026-11-13T00:00:00.000Z');
   assert.equal(at('2026-11-12T15:00:00Z', 'Asia/Kolkata'), '2026-11-12T18:30:00.000Z', 'half-hour offsets');
 });
+
+test('desktop test browsers never raise offline alerts; wall tablets, touch screens and kiosk pages do', async t => {
+  const { base, state } = await start(t, { env: { OFFICE_HOURS_START: '', ALERT_AFTER_MINUTES: '10' } });
+  const beat = (tabletId, userAgent, extra = {}) => json(base, '/api/tablets/heartbeat', { method: 'POST', headers: { 'user-agent': userAgent }, body: { roomId: 'front', tabletId, name: tabletId, screen: '1006x600 @1', ...extra } });
+  const MAC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
+  const WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
+  const SAMSUNG = 'Mozilla/5.0 (Linux; Android 14; SM-T220) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36';
+  await beat('mac-test', MAC, { kiosk: false, touch: false });
+  await beat('windows-test', WINDOWS);
+  await beat('samsung', SAMSUNG, { kiosk: false, touch: true });
+  await beat('ipad-as-mac', MAC, { kiosk: false, touch: true });            // iPadOS Safari reports a Mac; it has a touch screen
+  await beat('mac-in-kiosk', MAC, { kiosk: true, touch: false });          // a desktop deliberately set up as a display
+  const wall = Object.fromEntries([...state.tablets.values()].map(x => [x.tabletId, x.wallTablet]));
+  assert.deepEqual(wall, { 'mac-test': false, 'windows-test': false, samsung: true, 'ipad-as-mac': true, 'mac-in-kiosk': true });
+
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.equal(overview.rooms[0].tablets.find(x => x.tabletId === 'mac-test').wallTablet, false, 'the dashboard can mark test browsers');
+
+  await state.checkTablets(Date.now() + 15 * 60000);                      // everyone has been quiet for 15 minutes
+  const quiet = state.alerts.map(a => a.text).filter(text => /has not checked in/.test(text));
+  assert.deepEqual(quiet.map(text => text.match(/tablet "([^"]+)"/)[1]).sort(), ['ipad-as-mac', 'mac-in-kiosk', 'samsung'], 'only real displays alert');
+
+  // The live connection reports the same flags as the heartbeat.
+  const controller = new AbortController();
+  const stream = await fetch(`${base}/api/stream?room=front&tabletId=mac-stream&name=x&kiosk=0&touch=0`, { headers: { 'user-agent': MAC }, signal: controller.signal });
+  assert.equal(stream.status, 200);
+  assert.equal(state.tablets.get('front:mac-stream').wallTablet, false);
+  controller.abort();
+  const tablet = await fetch(`${base}/api/stream?room=front&tabletId=tab-stream&name=x&kiosk=1&touch=0`, { headers: { 'user-agent': MAC }, signal: AbortSignal.timeout(2000) }).catch(() => null);
+  assert.equal(state.tablets.get('front:tab-stream').wallTablet, true, 'kiosk=1 on the stream counts');
+  tablet?.body?.cancel().catch(() => { });
+});

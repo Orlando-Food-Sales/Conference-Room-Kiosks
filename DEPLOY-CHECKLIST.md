@@ -116,7 +116,7 @@ ssh USER@SERVER 'cd /opt/m365-room-display && bash scripts/smoke-test.sh'   # mu
 - [ ] Reload one tablet (or press its refresh button) and check the logo, the status card and today's schedule.
 - [ ] Wall tablets: change their address to end in `?kiosk=1` so visitors cannot tap refresh or message.
 - [ ] Press **Reserve** on a room, then delete the test meeting in Outlook. The tablet should update within about 15 seconds.
-- [ ] Back room: a real tablet is checking in (a Mac browser does not give a real offline alert).
+- [ ] Back room: a real tablet is checking in (a Mac browser shows as "test browser, no alerts" and does not count).
 
 ## 6. Send the test alert
 
