@@ -1,6 +1,6 @@
 .env.example	3733 bytes
 .gitignore	85 bytes
-CHANGELOG.md	20074 bytes
+CHANGELOG.md	20624 bytes
 DEPLOY-CHECKLIST.md	8891 bytes
 INSTALL-UBUNTU.md	21454 bytes
 README.md	8377 bytes
@@ -20,7 +20,7 @@ deploy/teams-app/outline.png	388 bytes
 package-lock.json	263 bytes
 package.json	382 bytes
 patches/0001-single-line-upcoming-meetings.patch	3566 bytes
-public/app.js	28782 bytes
+public/app.js	29340 bytes
 public/apple-touch-icon.png	6688 bytes
 public/dashboard.css	5055 bytes
 public/dashboard.html	1494 bytes
@@ -104,7 +104,7 @@ test/server.test.js	51730 bytes
 test/sleep-engine.test.mjs	4878 bytes
 test/sleep-extras.test.mjs	7276 bytes
 test/sleep-page.test.js	7706 bytes
-test/tablet-page.test.js	12551 bytes
+test/tablet-page.test.js	13538 bytes
 test/teams-alerts.test.js	11179 bytes
 test/weather.test.js	16533 bytes
 tools/apply_single_line_update.py	6931 bytes

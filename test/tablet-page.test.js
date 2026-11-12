@@ -176,3 +176,14 @@ test('every logo size named in a srcset exists at exactly the width it claims, s
   assert.equal(logoSizes.length, 4, 'picker and top bar, dark and light');
   assert.ok(logoSizes.every(value => /^clamp\(/.test(value)), 'sizes follow the CSS height of the logo');
 });
+
+test('the refresh button and the dashboard\'s Refresh display really reload the page, but only when the server answers', () => {
+  const reload = app.match(/async function reloadPage\(\) \{[\s\S]*?\n\}/);
+  assert.ok(reload, 'reloadPage is in app.js');
+  assert.match(reload[0], /fetch\('\/healthz'/, 'checks the server first');
+  assert.match(reload[0], /location\.reload\(\)/, 'a real reload, so new code, styles and outfits load');
+  assert.ok(reload[0].indexOf('/healthz') < reload[0].indexOf('location.reload()'), 'the check comes before the reload');
+  assert.match(reload[0], /catch \(_\) \{[\s\S]*initializeRoom\(state\.room\.id\)[\s\S]*return;/, 'with the server down it stays on the page and re-reads the meetings');
+  assert.match(app, /\$\('refreshButton'\)\.addEventListener\('click', function \(\) \{ reloadPage\(\); \}\)/, 'the tablet button uses it');
+  assert.match(app, /data\.detail\.action === 'refresh'\) await reloadPage\(\)/, 'the dashboard button uses it');
+});

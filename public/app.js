@@ -71,7 +71,7 @@ function fitRows() {
 window.addEventListener('resize', fitRows);
 async function loadEvents() { try { var data = await api('/api/events?room=' + encodeURIComponent(state.room.id)); state.events = data.events; state.events = previewEvents(state.events); $('syncState').textContent = new URLSearchParams(location.search).get('preview') === 'error' ? 'Calendar temporarily unavailable' : 'Updated ' + formatTime(data.generatedAt); render(); } catch (error) { $('syncState').textContent = 'Calendar temporarily unavailable'; showToast(error.message); } }
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH }) }); } catch (_) { } }
-function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await initializeRoom(state.room.id); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
+function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await reloadPage(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
 async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); loadWeatherAlerts(); }
 
@@ -172,11 +172,21 @@ async function loadCelebrations() {
 setInterval(loadCelebrations, 15 * 60 * 1000);
 
 // Refresh button and "send a message" panel (uses the same admin API as the dashboard).
-$('refreshButton').addEventListener('click', function () {
-  if (!state.room) return;
+// A real reload, so new code, styles and outfits are picked up (not just the meetings). Only when the server answers,
+// so a refresh during an outage never leaves the tablet on a browser error page; then it just re-reads the meetings.
+async function reloadPage() {
   showToast('Refreshing\u2026');
-  initializeRoom(state.room.id).catch(function (error) { showToast(error.message); });
-});
+  try {
+    var response = await fetch('/healthz', { cache: 'no-store', signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined });
+    if (!response.ok) throw new Error('server not ready');
+  } catch (_) {
+    showToast('Server not reachable, showing the latest meetings instead');
+    if (state.room) initializeRoom(state.room.id).catch(function () { });
+    return;
+  }
+  location.reload();
+}
+$('refreshButton').addEventListener('click', function () { reloadPage(); });
 function closeMessagePanel() { $('messagePanel').classList.add('hidden'); $('messageError').textContent = ''; }
 $('messageButton').addEventListener('click', function () {
   $('messageToken').value = sessionStorage.getItem('adminToken') || '';
