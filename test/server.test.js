@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import fs from 'node:fs';
 import { createAppServer } from '../src/server.js';
 
 const config = { port: 0, demoMode: true, adminToken: 'test-token', eventRefreshSeconds: 60, tabletOfflineSeconds: 120, rooms: [{ id: 'front', name: 'Front Room', email: 'front@example.com', timeZone: 'UTC', allowQuickBooking: false }] };
@@ -496,7 +497,7 @@ test('calendar-error alerts stay quiet outside office hours', async t => {
 });
 
 test('the background check notes a calendar that cannot be read and clears it when it works again', async t => {
-  const subscriptions = { start: async () => {}, stop() {}, processNotifications() {} };
+  const subscriptions = { start: async () => { }, stop() { }, processNotifications() { } };
   const { state } = await start(t, { env: { CHANGE_CHECK_SECONDS: '5' }, startSubscriptions: true, subscriptions });
   const calendar = state.calendars.get('front');
   const original = calendar.listEvents.bind(calendar);
@@ -697,4 +698,92 @@ test('serves the sleep artwork, manifest, engine and styles with the right types
     assert.equal(response.headers.get('content-type'), type, path);
     await response.arrayBuffer();
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Snoopy outfit pushed from the dashboard
+// ---------------------------------------------------------------------------------------------
+
+test('the dashboard can push an outfit for a while, for the rest of the day, or reset it', async t => {
+  const { base, state } = await start(t);
+  const control = (room, body) => json(base, `/api/admin/rooms/${room}/control`, { method: 'POST', token: TOKEN, body });
+  const now = async room => (await (await json(base, `/api/config?room=${room}`)).json()).control;
+
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  const ids = overview.outfits.map(o => o.id);
+  assert.ok(ids.includes('halloween') && ids.includes('pajamas'), 'outfits with art are offered');
+  assert.ok(ids.includes('memorial-day') && ids.includes('earth-day'), 'the holiday outfits are offered');
+  const rules = JSON.parse(fs.readFileSync(new URL('../public/snoopy/outfits.json', import.meta.url), 'utf8')).outfits;
+  const withArt = [...new Set(rules.filter(o => fs.existsSync(new URL(`../public/snoopy/${o.file}`, import.meta.url))).map(o => o.id))];
+  assert.deepEqual(ids, withArt, 'exactly the outfits whose picture is on the server, in rule order');
+  assert.equal(new Set(ids).size, ids.length, 'each outfit once');
+  assert.ok(overview.outfits.every(o => o.label), 'with a label');
+  assert.equal(overview.rooms[0].control.outfit, null, 'automatic to begin with');
+
+  let response = await control('front', { action: 'outfit', outfit: 'halloween', ttlMinutes: 90 });
+  assert.equal(response.status, 200);
+  let front = await now('front');
+  assert.equal(front.outfit, 'halloween');
+  assert.equal(front.outfitLabel, overview.outfits.find(o => o.id === 'halloween').label);
+  const left = Date.parse(front.outfitUntil) - Date.now();
+  assert.ok(left > 89 * 60000 && left <= 90 * 60000, `90 minutes (got ${left} ms)`);
+  assert.equal((await now('back')).outfit, null, 'the other room is not affected');
+
+  await control('front', { action: 'outfit', outfit: 'none', until: 'today' });
+  front = await now('front');
+  assert.equal(front.outfit, 'none', '"none" means plain Snoopy');
+  const until = new Date(front.outfitUntil);
+  const wall = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).format(until);
+  assert.equal(wall, '00:00', 'rest of today ends at midnight, room time');
+  assert.ok(until - Date.now() > 0 && until - Date.now() <= 86400000, 'within the next 24 hours');
+
+  await control('front', { action: 'outfit', outfit: 'chef', until: 'tomorrow' });
+  front = await now('front');
+  const hours = (Date.parse(front.outfitUntil) - Date.now()) / 3600000;
+  assert.ok(hours > 24 && hours <= 48, `today and tomorrow (${hours.toFixed(1)} h)`);
+
+  await control('front', { action: 'clearOutfit' });
+  front = await now('front');
+  assert.deepEqual([front.outfit, front.outfitUntil, front.outfitLabel], [null, null, ''], 'back to automatic');
+
+  // An override that has run out is dropped when anyone asks.
+  await control('front', { action: 'outfit', outfit: 'halloween', ttlMinutes: 5 });
+  state.controls.get('front').outfitUntil = new Date(Date.now() - 1000).toISOString();
+  assert.equal((await now('front')).outfit, null, 'expired overrides are not handed out');
+
+  for (const bad of [
+    { action: 'outfit', outfit: 'no-such-thing', ttlMinutes: 60 },
+    { action: 'outfit', outfit: '../../package', ttlMinutes: 60 },
+    { action: 'outfit', ttlMinutes: 60 },
+    { action: 'outfit', outfit: 'halloween' },                         // no duration
+    { action: 'outfit', outfit: 'halloween', ttlMinutes: 0 },
+    { action: 'outfit', outfit: 'halloween', ttlMinutes: 10081 },
+    { action: 'outfit', outfit: 'halloween', ttlMinutes: 'soon' },
+    { action: 'outfit', outfit: 'halloween', until: 'forever' }
+  ]) assert.equal((await control('front', bad)).status, 400, JSON.stringify(bad));
+  assert.equal((await now('front')).outfit, null, 'rejected requests change nothing');
+  assert.equal((await json(base, '/api/admin/rooms/front/control', { method: 'POST', body: { action: 'outfit', outfit: 'halloween', ttlMinutes: 60 } })).status, 401, 'no token, no outfit');
+});
+
+test('a pushed outfit reaches the room\'s tablets live', async t => {
+  const { base } = await start(t);
+  const front = await listen(base, 'front');
+  t.after(() => front.stop());
+  await json(base, '/api/admin/rooms/front/control', { method: 'POST', token: TOKEN, body: { action: 'outfit', outfit: 'halloween', ttlMinutes: 30 } });
+  await waitFor(() => /"outfit":"halloween"/.test(front.text()), 'the outfit in the control event');
+  assert.match(front.text(), /event: room\.control/);
+  assert.match(front.text(), /"action":"outfit"/);
+});
+
+test('end of day is midnight in the room\'s time zone, also on daylight saving days', async t => {
+  const { state } = await start(t);
+  const at = (iso, zone, extra) => new Date(state.endOfDay(zone, Date.parse(iso), extra)).toISOString();
+  assert.equal(at('2026-11-12T15:00:00Z', 'America/New_York'), '2026-11-13T05:00:00.000Z', 'EST: midnight is 05:00 UTC');
+  assert.equal(at('2026-07-01T15:00:00Z', 'America/New_York'), '2026-07-02T04:00:00.000Z', 'EDT: midnight is 04:00 UTC');
+  assert.equal(at('2026-11-13T03:30:00Z', 'America/New_York'), '2026-11-13T05:00:00.000Z', '10:30 PM local is still today');
+  assert.equal(at('2026-11-01T12:00:00Z', 'America/New_York'), '2026-11-02T05:00:00.000Z', 'the day clocks go back (25 hours long)');
+  assert.equal(at('2026-03-08T12:00:00Z', 'America/New_York'), '2026-03-09T04:00:00.000Z', 'the day clocks go forward (23 hours long)');
+  assert.equal(at('2026-03-07T20:00:00Z', 'America/New_York', 1), '2026-03-09T04:00:00.000Z', 'tomorrow, across the change');
+  assert.equal(at('2026-11-12T15:00:00Z', 'UTC'), '2026-11-13T00:00:00.000Z');
+  assert.equal(at('2026-11-12T15:00:00Z', 'Asia/Kolkata'), '2026-11-12T18:30:00.000Z', 'half-hour offsets');
 });

@@ -7,6 +7,8 @@
 #   scripts/deploy-on-server.sh --yes            do not ask for confirmation
 #   scripts/deploy-on-server.sh --restart        restart even if only web files changed
 #   scripts/deploy-on-server.sh --no-restart     never restart (you do it yourself)
+#   From another computer: ssh -t user@server 'bash ~/kiosks/scripts/deploy-on-server.sh'
+#   (-t gives it a terminal for the question and the sudo password; without one it stops instead of hanging)
 #
 # What it does, in order, and stops at the first problem:
 #   1. checks the server (Node 22+, git, rsync, curl, the app folder and its .env)
@@ -47,7 +49,7 @@ while [[ $# -gt 0 ]]; do
     --yes|-y) ASSUME_YES=1; shift ;;
     --restart) RESTART=yes; shift ;;
     --no-restart) RESTART=no; shift ;;
-    -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -77,6 +79,15 @@ git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$WORK/new" || die "coul
 new_commit=$(git -C "$WORK/new" rev-parse --short HEAD)
 new_version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/new/package.json")
 echo "Got commit $new_commit, version $new_version: $(git -C "$WORK/new" log -1 --format=%s)"
+# This script is run from a copy (usually ~/kiosks). If that copy is older than the one just downloaded, say so:
+# fixes to this script only take effect after "git -C <that folder> pull".
+if ! cmp -s "$0" "$WORK/new/scripts/deploy-on-server.sh"; then
+  if here=$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null); then
+    echo "Note: this deploy script differs from the one in $REF. Update it first with:  git -C \"$here\" pull"
+  else
+    echo "Note: this deploy script differs from the one in $REF. Get the latest copy from $REPO_URL and run that."
+  fi
+fi
 
 say "3. Running the tests on that copy (nothing live is touched)"
 if ! test_output=$(cd "$WORK/new" && npm run check 2>&1); then
@@ -101,8 +112,23 @@ echo "Restart needed: $needs_restart$why"
 # Settings in the new .env.example that this server's .env does not have yet (informational: the app still starts, the feature is off).
 missing=$(grep -oE '^[A-Z][A-Z0-9_]*=' "$WORK/new/.env.example" | grep -vxFf <(grep -oE '^[A-Z][A-Z0-9_]*=' "$APP_DIR/.env" || true) | tr -d '=' | tr '\n' ' ' || true)
 [[ -z $missing ]] || echo "Settings in .env.example that your .env does not have (optional, features stay off): $missing"
+# Room for the backup and the copy (the backup is about the size of the app folder, compressed).
+app_kb=$(du -sk "$APP_DIR" | cut -f1)
+for spot in "$BACKUP_DIR" "$APP_DIR"; do
+  probe=$spot; while [[ ! -d $probe ]]; do probe=$(dirname "$probe"); done
+  free_kb=$(df -Pk "$probe" | awk 'NR == 2 {print $4}')
+  [[ ${free_kb:-0} -ge $((app_kb * 2 + 102400)) ]] || die "only $((free_kb / 1024)) MB free for $spot; the update needs about $(((app_kb * 2 + 102400) / 1024)) MB. Free some space (old backups are in $BACKUP_DIR) and try again."
+done
 if [[ $DRY -eq 1 ]]; then echo; echo "Dry run: nothing was changed."; exit 0; fi
 
+# Without a terminal (for example "ssh server 'deploy-on-server.sh'") nobody can answer a question, so stop now
+# instead of waiting forever: the confirmation needs --yes, and a restart needs sudo that does not ask for a password.
+if [[ ! -t 0 ]]; then
+  [[ $ASSUME_YES -eq 1 ]] || die "no terminal to answer 'Go ahead?'. Run it in a terminal (ssh -t), or add --yes. Nothing was changed."
+  if [[ $needs_restart == yes && $RESTART_CMD == sudo\ * ]] && ! sudo -n true 2>/dev/null; then
+    die "a restart is needed and sudo wants a password, but there is no terminal to type it. Run it with ssh -t, or use --no-restart and restart yourself. Nothing was changed."
+  fi
+fi
 if [[ $ASSUME_YES -ne 1 ]]; then read -r -p "Go ahead and deploy? [y/N] " answer; [[ $answer == [yY]* ]] || { echo "Cancelled, nothing was changed."; exit 0; }; fi
 
 say "5. Backing up the running app"

@@ -52,3 +52,11 @@ input::placeholder{color:var(--muted)}
 .alert-tools button:hover{border-color:var(--accent);color:var(--accent);filter:none}
 #alertResult{margin:.25rem 0 .75rem;word-break:break-word}
 @media (max-width:560px){.brand-text{border-left:0;padding-left:0}.brand{flex-wrap:wrap}.links button{margin-left:0}}
+select{font:inherit;padding:.6rem .8rem;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);min-height:44px}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.outfit-push{width:100%;min-width:0;display:flex;flex-wrap:wrap;align-items:end;gap:.5rem;margin:.5rem 0 0;padding:.75rem;border:1px solid var(--line);border-radius:12px}
+.outfit-push legend{padding:0 .35rem;font-weight:800;color:var(--muted);font-size:.9rem}
+.outfit-push>p{width:100%;margin:0 0 .25rem;font-size:.9rem}
+.outfit-push label{display:grid;gap:.3rem;color:var(--muted);font-size:.85rem;flex:1 1 140px;min-width:0}
+.outfit-push label:first-of-type{flex-basis:100%}
+.outfit-push select{width:100%;max-width:100%;min-width:0;text-overflow:ellipsis}

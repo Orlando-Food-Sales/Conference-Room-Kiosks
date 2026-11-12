@@ -191,6 +191,14 @@
     var offset = Math.round((Date.UTC(year, month - 1, day) - Date.UTC(year, easter.month - 1, easter.day)) / 86400000);
     return offset >= -(rule.before || 0) && offset <= (rule.after || 0);
   }
+  // Holidays fixed to a weekday, worked out for any year. { "month": 1, "weekday": 1, "nth": 3 } is the third
+  // Monday in January (MLK Day); "nth": -1 is the last one in the month (Memorial Day). Months 1 to 12, weekday 0 = Sunday.
+  function nthWeekdayMatches(rule, year, month, day) {
+    if (month !== rule.month) return false;
+    if (new Date(Date.UTC(year, month - 1, day)).getUTCDay() !== rule.weekday) return false;
+    if (rule.nth === -1) return day + 7 > new Date(Date.UTC(year, month, 0)).getUTCDate();   // no same weekday left in the month
+    return Math.ceil(day / 7) === rule.nth;
+  }
 
   function inRange(from, to, today) {
     return from <= to ? (today >= from && today <= to) : (today >= from || today <= to);   // wraps the new year
@@ -198,6 +206,14 @@
 
   function chooseOutfit() {
     if (forcedOutfit) return outfits.filter(function (o) { return o.id === forcedOutfit && known[o.file] !== false; })[0] || null;
+    // Pushed from the dashboard (app.js sets these): wins over dates and weather until it runs out. "none" is plain Snoopy.
+    var pushed = document.documentElement.getAttribute('data-outfit-override');
+    var pushedUntil = Number(document.documentElement.getAttribute('data-outfit-until'));
+    if (pushed && pushedUntil > Date.now()) {
+      if (pushed === 'none') return null;
+      var pick = outfits.filter(function (o) { return o.id === pushed && known[o.file] !== false; })[0];
+      if (pick) return pick;                                               // art missing on this tablet: fall through to automatic
+    }
     var d = new Date();
     var year = d.getFullYear(), weekday = d.getDay();
     var today = ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
@@ -220,6 +236,7 @@
       if (o.weekdays && o.weekdays.indexOf(weekday) === -1) return false;  // 0 = Sunday ... 5 = Friday
       if (o.from && o.to) return inRange(o.from, o.to, today);
       if (o.easter) return easterRuleMatches(o.easter, year, Number(today.slice(0, 2)), Number(today.slice(3, 5)));   // around Easter, whichever date that is this year
+      if (o.nthWeekday) return nthWeekdayMatches(o.nthWeekday, year, Number(today.slice(0, 2)), Number(today.slice(3, 5)));   // e.g. the last Monday in May
       if (o.weekdays && !o.weather && !o.closed && !o.event) return true;  // a plain weekday rule (chef on Fridays)
       if (o.event === 'birthday') return birthday;                         // a birthday or work anniversary is on the display today
       if (o.closed) return closed && !o.weather;                           // the display says Closed (after hours, weekend, holiday)
@@ -261,7 +278,7 @@
   fetch('/snoopy/outfits.json').then(function (r) { return r.ok ? r.json() : { outfits: [] }; })
     .then(function (data) { outfits = data.outfits || []; refreshOutfit(); })
     .catch(function () { });
-  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-closed'] });
+  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-closed', 'data-outfit-override', 'data-outfit-until'] });
   setInterval(refreshOutfit, 60000);                                       // catches midnight / date changes
 
   draw();

@@ -1,5 +1,5 @@
 {
-  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday' (a birthday or work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, ice, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
+  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday' (a birthday or work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'nthWeekday': {\"month\": 5, \"weekday\": 1, \"nth\": -1} (a holiday fixed to a weekday: here the last Monday in May; nth 1 to 4, or -1 for the last one; weekday 0 = Sunday); 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, ice, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
   "outfits": [
     {
       "id": "party-hat",
@@ -25,6 +25,17 @@
       "to": "01-02"
     },
     {
+      "id": "mlk-day",
+      "label": "Martin Luther King Jr. Day (third Monday in January)",
+      "file": "outfits/mlk-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 1,
+        "weekday": 1,
+        "nth": 3
+      }
+    },
+    {
       "id": "valentines",
       "label": "Valentine's Day",
       "file": "outfits/valentines.png",
@@ -33,12 +44,31 @@
       "to": "02-14"
     },
     {
+      "id": "presidents-day",
+      "label": "Presidents' Day (third Monday in February)",
+      "file": "outfits/presidents-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 2,
+        "weekday": 1,
+        "nth": 3
+      }
+    },
+    {
       "id": "st-patricks",
       "label": "St. Patrick's Day",
       "file": "outfits/st-patricks.png",
       "rows": 11,
       "from": "03-14",
       "to": "03-17"
+    },
+    {
+      "id": "earth-day",
+      "label": "Earth Day (April 22)",
+      "file": "outfits/earth-day.png",
+      "rows": 11,
+      "from": "04-22",
+      "to": "04-22"
     },
     {
       "id": "easter",
@@ -51,12 +81,42 @@
       }
     },
     {
+      "id": "memorial-day",
+      "label": "Memorial Day (last Monday in May)",
+      "file": "outfits/memorial-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 5,
+        "weekday": 1,
+        "nth": -1
+      }
+    },
+    {
+      "id": "juneteenth",
+      "label": "Juneteenth (June 19)",
+      "file": "outfits/juneteenth.png",
+      "rows": 11,
+      "from": "06-19",
+      "to": "06-19"
+    },
+    {
       "id": "july-4th",
       "label": "July 4th",
       "file": "outfits/july-4th.png",
       "rows": 11,
       "from": "07-01",
       "to": "07-05"
+    },
+    {
+      "id": "labor-day",
+      "label": "Labor Day (first Monday in September)",
+      "file": "outfits/labor-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 9,
+        "weekday": 1,
+        "nth": 1
+      }
     },
     {
       "id": "halloween",

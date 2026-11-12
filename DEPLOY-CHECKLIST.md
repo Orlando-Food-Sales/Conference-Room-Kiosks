@@ -32,6 +32,13 @@ After that first deploy the script lives in the app folder, so every later updat
 
 Options: `--ref v2.1.0` (a tag or branch instead of main), `--yes` (no question), `--restart` / `--no-restart`. `--help` lists the
 settings. New settings still go into `.env` by hand (section 3); the script lists the ones your `.env` does not have yet.
+
+From a laptop over ssh, add `-t` so the script has a terminal for its question and the sudo password:
+`ssh -t user@server 'bash /opt/m365-room-display/scripts/deploy-on-server.sh'`. Without a terminal it stops before changing
+anything unless you add `--yes`, and it also stops if a restart is needed and sudo would ask for a password (use `-t`, or
+`--no-restart` and restart yourself). If the copy of the script you run is older than the one on GitHub, it prints a note
+saying how to update it (for a git clone such as `~/kiosks`: `git -C ~/kiosks pull`). It also stops if the disk does not have
+room for the backup and the copy (about twice the app folder plus 100 MB); old backups are in `~/deploy-backups`.
 The Teams test alert (section 6) and looking at a tablet (section 5) are still yours to do afterwards.
 
 The manual steps below are the same thing done from a laptop, and they are the fallback if the server cannot reach github.com.

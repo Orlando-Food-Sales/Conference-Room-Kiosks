@@ -112,7 +112,31 @@ export function createAppServer(options = {}) {
   const celebrations = options.celebrations || new CelebrationService(config, tokenProvider, options.fetchImpl || fetch);
   const sseClients = new Set();
   const tablets = new Map();
-  const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, revision: 0 }]));
+  const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, outfit: null, outfitLabel: '', outfitUntil: null, revision: 0 }]));
+  // The control state as tablets and the dashboard should see it: an outfit override that has run out is dropped.
+  function liveControl(roomId, ms = Date.now()) {
+    const state = controls.get(roomId);
+    if (state.outfit && (!state.outfitUntil || Date.parse(state.outfitUntil) <= ms)) { state.outfit = null; state.outfitLabel = ''; state.outfitUntil = null; }
+    return state;
+  }
+  // Outfits that can be pushed from the dashboard: those in public/snoopy/outfits.json whose art is on the server.
+  function pushableOutfits() {
+    let list = [];
+    try { list = JSON.parse(fs.readFileSync(path.join(PUBLIC, 'snoopy', 'outfits.json'), 'utf8')).outfits || []; } catch { return []; }
+    const seen = new Set();
+    return list.filter(o => o && typeof o.id === 'string' && typeof o.file === 'string' && !seen.has(o.id) && seen.add(o.id))
+      .filter(o => { const file = path.resolve(PUBLIC, 'snoopy', o.file); return file.startsWith(path.join(PUBLIC, 'snoopy') + path.sep) && fs.existsSync(file); })
+      .map(o => ({ id: o.id, label: String(o.label || o.id) }));
+  }
+  // Midnight at the end of today (or of a later day), in the room's time zone, as a UTC instant.
+  function endOfDay(timeZone, ms, extraDays = 0) {
+    const wall = t => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(t)).map(x => [x.type, x.value])); return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second); };
+    const today = new Date(wall(ms));
+    const target = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1 + extraDays);   // wall-clock midnight wanted
+    let t = target - (wall(target) - target);                                // first guess using the offset at that moment
+    t += target - wall(t);                                                   // correct once more (daylight saving)
+    return t;
+  }
   const roomById = new Map(config.rooms.map(room => [room.id, room]));
 
   function notifyRoom(roomId, type, detail = {}) {
@@ -318,7 +342,7 @@ export function createAppServer(options = {}) {
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
-        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: controls.get(room.id) });
+        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: liveControl(room.id) });
       }
       if (req.method === 'GET' && url.pathname === '/api/events') {
         const roomId = url.searchParams.get('room') || config.rooms[0].id;
@@ -379,9 +403,9 @@ export function createAppServer(options = {}) {
             let events = [], error = null;
             try { events = await calendars.get(room.id).listEvents(window.start, window.end); } catch (e) { error = e.message; }
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
-            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: controls.get(room.id), error };
+            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: liveControl(room.id), error };
           }));
-          return sendJson(res, 200, { version: VERSION, rooms, alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { version: VERSION, rooms, outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
@@ -395,9 +419,27 @@ export function createAppServer(options = {}) {
           if (!roomById.has(roomId)) return sendJson(res, 404, { error: 'Unknown room.' });
           const body = await readJson(req);
           const action = String(body.action || '');
-          const state = controls.get(roomId);
+          const state = liveControl(roomId);
           if (action === 'message') { state.message = String(body.message || '').trim().slice(0, 280); const ttl = Math.min(1440, Math.max(1, Number(body.ttlMinutes) || 30)); state.messageExpiresAt = state.message ? new Date(Date.now() + ttl * 60000).toISOString() : null; }
           else if (action === 'clearMessage') { state.message = ''; state.messageExpiresAt = null; }
+          else if (action === 'outfit') {
+            // body.outfit: an outfit id from outfits.json, or "none" for plain Snoopy.
+            // body.until: "today" (to midnight, room time) or "tomorrow" (to midnight tomorrow); otherwise ttlMinutes (1 minute to 7 days).
+            const id = String(body.outfit || '');
+            const choice = id === 'none' ? { id: 'none', label: 'No outfit' } : pushableOutfits().find(o => o.id === id);
+            if (!choice) return sendJson(res, 400, { error: 'Unknown outfit, or its picture is not on the server yet.' });
+            const now = Date.now();
+            let until;
+            if (body.until === 'today') until = endOfDay(roomById.get(roomId).timeZone, now);
+            else if (body.until === 'tomorrow') until = endOfDay(roomById.get(roomId).timeZone, now, 1);
+            else {
+              const minutes = Number(body.ttlMinutes);
+              if (!Number.isFinite(minutes) || minutes < 1 || minutes > 10080) return sendJson(res, 400, { error: 'Pick how long: 1 minute to 7 days, or until the end of today.' });
+              until = now + Math.round(minutes) * 60000;
+            }
+            state.outfit = choice.id; state.outfitLabel = choice.label; state.outfitUntil = new Date(until).toISOString();
+          }
+          else if (action === 'clearOutfit') { state.outfit = null; state.outfitLabel = ''; state.outfitUntil = null; }
           else if (action === 'displayOn') state.displayEnabled = true;
           else if (action === 'displayOff') state.displayEnabled = false;
           else if (action !== 'refresh') return sendJson(res, 400, { error: 'Unsupported control action.' });
@@ -418,7 +460,7 @@ export function createAppServer(options = {}) {
   });
 
   server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
-  server.appState = { config, calendars, tablets, controls, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
+  server.appState = { config, calendars, tablets, controls, liveControl, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {
