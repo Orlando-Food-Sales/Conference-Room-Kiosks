@@ -25,7 +25,7 @@
 #   APP_DIR       /opt/m365-room-display
 #   REPO_URL      https://github.com/Orlando-Food-Sales/Conference-Room-Kiosks.git
 #   SERVICE       m365-room-display
-#   BACKUP_DIR    $HOME/deploy-backups        KEEP_BACKUPS  5
+#   BACKUP_DIR    $HOME/deploy-backups        KEEP_BACKUPS  2
 #   HEALTH_URL    http://127.0.0.1:3000/healthz
 #   RESTART_CMD   sudo systemctl restart $SERVICE      (the only step that needs sudo and your password)
 #   SMOKE_CMD     bash $APP_DIR/scripts/smoke-test.sh  (with BASE_URL set from HEALTH_URL)
@@ -35,7 +35,7 @@ APP_DIR=${APP_DIR:-/opt/m365-room-display}
 REPO_URL=${REPO_URL:-https://github.com/Orlando-Food-Sales/Conference-Room-Kiosks.git}
 SERVICE=${SERVICE:-m365-room-display}
 BACKUP_DIR=${BACKUP_DIR:-$HOME/deploy-backups}
-KEEP_BACKUPS=${KEEP_BACKUPS:-5}
+KEEP_BACKUPS=${KEEP_BACKUPS:-2}
 HEALTH_URL=${HEALTH_URL:-http://127.0.0.1:3000/healthz}
 RESTART_CMD=${RESTART_CMD:-sudo systemctl restart $SERVICE}
 BASE_URL=${HEALTH_URL%/healthz}
