@@ -1,9 +1,9 @@
 .env.example	3733 bytes
 .gitignore	85 bytes
-CHANGELOG.md	20783 bytes
+CHANGELOG.md	21426 bytes
 DEPLOY-CHECKLIST.md	8891 bytes
-INSTALL-UBUNTU.md	21454 bytes
-README.md	8377 bytes
+INSTALL-UBUNTU.md	21912 bytes
+README.md	8597 bytes
 RELEASE_MANIFEST.md	1658 bytes
 REPO-FILE-MANIFEST.txt	329 bytes
 SECURITY.md	2423 bytes
@@ -87,7 +87,7 @@ scripts/smoke-test.sh	1721 bytes
 scripts/update-manifests.sh	1003 bytes
 snippets/app.js-meeting-row.js	935 bytes
 snippets/styles-single-line.css	1576 bytes
-src/celebrations.js	9096 bytes
+src/celebrations.js	9873 bytes
 src/config.js	10742 bytes
 src/demo-calendar.js	1158 bytes
 src/graph-calendar.js	4465 bytes
@@ -95,7 +95,7 @@ src/server.js	34745 bytes
 src/subscription-manager.js	302 bytes
 src/teams-alerts.js	9082 bytes
 src/weather.js	14798 bytes
-test/celebrations.test.js	9661 bytes
+test/celebrations.test.js	13053 bytes
 test/config.test.js	8505 bytes
 test/dashboard-page.test.js	2743 bytes
 test/outfits.test.js	17079 bytes

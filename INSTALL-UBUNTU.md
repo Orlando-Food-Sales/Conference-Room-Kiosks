@@ -190,6 +190,8 @@ Weather comes from the US National Weather Service (real readings from the neare
 
 Birthdays and work anniversaries come from a shared Microsoft 365 mailbox. Set `BIRTHDAY_CALENDAR_MAILBOX` to its address; leave it empty to turn the feature off. The app registration needs `Calendars.Read` for that mailbox as well (include it in the Application RBAC scope). Only event titles containing "birthday", "b'day" or "anniversary" are shown, so PTO and holiday events in the same mailbox are ignored. Use `BIRTHDAY_CALENDAR_NAME` to read only calendars whose name contains some text.
 
+Work anniversaries are easiest as one all-day event per person that repeats every year, titled with the start year: "Jodi Andrade - Work Anniversary (since 2025)" (also understood: "hired 2025", "started 2025", "joined 2025"). The display counts the years for the day shown, never on the hire day itself. A written count ("5 Year Work Anniversary") still works for one-off entries. Mark them as Free with no reminder so they do not block anyone's calendar.
+
 The same mailbox also marks company holidays. Create an all-day event whose title starts with "Holiday" (for example "Holiday - Christmas", or "Holiday-Thanksgiving" spanning two days). On those days every display shows "Closed" with the holiday name and hides booking. If `BIRTHDAY_CALENDAR_NAME` is set, the holiday events must be in a calendar that matches it.
 
 Then:

@@ -48,7 +48,9 @@ All settings are environment variables; see `.env.example`.
 - Weather: `WEATHER_ENABLED`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` (one location for all rooms), `WEATHER_SOURCE` (auto, nws, open-meteo), `WEATHER_CONTACT`, `WEATHER_ALERTS` (official warnings, default on)
 - Birthdays: `BIRTHDAY_CALENDAR_MAILBOX`, `BIRTHDAY_CALENDAR_NAME`, `BIRTHDAY_CALENDAR_ID`,
   `BIRTHDAY_NAME_STYLE`, `BIRTHDAY_TIME_ZONE`. Only titles containing "birthday", "b'day" or
-  "anniversary" are used; PTO and holidays on the same calendar are ignored.
+  "anniversary" are used; PTO and holidays on the same calendar are ignored. A yearly anniversary can carry the start
+  year instead of a count, "Jodi Andrade - Work Anniversary (since 2025)", and the display works out the years
+  ("Happy 1-year work anniversary, Jodi!" in 2026, 2-year in 2027).
 - Per room, in `rooms.json`: `allowQuickBooking`, and `showCelebrations` (set `false` for
   client-facing rooms).
 

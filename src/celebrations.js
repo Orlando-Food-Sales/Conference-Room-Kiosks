@@ -4,16 +4,22 @@
 
 const NOISE = /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu;       // emoji
 
-export function parseCelebration(subject, nameStyle = 'first') {
+// onDate (YYYY-MM-DD, the day the entry is for) lets a yearly entry carry the start year instead of a count:
+// "Jodi Andrade - Work Anniversary (since 2025)" is a 1-year anniversary in 2026, 2 years in 2027, and so on.
+export function parseCelebration(subject, nameStyle = 'first', onDate = '') {
   const raw = String(subject || '').replace(NOISE, ' ').trim();
   if (!raw) return null;
   // Only titles that say birthday or anniversary count. PTO and anything else on the calendar is ignored.
   const kind = /anniversar|anniv\b/i.test(raw) ? 'anniversary' : (/birthday|\bb['\u2019]?-?day\b/i.test(raw) ? 'birthday' : null);
   if (!kind) return null;
   const yearsMatch = raw.match(/(\d{1,2})\s*[- ]?\s*(?:year|yr)s?/i) || raw.match(/\((\d{1,2})\)/);
-  const years = kind === 'anniversary' && yearsMatch ? Number(yearsMatch[1]) : null;
+  let years = kind === 'anniversary' && yearsMatch ? Number(yearsMatch[1]) : null;
+  const since = raw.match(/\b(?:since|hired|started|joined)\s*(?:in\s*)?((?:19|20)\d\d)\b/i);
+  const onYear = Number(String(onDate).slice(0, 4));
+  if (kind === 'anniversary' && since && onYear && onYear - Number(since[1]) >= 1 && onYear - Number(since[1]) <= 70) years = onYear - Number(since[1]);
   let name = raw
     .replace(/\([^)]*\)/g, ' ')
+    .replace(/\b(?:since|hired|started|joined)\s*(?:in\s*)?(?:19|20)\d\d\b/gi, ' ')
     .replace(/\d{1,2}\s*[- ]?\s*(?:year|yr)s?/gi, ' ')
     .replace(/\bb['\u2019]?-?day\b/gi, ' ')
     .replace(/\b(?:happy|work|birthday|anniversary|anniv)\b/gi, ' ')
@@ -173,9 +179,10 @@ export class CelebrationService {
     for (const d of days) {
       for (const event of live) {
         if (!appliesOn(event, d)) continue;
-        const entry = parseCelebration(event.subject, b.nameStyle);
+        const entry = parseCelebration(event.subject, b.nameStyle, d);
         if (!entry) continue;
-        const key = `${d}:${entry.kind}:${entry.name.toLowerCase()}`;
+        // The same person twice (for example on two calendars) shows once; two people who share a first name both show.
+        const key = `${d}:${entry.kind}:${parseCelebration(event.subject, 'full', d).name.toLowerCase()}`;
         if (seen.has(key)) continue;
         seen.add(key);
         out.push(d === date ? entry : { ...entry, day: weekdayName(d) });

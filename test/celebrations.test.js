@@ -17,6 +17,17 @@ test('reads birthdays and anniversaries from calendar titles', () => {
   assert.deepEqual(read('Sam Lee \u2013 5 Year Work Anniversary'), { kind: 'anniversary', name: 'Sam', years: 5 });
   assert.deepEqual(read('Maria (3) Anniversary'), { kind: 'anniversary', name: 'Maria', years: 3 });
   assert.equal(read('Jane Smith - Birthday', 'full').name, 'Jane Smith');
+  // Yearly entries carry the start year, and the count is worked out for the day shown.
+  const on = (title, date, style) => parseCelebration(title, style, date);
+  assert.deepEqual(on('Jodi Andrade - Work Anniversary (since 2025)', '2026-11-17'), { kind: 'anniversary', name: 'Jodi', years: 1 });
+  assert.deepEqual(on('Jodi Andrade - Work Anniversary (since 2025)', '2030-11-17'), { kind: 'anniversary', name: 'Jodi', years: 5 });
+  assert.deepEqual(on('Fred Mortati - Work Anniversary (since 1988)', '2027-07-05', 'full'), { kind: 'anniversary', name: 'Fred Mortati', years: 39 });
+  assert.deepEqual(on('Mabel De Vera - Work Anniversary (since 2007)', '2026-11-01', 'full'), { kind: 'anniversary', name: 'Mabel De Vera', years: 19 });
+  assert.deepEqual(on('Hermes Jimenez Jr - Work Anniversary (since 2026)', '2027-03-04', 'full'), { kind: 'anniversary', name: 'Hermes Jimenez Jr', years: 1 });
+  assert.equal(on('Aja Tweitmann - Work Anniversary (since 2026)', '2026-11-09').years, null, 'the hire day itself is not an anniversary');
+  assert.equal(on('Jodi Andrade - Work Anniversary (since 2025)', '').years, null, 'no date, no count');
+  assert.equal(on('Ronda Birthday (since 1990)', '2026-08-07').years, null, 'birthdays never get a count');
+  assert.equal(on('Sam Lee - 5 Year Work Anniversary', '2030-01-01').years, 5, 'a written count still wins when there is no start year');
 });
 
 test('ignores PTO, holidays and anything that is not a birthday or anniversary', () => {
@@ -162,4 +173,38 @@ test('is quiet when no mailbox is set, when Graph fails, and between refreshes',
   const requests = cached.fetchImpl.calls.length;
   await cached.get(noon('2026-11-10'));
   assert.equal(cached.fetchImpl.calls.length, requests, 'the second call the same day reuses the answer');
+});
+
+test('yearly work anniversaries from the PTO calendar: counted from the start year, weekend ones shown on Friday', async () => {
+  // As created in Outlook: one all-day yearly series per person; calendarView returns this year's occurrence.
+  const calendars = {
+    Calendar: [
+      allDay('Jodi Andrade - Work Anniversary (since 2025)', '2026-11-17', '2026-11-18'),
+      allDay('Rafal Cichon - Work Anniversary (since 2025)', '2026-11-17', '2026-11-18'),
+      allDay('Beatrice - PTO', '2026-11-17', '2026-11-18'),
+      allDay('Christine Cucinotta - Work Anniversary (since 2022)', '2026-11-28', '2026-11-29'),   // Saturday
+      allDay('Susan Moffa - Work Anniversary (since 2021)', '2026-11-29', '2026-11-30')            // Sunday
+    ]
+  };
+  const tuesday = await service(calendars).get(noon('2026-11-17'));
+  assert.deepEqual(tuesday.celebrations, [{ kind: 'anniversary', name: 'Jodi', years: 1 }, { kind: 'anniversary', name: 'Rafal', years: 1 }]);
+  const friday = await service(calendars).get(noon('2026-11-27'));
+  assert.deepEqual(friday.celebrations, [{ kind: 'anniversary', name: 'Christine', years: 4, day: 'Saturday' }, { kind: 'anniversary', name: 'Susan', years: 5, day: 'Sunday' }]);
+});
+
+test('two people with the same first name on the same day both show; the same person twice shows once', async () => {
+  const calendars = {
+    Calendar: [
+      allDay('Alexandra Mortati - Work Anniversary (since 2019)', '2027-04-29', '2027-04-30'),
+      allDay('Alexandra Figliuolo - Work Anniversary (since 2023)', '2027-04-29', '2027-04-30'),
+      allDay('Jane Smith - Birthday', '2027-04-29', '2027-04-30')
+    ],
+    Birthdays: [allDay('Jane Smith Birthday', '2027-04-29', '2027-04-30')]
+  };
+  const result = await service(calendars).get(noon('2027-04-29'));
+  assert.deepEqual(result.celebrations, [
+    { kind: 'anniversary', name: 'Alexandra', years: 8 },
+    { kind: 'anniversary', name: 'Alexandra', years: 4 },
+    { kind: 'birthday', name: 'Jane', years: null }
+  ]);
 });
