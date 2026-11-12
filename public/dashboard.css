@@ -60,3 +60,11 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .outfit-push label{display:grid;gap:.3rem;color:var(--muted);font-size:.85rem;flex:1 1 140px;min-width:0}
 .outfit-push label:first-of-type{flex-basis:100%}
 .outfit-push select{width:100%;max-width:100%;min-width:0;text-overflow:ellipsis}
+.hidden{display:none!important}
+.signin,.button-link{display:inline-flex;align-items:center;min-height:44px;padding:.7rem 1rem;border-radius:10px;font-weight:800;text-decoration:none}
+.signin{background:var(--accent);color:var(--on-accent);flex:1 1 100%;justify-content:center}
+.signin:hover{filter:brightness(1.08)}
+.button-link{border:1px solid var(--line);color:var(--text);margin-right:.5rem}
+.button-link:hover{border-color:var(--accent);color:var(--accent)}
+.account{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin:0 0 1rem;color:var(--muted)}
+.account button{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:700}

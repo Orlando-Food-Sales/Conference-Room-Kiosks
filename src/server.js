@@ -10,6 +10,7 @@ import { SubscriptionManager } from './subscription-manager.js';
 import { WeatherService } from './weather.js';
 import { CelebrationService } from './celebrations.js';
 import { TeamsAlerts } from './teams-alerts.js';
+import { DashboardSignIn, SignInError, signInProblemPage } from './dashboard-signin.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -110,6 +111,7 @@ export function createAppServer(options = {}) {
   const weather = options.weather || new WeatherService(config, options.fetchImpl || fetch);
   const teams = options.teamsAlerts || new TeamsAlerts(config.teamsAlerts, options.fetchImpl || fetch);
   const celebrations = options.celebrations || new CelebrationService(config, tokenProvider, options.fetchImpl || fetch);
+  const signIn = options.dashboardSignIn || new DashboardSignIn(config.dashboardSignIn, options.fetchImpl || fetch);
   const sseClients = new Set();
   const tablets = new Map();
   const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, outfit: null, outfitLabel: '', outfitUntil: null, revision: 0 }]));
@@ -328,9 +330,24 @@ export function createAppServer(options = {}) {
     return tablet;
   }
 
-  function isAdmin(req) {
+  // Who is calling the admin API: the administrator token (the backup, also used by the tablet's message panel)
+  // or a Microsoft sign-in session cookie. null if neither.
+  function adminFrom(req) {
     const bearer = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    return safeEqual(bearer, config.adminToken);
+    if (config.adminToken && safeEqual(bearer, config.adminToken)) return { via: 'token' };
+    const session = signIn.sessionFor(req.headers.cookie);
+    return session ? { via: 'session', session } : null;
+  }
+  function isAdmin(req) { return Boolean(adminFrom(req)); }
+  // A browser sends the session cookie by itself, so a change made with it must come from the dashboard's own page:
+  // JSON (a form on another site cannot send that without permission) and, when the browser says, the same origin.
+  function sameOriginJson(req) { return /^application\/json\b/i.test(String(req.headers['content-type'] || '')) && sameOriginPost(req); }
+  function sameOriginPost(req) {
+    const site = req.headers['sec-fetch-site'];
+    if (site && site !== 'same-origin') return false;
+    const origin = req.headers.origin;
+    if (origin) { try { return new URL(origin).host === req.headers.host; } catch { return false; } }
+    return true;
   }
 
   const server = http.createServer(async (req, res) => {
@@ -400,9 +417,42 @@ export function createAppServer(options = {}) {
       }
       if (url.pathname === '/api/notifications' && url.searchParams.has('validationToken')) return sendText(res, 200, url.searchParams.get('validationToken'));
       if (req.method === 'POST' && url.pathname === '/api/notifications') { subscriptions.processNotifications(((await readJson(req, 256000)).value || []).filter(value => !config.graphClientState || value.clientState === config.graphClientState)); return sendText(res, 202, 'Accepted'); }
+      // Microsoft sign-in for the dashboard (off unless DASHBOARD_SIGNIN_* is set; the administrator token always works too).
+      if (req.method === 'GET' && url.pathname === '/api/auth/me') {
+        const who = adminFrom(req);
+        return sendJson(res, 200, { signInEnabled: signIn.enabled, tokenEnabled: Boolean(config.adminToken), signedIn: who?.via === 'session', name: who?.session?.name || '', email: who?.session?.email || '', expiresAt: who?.session ? new Date(who.session.expires).toISOString() : null });
+      }
+      if (req.method === 'GET' && url.pathname === '/auth/login') {
+        if (!signIn.enabled) return sendJson(res, 404, { error: 'Microsoft sign-in is not set up on this server.' });
+        const { location, setCookie } = signIn.start();
+        securityHeaders(res);
+        res.writeHead(302, { location, 'set-cookie': setCookie });
+        return res.end();
+      }
+      if (req.method === 'GET' && url.pathname === '/auth/callback') {
+        try {
+          const { session, setCookies } = await signIn.finish(url.searchParams, req.headers.cookie);
+          logger.log?.(`Dashboard sign-in: ${session.email}`);
+          securityHeaders(res);
+          res.writeHead(302, { location: '/dashboard', 'set-cookie': setCookies });
+          return res.end();
+        } catch (error) {
+          if (!(error instanceof SignInError)) throw error;
+          logger.warn?.(`Dashboard sign-in refused: ${error.message}`);
+          return sendText(res, error.status, signInProblemPage(error.message), 'text/html; charset=utf-8');
+        }
+      }
+      if (req.method === 'POST' && url.pathname === '/auth/logout') {
+        if (!sameOriginPost(req)) return sendJson(res, 403, { error: 'Sign out from the dashboard page.' });
+        securityHeaders(res);
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'set-cookie': signIn.logout(req.headers.cookie) });
+        return res.end(JSON.stringify({ ok: true }));
+      }
       if (url.pathname.startsWith('/api/admin/')) {
-        if (!config.adminToken) return sendJson(res, 503, { error: 'Dashboard controls are disabled until ADMIN_TOKEN is configured.' });
-        if (!isAdmin(req)) return sendJson(res, 401, { error: 'A valid dashboard token is required.' });
+        if (!config.adminToken && !signIn.enabled) return sendJson(res, 503, { error: 'Dashboard controls are disabled until ADMIN_TOKEN (or Microsoft sign-in) is configured.' });
+        const who = adminFrom(req);
+        if (!who) return sendJson(res, 401, { error: signIn.enabled ? 'Please sign in with Microsoft (or use the administrator token).' : 'A valid dashboard token is required.' });
+        if (who.via === 'session' && req.method !== 'GET' && !sameOriginJson(req)) return sendJson(res, 403, { error: 'Changes must come from the dashboard page.' });
         if (req.method === 'GET' && url.pathname === '/api/admin/overview') {
           const cutoff = Date.now() - config.tabletOfflineSeconds * 1000;
           const window = roomWindow();
@@ -467,7 +517,7 @@ export function createAppServer(options = {}) {
   });
 
   server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
-  server.appState = { config, calendars, tablets, controls, liveControl, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
+  server.appState = { config, calendars, tablets, controls, signIn, liveControl, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {

@@ -283,6 +283,28 @@ unset NEW_TOKEN
 sudo systemctl restart m365-room-display
 ```
 
+## 12c. Sign in to the dashboard with Microsoft (optional, needs HTTPS)
+
+People on an allowed list can sign in to the dashboard with their work account instead of typing the administrator token. The token keeps working as the backup (for example when Microsoft sign-in is down), and the tablet's message panel still uses it.
+
+Before you start: the dashboard must be reachable at an `https://` name (section 13). Microsoft does not allow plain `http://` sign-in addresses, except `http://localhost` for testing.
+
+1. **Create an app registration just for sign-in** (keep it separate from the room display's own app, so it has no calendar or Teams permissions): **Entra admin center > App registrations > New registration**, name `Room Display Control sign-in`, **Accounts in this organizational directory only**, redirect URI platform **Web**: `https://rooms.example.com/auth/callback`. Record the **Application (client) ID**.
+2. **Add a client secret** under **Certificates & secrets** and copy its value. Note its expiry date in your calendar.
+3. **Permissions**: the default delegated `User.Read` is enough (the dashboard only asks for `openid profile email`). No admin consent or application permissions are needed.
+4. **Optional, recommended**: in **Enterprise applications > Room Display Control sign-in > Properties** set **Assignment required** to **Yes** and assign the same people under **Users and groups**. Microsoft then refuses everyone else before they reach the server (the server checks the list too).
+5. **Configure the server** in `/opt/m365-room-display/.env`:
+   ```ini
+   DASHBOARD_SIGNIN_CLIENT_ID=APPLICATION-CLIENT-ID
+   DASHBOARD_SIGNIN_CLIENT_SECRET=CLIENT-SECRET-VALUE
+   DASHBOARD_SIGNIN_REDIRECT_URI=https://rooms.example.com/auth/callback
+   # Optional; defaults to the TEAMS_ALERT_EMAILS people:
+   DASHBOARD_ADMIN_EMAILS=first.person@yourcompany.com,second.person@yourcompany.com
+   ```
+   Restart the service. The dashboard now shows **Sign in with Microsoft** above the backup token box.
+
+How it works: the standard OpenID Connect authorization code flow with PKCE. The server checks the one-time state (and that the answer comes back to the same browser), swaps the code for an ID token at Microsoft with the client secret, and checks the token's tenant, issuer, audience, nonce and expiry, then that the person's sign-in name or email is on the list. Sessions are a random ID in an `HttpOnly`, `SameSite=Lax`, `Secure` cookie, last `DASHBOARD_SESSION_HOURS` (default 8) and are kept in memory, so a restart signs everyone out. Changes made with a session must come from the dashboard page itself (JSON from the same origin). Sign-ins and refusals are written to the service log (`journalctl -u m365-room-display | grep "Dashboard sign-in"`).
+
 ## 12b. Teams alerts from a named bot (optional)
 Alerts (a tablet offline, a room calendar that cannot be read) can arrive as a Teams message from a bot with its own name, for example **Room Display Alerts**, sent to specific people. It is one-way: nobody can reply to it and it cannot read anyone's chats. Without this, alerts still appear on the dashboard and, if `ALERT_WEBHOOK_URL` is set, in a chat channel.
 
@@ -319,7 +341,7 @@ Notes:
 Keep the application on loopback port 3000 and terminate TLS at Nginx. Use your organization's certificate process or Certbot when the host has public DNS. After enabling HTTPS:
 
 - Redirect HTTP to HTTPS.
-- Set `PUBLIC_BASE_URL=https://rooms.example.com` if Graph webhooks are implemented.
+- Set `PUBLIC_BASE_URL=https://rooms.example.com` (dashboard sign-in, section 12c, uses it for its sign-in address).
 - Re-run the smoke test against the HTTPS URL.
 - Do not expose port 3000 through the firewall.
 

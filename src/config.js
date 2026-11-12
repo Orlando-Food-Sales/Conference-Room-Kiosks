@@ -131,6 +131,30 @@ function loadTeamsAlerts(env, tenantId) {
   return { enabled: true, appId, appSecret, tenantId: botTenant, recipients: [...new Set(emails)], serviceUrl, catalogId };
 }
 
+// Optional "Sign in with Microsoft" for the dashboard (see dashboard-signin.js). Off unless the client ID and secret are set.
+// Who may sign in: DASHBOARD_ADMIN_EMAILS, or by default the people who get the Teams alerts.
+function loadDashboardSignIn(env, tenantId, teamsRecipients, publicBaseUrl) {
+  const clientId = String(env.DASHBOARD_SIGNIN_CLIENT_ID || '').trim();
+  const clientSecret = String(env.DASHBOARD_SIGNIN_CLIENT_SECRET || '').trim();
+  if (!clientId && !clientSecret) return { enabled: false };
+  if (!clientId || !clientSecret) throw new Error('Dashboard sign-in needs DASHBOARD_SIGNIN_CLIENT_ID and DASHBOARD_SIGNIN_CLIENT_SECRET together (or neither).');
+  if (!GUID.test(clientId)) throw new Error('DASHBOARD_SIGNIN_CLIENT_ID must be the sign-in app registration\'s application (client) ID, a GUID.');
+  const signInTenant = String(env.DASHBOARD_SIGNIN_TENANT_ID || '').trim() || tenantId;
+  if (!GUID.test(signInTenant)) throw new Error('Dashboard sign-in needs the directory (tenant) ID as a GUID: set DASHBOARD_SIGNIN_TENANT_ID or TENANT_ID.');
+  const redirectUri = String(env.DASHBOARD_SIGNIN_REDIRECT_URI || '').trim() || (publicBaseUrl ? `${publicBaseUrl}/auth/callback` : '');
+  let url;
+  try { url = new URL(redirectUri); } catch { throw new Error('Dashboard sign-in needs DASHBOARD_SIGNIN_REDIRECT_URI (or PUBLIC_BASE_URL), for example https://rooms.example.com/auth/callback.'); }
+  const local = url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  if (url.protocol !== 'https:' && !local) throw new Error('DASHBOARD_SIGNIN_REDIRECT_URI must use https:// (Microsoft only allows plain http:// for localhost).');
+  if (url.pathname !== '/auth/callback' || url.search || url.hash) throw new Error('DASHBOARD_SIGNIN_REDIRECT_URI must end in /auth/callback, for example https://rooms.example.com/auth/callback.');
+  const listed = String(env.DASHBOARD_ADMIN_EMAILS || '').split(/[,;\s]+/).map(e => e.trim().toLowerCase()).filter(Boolean);
+  const allowedEmails = [...new Set(listed.length ? listed : teamsRecipients)];
+  if (!allowedEmails.length) throw new Error('Dashboard sign-in needs someone who may sign in: set DASHBOARD_ADMIN_EMAILS (or TEAMS_ALERT_EMAILS).');
+  for (const email of allowedEmails) if (!EMAIL.test(email)) throw new Error(`DASHBOARD_ADMIN_EMAILS has an invalid address: ${email}`);
+  if (allowedEmails.length > 50) throw new Error('DASHBOARD_ADMIN_EMAILS can list at most 50 people.');
+  return { enabled: true, clientId, clientSecret, tenantId: signInTenant, redirectUri: url.href, allowedEmails, allowedFrom: listed.length ? 'DASHBOARD_ADMIN_EMAILS' : 'TEAMS_ALERT_EMAILS', sessionHours: integerValue(env.DASHBOARD_SESSION_HOURS, 8, 1, 24) };
+}
+
 export function loadConfig(env = process.env, cwd = process.cwd()) {
   const demoMode = booleanValue(env.DEMO_MODE, false);
   const config = {
@@ -179,6 +203,7 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     rooms: loadRooms(env, cwd)
   };
   config.teamsAlerts = loadTeamsAlerts(env, config.tenantId);
+  config.dashboardSignIn = loadDashboardSignIn(env, config.tenantId, config.teamsAlerts.recipients, config.publicBaseUrl);
   if (config.alertWebhookUrl && !/^https:\/\//i.test(config.alertWebhookUrl)) throw new Error('ALERT_WEBHOOK_URL must start with https://');
   const birthdayZone = String(env.BIRTHDAY_TIME_ZONE || '').trim() || config.rooms[0].timeZone;
   try { new Intl.DateTimeFormat('en-US', { timeZone: birthdayZone }).format(); }
