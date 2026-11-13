@@ -4,8 +4,8 @@ Each outfit is a full sprite sheet in this folder: 8 columns, 192x208 cells, tra
 
 - Sheets are 1536x2288 (11 rows, with the look-around animation). Older 1536x1872 sheets (9 rows) also work, but Snoopy skips look-around while wearing one. `"rows"` in `../outfits.json` must match (11 or 9).
 
-Ready: `party-hat`, `christmas`, `new-year`, `valentines`, `st-patricks`, `easter`, `july-4th`, `halloween`, `veterans-day`, `mlk-day`, `presidents-day`, `earth-day`, `memorial-day`, `juneteenth`, `labor-day`, `work-anniversary`, `birthday-work-anniversary`, `groundhog-day`, `lunar-new-year`, `april-fools`, `mothers-day`, `flag-day`, `fathers-day`, `national-dog-day`, `columbus-day`, `indigenous-peoples-day`, `diwali`, `hanukkah`, `autumn-thanksgiving`, `pajamas`, `storm`, `spring-raincoat`, `winter-snow`, `summer-sunshine`, `chef`.
-Weather outfits. Rules ready, art still to come (until a sheet is added here Snoopy keeps today's choice: the winter coat for ice and cold, nothing for fog, chilly days, or the Hawaiian shirt on hot days):
+Ready: `party-hat`, `christmas`, `new-year`, `valentines`, `st-patricks`, `easter`, `july-4th`, `halloween`, `veterans-day`, `mlk-day`, `presidents-day`, `earth-day`, `memorial-day`, `juneteenth`, `labor-day`, `work-anniversary`, `birthday-work-anniversary`, `ice`, `fog`, `winter-cold-coat`, `chilly`, `heatwave`, `groundhog-day`, `lunar-new-year`, `april-fools`, `mothers-day`, `flag-day`, `fathers-day`, `national-dog-day`, `columbus-day`, `indigenous-peoples-day`, `diwali`, `hanukkah`, `autumn-thanksgiving`, `pajamas`, `storm`, `spring-raincoat`, `winter-snow`, `summer-sunshine`, `chef`.
+Weather outfits (art by Codex, 11-row sheets, every row checked against the base Snoopy). If one of these sheets is ever removed, Snoopy falls back to the older choice: the winter coat for ice and cold, nothing for fog and chilly days, the Hawaiian shirt on hot days.
 
 | File | When | Outfit idea |
 |---|---|---|

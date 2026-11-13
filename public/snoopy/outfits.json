@@ -332,7 +332,7 @@
     },
     {
       "id": "winter-snow",
-      "label": "Winter coat (snow; also freezing rain or sleet until the ice outfit is drawn)",
+      "label": "Winter coat (snow)",
       "file": "outfits/winter-snow.png",
       "rows": 11,
       "weather": [
@@ -358,7 +358,7 @@
     },
     {
       "id": "winter-cold",
-      "label": "Winter coat (cold, feels 4 C / 39 F or less; used until the peacoat is drawn)",
+      "label": "Winter coat (cold, feels 4 C / 39 F or less; only if the peacoat sheet is missing)",
       "file": "outfits/winter-snow.png",
       "rows": 11,
       "maxTempC": 4
