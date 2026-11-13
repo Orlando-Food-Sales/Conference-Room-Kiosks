@@ -5,6 +5,18 @@ Each outfit is a full sprite sheet in this folder: 8 columns, 192x208 cells, tra
 - Sheets are 1536x2288 (11 rows, with the look-around animation). Older 1536x1872 sheets (9 rows) also work, but Snoopy skips look-around while wearing one. `"rows"` in `../outfits.json` must match (11 or 9).
 
 Ready: `party-hat`, `christmas`, `new-year`, `valentines`, `st-patricks`, `easter`, `july-4th`, `halloween`, `veterans-day`, `mlk-day`, `presidents-day`, `earth-day`, `memorial-day`, `juneteenth`, `labor-day`, `work-anniversary`, `birthday-work-anniversary`, `groundhog-day`, `lunar-new-year`, `april-fools`, `mothers-day`, `flag-day`, `fathers-day`, `national-dog-day`, `columbus-day`, `indigenous-peoples-day`, `diwali`, `hanukkah`, `autumn-thanksgiving`, `pajamas`, `storm`, `spring-raincoat`, `winter-snow`, `summer-sunshine`, `chef`.
+Weather outfits. Rules ready, art still to come (until a sheet is added here Snoopy keeps today's choice: the winter coat for ice and cold, nothing for fog, chilly days, or the Hawaiian shirt on hot days):
+
+| File | When | Outfit idea |
+|---|---|---|
+| `ice.png` | Freezing rain or sleet | Hooded insulated yellow jacket, knit mittens |
+| `fog.png` | Fog | Trench coat and flat cap |
+| `winter-cold-coat.png` | Dry and feels 4 C / 39 F or less (snow keeps `winter-snow.png`) | Wool peacoat, scarf, beanie |
+| `chilly.png` | Dry and feels above 4 C up to 12 C / 39 to 54 F | Light knit sweater |
+| `heatwave.png` | Clear, daytime, feels 29 C / 84 F or more (the Hawaiian shirt stays for 18 to 29 C) | Sun hat and light tank top, no sunglasses (they hide the eyes) |
+
+Weather order (first match wins): storm, rain, ice, snow, fog, cold, chilly, heatwave, warm and sunny. Cloudy and mild days (12 to 18 C) and hot nights stay plain Snoopy. A test checks what Snoopy wears for each case, both before and after the new sheets arrive.
+
 Holiday and celebration outfits (art by Codex, 11-row sheets, every row checked against the base Snoopy):
 
 | Outfit id / file | When | Outfit idea |

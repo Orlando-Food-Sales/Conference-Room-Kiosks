@@ -143,11 +143,44 @@ test('there is a single Easter rule, with no per-year entries left to run out', 
   assert.match(snoopyCode, /if \(o\.easter\) return easterRuleMatches\(/, 'the outfit chooser uses the Easter rule');
 });
 
-test('freezing rain and sleet get the winter coat, never the raincoat', () => {
-  const wears = condition => outfits.filter(o => o.weather && o.weather.includes(condition)).map(o => o.id);
-  assert.deepEqual(wears('ice'), ['winter-snow']);
-  assert.ok(wears('rain').includes('spring-raincoat'));
-  assert.ok(!wears('rain').includes('winter-snow'));
+test('each kind of weather gets its own outfit once the art is there, and today\'s outfit until then', () => {
+  const fn = snoopyCode.match(/function weatherRuleMatches\([\s\S]*?\n  \}/);
+  assert.ok(fn, 'weatherRuleMatches is in public/snoopy.js');
+  assert.match(snoopyCode, /var weathered = weatherRuleMatches\(o, weather, isDay, hasTemp \? feels : null\);/, 'the outfit chooser uses it');
+  const matches = new Function(`${fn[0]}\nreturn weatherRuleMatches;`)();
+  const weatherRules = outfits.filter(o => o.weather || o.minTempC !== undefined || o.maxTempC !== undefined);
+  // What Snoopy wears (first match wins), with only some sheets drawn.
+  const wears = (weather, feels, { isDay = true, drawn = null } = {}) =>
+    weatherRules.find(o => (!drawn || drawn.includes(o.id)) && matches(o, weather, isDay, feels))?.id || null;
+  const today = ['storm', 'spring-raincoat', 'winter-snow', 'winter-cold', 'summer-sunshine'];
+  const all = weatherRules.map(o => o.id);
+  const cases = [   // [weather, feels C, daytime, with today's art, with all five new sheets]
+    ['storm', 10, true, 'storm', 'storm'],
+    ['rain', 10, true, 'spring-raincoat', 'spring-raincoat'],
+    ['rain', 1, true, 'spring-raincoat', 'spring-raincoat'],
+    ['ice', -2, true, 'winter-snow', 'ice'],
+    ['snow', -5, true, 'winter-snow', 'winter-snow'],
+    ['fog', 8, true, null, 'fog'],
+    ['clear', 2, true, 'winter-cold', 'winter-cold-coat'],
+    ['clouds', 4, true, 'winter-cold', 'winter-cold-coat'],
+    ['clouds', 4.5, true, null, 'chilly'],
+    ['clear', 9, true, null, 'chilly'],
+    ['clouds', 12, false, null, 'chilly'],
+    ['clouds', 15, true, null, null],
+    ['clear', 22, true, 'summer-sunshine', 'summer-sunshine'],
+    ['clear', 29, true, 'summer-sunshine', 'heatwave'],
+    ['clear', 33, false, null, null],
+    ['clouds', 33, true, null, null],
+    ['clear', null, true, 'summer-sunshine', 'summer-sunshine'],
+    ['clouds', null, true, null, null]
+  ];
+  for (const [weather, feels, isDay, before, after] of cases) {
+    const label = `${weather}, feels ${feels ?? 'unknown'} C, ${isDay ? 'day' : 'night'}`;
+    assert.equal(wears(weather, feels, { isDay, drawn: today }), before, `${label}: today's art`);
+    assert.equal(wears(weather, feels, { isDay, drawn: all }), after, `${label}: with the new sheets`);
+  }
+  assert.equal(wears('ice', -2, { drawn: today.concat('fog') }), 'winter-snow', 'ice keeps the winter coat until its own sheet lands');
+  for (const id of ['ice', 'fog', 'winter-cold-coat', 'chilly', 'heatwave']) assert.equal(outfits.find(o => o.id === id).file, `outfits/${id}.png`);
 });
 
 test('the Easter dates offered on the preview page really fall inside or outside the Easter window', () => {

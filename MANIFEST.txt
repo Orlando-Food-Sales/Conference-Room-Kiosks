@@ -1,6 +1,6 @@
 .env.example	4539 bytes
 .gitignore	85 bytes
-CHANGELOG.md	23791 bytes
+CHANGELOG.md	24348 bytes
 DEPLOY-CHECKLIST.md	8891 bytes
 INSTALL-UBUNTU.md	24722 bytes
 README.md	8896 bytes
@@ -45,10 +45,10 @@ public/preview.js	7785 bytes
 public/snoopy-sleep-engine.js	6428 bytes
 public/snoopy-sleep.css	1315 bytes
 public/snoopy-sleep.js	6006 bytes
-public/snoopy.js	17591 bytes
+public/snoopy.js	18007 bytes
 public/snoopy/README.md	4968 bytes
-public/snoopy/outfits.json	10167 bytes
-public/snoopy/outfits/README.md	5570 bytes
+public/snoopy/outfits.json	11387 bytes
+public/snoopy/outfits/README.md	6600 bytes
 public/snoopy/outfits/april-fools.png	2229621 bytes
 public/snoopy/outfits/autumn-thanksgiving.png	1807627 bytes
 public/snoopy/outfits/birthday-work-anniversary.png	1951565 bytes
@@ -113,7 +113,7 @@ test/celebrations.test.js	13053 bytes
 test/config.test.js	8505 bytes
 test/dashboard-page.test.js	2743 bytes
 test/dashboard-signin.test.js	19349 bytes
-test/outfits.test.js	22986 bytes
+test/outfits.test.js	25239 bytes
 test/project.test.js	6488 bytes
 test/server.test.js	51970 bytes
 test/sleep-engine.test.mjs	4878 bytes

@@ -322,8 +322,17 @@
       ]
     },
     {
+      "id": "ice",
+      "label": "Insulated hooded jacket and mittens (freezing rain or sleet)",
+      "file": "outfits/ice.png",
+      "rows": 11,
+      "weather": [
+        "ice"
+      ]
+    },
+    {
       "id": "winter-snow",
-      "label": "Winter coat (snow, freezing rain or sleet)",
+      "label": "Winter coat (snow; also freezing rain or sleet until the ice outfit is drawn)",
       "file": "outfits/winter-snow.png",
       "rows": 11,
       "weather": [
@@ -332,11 +341,47 @@
       ]
     },
     {
+      "id": "fog",
+      "label": "Trench coat and flat cap (fog)",
+      "file": "outfits/fog.png",
+      "rows": 11,
+      "weather": [
+        "fog"
+      ]
+    },
+    {
+      "id": "winter-cold-coat",
+      "label": "Wool peacoat, scarf and beanie (dry and cold, feels 4 C / 39 F or less)",
+      "file": "outfits/winter-cold-coat.png",
+      "rows": 11,
+      "maxTempC": 4
+    },
+    {
       "id": "winter-cold",
-      "label": "Winter coat (cold, feels 4 C / 39 F or less)",
+      "label": "Winter coat (cold, feels 4 C / 39 F or less; used until the peacoat is drawn)",
       "file": "outfits/winter-snow.png",
       "rows": 11,
       "maxTempC": 4
+    },
+    {
+      "id": "chilly",
+      "label": "Light knit sweater (dry and chilly, feels above 4 C up to 12 C / 39 to 54 F)",
+      "file": "outfits/chilly.png",
+      "rows": 11,
+      "minTempC": 4,
+      "maxTempC": 12
+    },
+    {
+      "id": "heatwave",
+      "label": "Sun hat and tank top (clear and hot, feels 29 C / 84 F or more, daytime; never on an unknown temperature)",
+      "file": "outfits/heatwave.png",
+      "rows": 11,
+      "weather": [
+        "clear"
+      ],
+      "minTempC": 29,
+      "daytimeOnly": true,
+      "maxTempC": 60
     },
     {
       "id": "summer-sunshine",

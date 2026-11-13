@@ -231,6 +231,17 @@
   // Whether a date rule applies on a day: true or false, or null when the outfit has no date rule.
   //   from/to (MM-DD), easter, nthWeekday (+ before/after), dates (a list of YYYY-MM-DD, + before/after: holidays that follow
   //   a lunar calendar), hebrew (a Hebrew calendar date + days: Hanukkah is 25 Kislev for 8 days).
+  // Whether a weather rule applies: true or false, or null when the outfit has no weather or temperature rule.
+  // feels is the feels-like temperature in Celsius, or null when it is not known: an unknown temperature passes a
+  // minimum but never a maximum (so "cold" never shows on a guess).
+  function weatherRuleMatches(o, weather, isDay, feels) {
+    if (!o.weather && o.minTempC === undefined && o.maxTempC === undefined) return null;
+    if (o.weather && o.weather.indexOf(weather) === -1) return false;
+    if (o.daytimeOnly && !isDay) return false;
+    if (o.minTempC !== undefined && feels !== null && feels < o.minTempC) return false;
+    if (o.maxTempC !== undefined && (feels === null || feels > o.maxTempC)) return false;
+    return true;
+  }
   function dateRuleMatches(o, year, month, day) {
     var mmdd = ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
     if (o.from && o.to) return inRange(o.from, o.to, mmdd);
@@ -278,13 +289,8 @@
       // A birthday and/or a work anniversary is on the display today (app.js sets data-birthday and data-anniversary).
       if (o.event) return o.event === 'birthday+anniversary' ? (birthday && anniversary) : (o.event === 'birthday' ? birthday : (o.event === 'anniversary' && anniversary));
       if (o.closed) return closed && !o.weather;                           // the display says Closed (after hours, weekend, holiday)
-      if (o.weather || o.minTempC !== undefined || o.maxTempC !== undefined) {
-        if (o.weather && o.weather.indexOf(weather) === -1) return false;
-        if (o.daytimeOnly && !isDay) return false;
-        if (o.minTempC !== undefined && hasTemp && feels < o.minTempC) return false;      // unknown temperature passes a minimum
-        if (o.maxTempC !== undefined && (!hasTemp || feels > o.maxTempC)) return false;   // but never a maximum
-        return true;
-      }
+      var weathered = weatherRuleMatches(o, weather, isDay, hasTemp ? feels : null);
+      if (weathered !== null) return weathered;
       return false;
     })[0] || null;
   }
