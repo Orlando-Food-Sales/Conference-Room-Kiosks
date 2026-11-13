@@ -66,7 +66,7 @@
     q.set('closedsoon', $('closedsoon').value);
     q.set('warning', $('warning').value);
     if ($('kiosk').value) q.set('kiosk', $('kiosk').value);
-    return '/room/room?' + q;
+    return '/room/' + encodeURIComponent($('room').value || 'room') + '?' + q;
   }
 
   function fit() {
@@ -91,7 +91,7 @@
     fit();
   }
 
-  ['theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday', 'closedsoon', 'warning', 'kiosk', 'temp', 'day', 'date'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
+  ['room', 'theme', 'weather', 'state', 'screen', 'outfit', 'celebrate', 'quickbook', 'hours', 'display', 'message', 'holiday', 'closedsoon', 'warning', 'kiosk', 'temp', 'day', 'date'].forEach(function (id) { $(id).addEventListener('change', function () { stopTour(); update(); }); });
   window.addEventListener('resize', fit);
 
   // Tour: every animation x theme x weather x state. Animations are the slowest axis
@@ -135,5 +135,12 @@
       $('outfit').appendChild(option);
     });
   }).catch(function () {});
-  update();
+  // Rooms come from the server (front and back in production, "room" in demo mode). ?room=back picks one on load.
+  fetch('/api/rooms').then(function (r) { return r.json(); }).then(function (data) {
+    var pick = $('room'), wanted = new URLSearchParams(location.search).get('room');
+    pick.innerHTML = '';
+    (data.rooms || []).forEach(function (room) { var option = document.createElement('option'); option.value = room.id; option.textContent = room.name; pick.appendChild(option); });
+    if (wanted && (data.rooms || []).some(function (room) { return room.id === wanted; })) pick.value = wanted;
+    update();
+  }).catch(function () { $('room').innerHTML = '<option value="room">Conference Room</option>'; update(); });
 })();

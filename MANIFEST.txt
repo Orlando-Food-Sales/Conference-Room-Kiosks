@@ -1,6 +1,6 @@
 .env.example	4663 bytes
 .gitignore	92 bytes
-CHANGELOG.md	26737 bytes
+CHANGELOG.md	27173 bytes
 DEPLOY-CHECKLIST.md	8891 bytes
 INSTALL-UBUNTU.md	25489 bytes
 README.md	9761 bytes
@@ -20,7 +20,7 @@ deploy/teams-app/outline.png	388 bytes
 package-lock.json	263 bytes
 package.json	382 bytes
 patches/0001-single-line-upcoming-meetings.patch	3566 bytes
-public/app.js	31265 bytes
+public/app.js	31283 bytes
 public/apple-touch-icon.png	6688 bytes
 public/dashboard.css	6661 bytes
 public/dashboard.html	1718 bytes
@@ -40,8 +40,8 @@ public/logo/orlando-foods-white-400.png	11320 bytes
 public/logo/orlando-foods-white-600.png	17950 bytes
 public/logo/orlando-foods-white.png	29066 bytes
 public/preview.css	2238 bytes
-public/preview.html	9873 bytes
-public/preview.js	7785 bytes
+public/preview.html	10004 bytes
+public/preview.js	8558 bytes
 public/snoopy-sleep-engine.js	6428 bytes
 public/snoopy-sleep.css	1315 bytes
 public/snoopy-sleep.js	6006 bytes
@@ -127,7 +127,7 @@ test/sleep-engine.test.mjs	4878 bytes
 test/sleep-extras.test.mjs	7276 bytes
 test/sleep-page.test.js	7706 bytes
 test/snoopy-meetings.test.js	4231 bytes
-test/tablet-page.test.js	13538 bytes
+test/tablet-page.test.js	14290 bytes
 test/teams-alerts.test.js	11179 bytes
 test/weather.test.js	16533 bytes
 tools/apply_single_line_update.py	6931 bytes

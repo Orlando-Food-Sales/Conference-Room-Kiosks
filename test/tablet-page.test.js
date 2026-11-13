@@ -118,7 +118,7 @@ const options = id => [...previewHtml.match(new RegExp(`<select id="${id}">([\\s
 test('every control on the preview page is listened to and sent to the display', () => {
   const ids = [...previewHtml.matchAll(/<select id="([a-z]+)"/g)].map(m => m[1]);
   assert.ok(ids.length >= 17, 'the controls were found');
-  const listened = previewJs.match(/\[('theme'[^\]]*)\]\.forEach/)[1];
+  const listened = previewJs.match(/\[('room', 'theme'[^\]]*)\]\.forEach/)[1];
   const sent = previewJs.match(/function url\(\) \{[\s\S]*?\n  \}/)[0];
   for (const id of ids) {
     assert.ok(listened.includes(`'${id}'`), `${id} is listened to, so changing it updates the display`);
@@ -186,4 +186,12 @@ test('the refresh button and the dashboard\'s Refresh display really reload the 
   assert.match(reload[0], /catch \(_\) \{[\s\S]*initializeRoom\(state\.room\.id\)[\s\S]*return;/, 'with the server down it stays on the page and re-reads the meetings');
   assert.match(app, /\$\('refreshButton'\)\.addEventListener\('click', function \(\) \{ reloadPage\(\); \}\)/, 'the tablet button uses it');
   assert.match(app, /data\.detail\.action === 'refresh'\) await reloadPage\(\)/, 'the dashboard button uses it');
+});
+
+test('the preview shows a real room from the server, and picking a room never drops the preview settings', () => {
+  assert.match(previewHtml, /<label>Room\s*<select id="room">/, 'a Room choice on the preview page');
+  assert.match(previewJs, /fetch\('\/api\/rooms'\)/, 'filled from the server (front and back in production, "room" in demo mode)');
+  assert.match(previewJs, /return '\/room\/' \+ encodeURIComponent\(\$\('room'\)\.value \|\| 'room'\) \+ '\?' \+ q;/);
+  assert.doesNotMatch(previewJs, /'\/room\/room\?'/, 'no longer a fixed room that only the demo has');
+  assert.match(app, /history\.replaceState\(\{\}, '', room\.displayUrl \+ location\.search\);/, 'choosing a room from the picker keeps ?kiosk=1 and preview settings');
 });
