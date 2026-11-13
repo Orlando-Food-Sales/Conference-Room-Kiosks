@@ -82,21 +82,57 @@
     }, ANIMATIONS[name].ms);
   }
 
+  // The calm mood for the room's meetings at a moment, and which meeting is on (so a change can be greeted):
+  //   in a meeting: thinking ('working'); in its last 5 minutes (meetings over 10 minutes): 'waiting', time to wrap up
+  //   free: 'waiting' when a meeting starts within 5 minutes, 'review' for 3 minutes after one ended, else 'idle'
+  function meetingMood(events, now) {
+    var on = null, soon = false, justEnded = false;
+    (events || []).forEach(function (e) {
+      var from = new Date(e.start).getTime(), to = new Date(e.end).getTime();
+      if (from <= now && to > now && (!on || from > new Date(on.start).getTime())) on = e;   // the latest-starting one if two overlap
+      if (from > now && from - now <= 5 * 60000) soon = true;
+      if (to <= now && now - to <= 3 * 60000) justEnded = true;
+    });
+    if (on) {
+      var start = new Date(on.start).getTime(), end = new Date(on.end).getTime();
+      return { mood: end - start > 10 * 60000 && end - now <= 5 * 60000 ? 'waiting' : 'working', meeting: (on.id || '') + '|' + on.start };
+    }
+    return { mood: soon ? 'waiting' : (justEnded ? 'review' : 'idle'), meeting: '' };
+  }
+
   // Calm mood that follows the room.
   function baseMood() {
     var s = globalThis.state;
     var sync = document.getElementById('syncState');
-    if (sync && /unavailable/i.test(sync.textContent)) return 'failed';
+    if (sync && /unavailable|not responding/i.test(sync.textContent)) return 'failed';
     if (!s || !s.room) return 'idle';
-    var now = Date.now();
-    var events = s.events || [];
-    var busy = events.some(function (e) { return new Date(e.start).getTime() <= now && new Date(e.end).getTime() > now; });
-    if (busy) return 'working';
-    var soon = events.some(function (e) { var t = new Date(e.start).getTime(); return t > now && t - now <= 5 * 60000; });
-    if (soon) return 'waiting';
-    var justEnded = events.some(function (e) { var t = new Date(e.end).getTime(); return t <= now && now - t <= 3 * 60000; });
-    return justEnded ? 'review' : 'idle';
+    return meetingMood(s.events, Date.now()).mood;
   }
+
+  // A meeting starting gets a two-handed hello, a meeting ending (with nothing straight after) a goodbye wave.
+  // Not on the first look after the page loads, and not right after a booking from this tablet (that gets a jump).
+  var lastMeeting = null, skipGreetingUntil = 0;
+  function greet(now) {
+    var s = globalThis.state;
+    if (!s || !s.room) return false;
+    var meeting = meetingMood(s.events, now).meeting;
+    var before = lastMeeting;
+    lastMeeting = meeting;
+    if (before === null || before === meeting || reduceMotion) return false;
+    if (meeting && now < skipGreetingUntil) return false;
+    nextFlourishAt = now + 15000;
+    setX(x, 0);
+    start('waving', { repeat: meeting ? 2 : 1, then: function () { start(baseMood()); } });
+    return true;
+  }
+  // Booked from this tablet (app.js sends "room-booked"): a happy double jump.
+  document.addEventListener('room-booked', function () {
+    skipGreetingUntil = Date.now() + 90000;
+    if (forced || reduceMotion || sleepOwns()) return;
+    nextFlourishAt = Date.now() + 15000;
+    setX(x, 0);
+    start('jumping', { repeat: 2, then: function () { start(baseMood()); } });
+  });
 
   function walk() {
     if (globalThis.innerWidth <= 800) return start('idle');
@@ -132,6 +168,7 @@
   function tick() {
     if (forced || sleepOwns()) return;
     var now = Date.now();
+    if (greet(now)) return;                        // a meeting started or ended
     if (plan) return;                              // a one-shot is playing
     var mood = baseMood();
     if (mood !== name) start(mood);

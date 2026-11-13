@@ -469,7 +469,7 @@ test('the overview says where alerts go', async t => {
 test('alerts when a room calendar cannot be read for a while, and when it recovers', async t => {
   const teams = fakeTeams();
   const { state } = await withAlerts(t, { teamsAlerts: teams });
-  state.calendarProblems.set('front', { since: TUESDAY_3PM - 3 * 60000, error: 'Microsoft Graph request failed (401): token expired' });
+  state.calendarProblems.set('front', { since: TUESDAY_3PM - 3 * 60000, error: 'Microsoft Graph request failed (401): token expired', kind: 'permission' });
   await state.checkTablets(TUESDAY_3PM);
   assert.equal(state.alerts.length, 0, 'a short blip is not worth a message');
 
@@ -478,7 +478,7 @@ test('alerts when a room calendar cannot be read for a while, and when it recove
   const alert = state.alerts.find(a => /calendar cannot be read/.test(a.text));
   assert.ok(alert, 'alert after 10 minutes');
   assert.match(alert.text, /Front Conference Room.*\(Microsoft Graph request failed \(401\)/);
-  assert.match(alert.text, /app secret and permissions/);
+  assert.match(alert.text, /app secret \(CLIENT_SECRET, and whether it has expired\) and the app's permissions/);
   await state.checkTablets(TUESDAY_3PM + 60000);
   assert.equal(state.alerts.filter(a => /cannot be read/.test(a.text)).length, 1, 'only once');
 

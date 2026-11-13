@@ -384,6 +384,14 @@ To roll back, stop the service, extract the selected verified archive, restore i
 
 ## 16. Troubleshooting
 
+### "Microsoft 365 is not responding" on the tablets
+
+Microsoft 365 itself is failing (the server got 5xx answers, throttling or no answer). Nothing needs changing on the server: the tablets keep the last meetings they had and recover by themselves. Check https://status.cloud.microsoft or **Health > Service health** in the Microsoft 365 admin center. If the message says the display "is not allowed" instead, the client secret or the app's permissions need attention (see section 9).
+
+### Scheduled Snoopy outfits
+
+Pushed and scheduled outfits are saved in `/opt/m365-room-display/data/outfit-overrides.json` (`DATA_DIR` in the service environment moves it). Deploys never touch `data/` and it is not in Git. Deleting the file clears them all at the next restart.
+
 ### Service does not start
 
 ```bash

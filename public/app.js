@@ -24,7 +24,7 @@ var HAS_TOUCH = (navigator.maxTouchPoints || 0) > 1;   // wall tablets; the serv
 if (IS_KIOSK) document.documentElement.classList.add('kiosk');
 
 function roomIdFromLocation() { var match = location.pathname.match(/^\/room\/([a-z0-9-]+)\/?$/); return match ? match[1] : localStorage.getItem('selectedRoomId'); }
-async function api(url, options) { var response = await fetch(url, Object.assign({ headers: { 'content-type': 'application/json' } }, options || {})); var data = await response.json().catch(function () { return {}; }); if (!response.ok) throw new Error(data.error || ('Request failed: ' + response.status)); return data; }
+async function api(url, options) { var response = await fetch(url, Object.assign({ headers: { 'content-type': 'application/json' } }, options || {})); var data = await response.json().catch(function () { return {}; }); if (!response.ok) { var failure = new Error(data.error || ('Request failed: ' + response.status)); failure.reason = data.reason || ''; failure.status = response.status; throw failure; } return data; }
 function formatTime(value) { return new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', timeZone: state.room ? state.room.timeZone : undefined }).format(new Date(value)); }
 function formatRange(event) { return formatTime(event.start) + '–' + formatTime(event.end); }
 function updateClock() { if (!state.room) return; var now = new Date(); $('clock').textContent = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', timeZone: state.room.timeZone }).format(now); $('date').textContent = new Intl.DateTimeFormat([], { weekday: 'long', month: 'long', day: 'numeric', timeZone: state.room.timeZone }).format(now); }
@@ -37,7 +37,10 @@ function pushOutfit(control) {
   if (control.outfit && until > Date.now()) {
     root.setAttribute('data-outfit-until', String(until));
     root.setAttribute('data-outfit-override', control.outfit);
-    state.outfitTimer = setTimeout(function () { root.removeAttribute('data-outfit-override'); root.removeAttribute('data-outfit-until'); }, Math.min(until - Date.now() + 500, 2147483000));
+    state.outfitTimer = setTimeout(function () {
+      root.removeAttribute('data-outfit-override'); root.removeAttribute('data-outfit-until');
+      if (state.room) api('/api/config?room=' + encodeURIComponent(state.room.id)).then(function (data) { if (data.control) activeControl(data.control); }).catch(function () { });
+    }, Math.min(until - Date.now() + 500, 2147483000));
   } else { root.removeAttribute('data-outfit-override'); root.removeAttribute('data-outfit-until'); }
 }
 
@@ -47,13 +50,16 @@ function render() { if (!state.room) return; var now = Date.now(); var current =
 function previewEvents(events) {
   var mode = new URLSearchParams(location.search).get('preview');
   if (!mode) return events;
-  var t = Date.now(), m = 60000;
+  // Times are counted from the first page load, so a preview meeting really starts and ends (Snoopy reacts to that).
+  var t = state.previewStartedAt || (state.previewStartedAt = Date.now()), m = 60000;
   function ev(id, subject, from, to) { return { id: id, subject: subject, organizer: 'Demo Organizer', start: new Date(t + from * m).toISOString(), end: new Date(t + to * m).toISOString() }; }
   var later = [ev('p2', 'Project review', 90, 150), ev('p3', 'Design sync', 180, 210)];
   if (mode === 'busy') return [ev('p1', 'Quarterly planning', -20, 25), ev('p2', 'Project review', 60, 120)];
   if (mode === 'soon') return [ev('p1', 'Quarterly planning', 3, 63), ev('p2', 'Project review', 120, 180)];
   if (mode === 'ended') return [ev('p0', 'Team sync', -61, -1)].concat(later);
-  if (mode === 'error') return [];
+  if (mode === 'error' || mode === 'outage') return [];
+  if (mode === 'starting') return [ev('p1', 'Quarterly planning', 0.5, 45)].concat(later);           // starts 30 seconds after loading
+  if (mode === 'wrapup') return [ev('p1', 'Quarterly planning', -40, 3), ev('p2', 'Project review', 4, 60)];   // last minutes, next one right after
   if (mode === 'tomorrow') return [ev('p1', 'Planning meeting', 30 * 60, 31 * 60)];     // only a meeting on a later day
   return later;
 }
@@ -69,7 +75,25 @@ function fitRows() {
   });
 }
 window.addEventListener('resize', fitRows);
-async function loadEvents() { try { var data = await api('/api/events?room=' + encodeURIComponent(state.room.id)); state.events = data.events; state.events = previewEvents(state.events); $('syncState').textContent = new URLSearchParams(location.search).get('preview') === 'error' ? 'Calendar temporarily unavailable' : 'Updated ' + formatTime(data.generatedAt); render(); } catch (error) { $('syncState').textContent = 'Calendar temporarily unavailable'; showToast(error.message); } }
+async function loadEvents() {
+  var preview = new URLSearchParams(location.search).get('preview');
+  try {
+    var data = await api('/api/events?room=' + encodeURIComponent(state.room.id));
+    state.events = previewEvents(data.events);
+    state.lastGoodAt = data.generatedAt;
+    state.syncProblem = '';
+    $('syncState').textContent = preview === 'error' ? 'Calendar temporarily unavailable' : preview === 'outage' ? outageText() : 'Updated ' + formatTime(data.generatedAt);
+    render();
+  } catch (error) {
+    // The meetings already on screen stay. A message pops up once per problem, not on every refresh.
+    var kind = error.reason || 'other';
+    $('syncState').textContent = kind === 'microsoft-down' ? outageText() : 'Calendar temporarily unavailable';
+    if (state.syncProblem !== kind) showToast(error.message);
+    state.syncProblem = kind;
+  }
+}
+// "Microsoft 365 is not responding · showing meetings from 2:41 PM" (Snoopy looks for "not responding" too).
+function outageText() { return 'Microsoft 365 is not responding' + (state.lastGoodAt ? ' \u00b7 showing meetings from ' + formatTime(state.lastGoodAt) : ''); }
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH }) }); } catch (_) { } }
 function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await reloadPage(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
@@ -77,7 +101,7 @@ async function initializeRoom(roomId) { state.room = await api('/api/config?room
 
 $('reserveButton').addEventListener('click', function () { $('bookingPanel').classList.remove('hidden'); });
 $('cancelBooking').addEventListener('click', function () { $('bookingPanel').classList.add('hidden'); });
-$('bookingForm').addEventListener('submit', async function (event) { event.preventDefault(); $('bookingError').textContent = ''; var form = new FormData(event.currentTarget); var duration = Number(form.get('duration')); var start = new Date(Math.ceil(Date.now() / 300000) * 300000); try { await api('/api/bookings', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, subject: $('bookingSubject').value, start: start.toISOString(), end: new Date(start.getTime() + duration * 60000).toISOString() }) }); $('bookingPanel').classList.add('hidden'); showToast('Room reserved'); await loadEvents(); } catch (error) { $('bookingError').textContent = error.message; } });
+$('bookingForm').addEventListener('submit', async function (event) { event.preventDefault(); $('bookingError').textContent = ''; var form = new FormData(event.currentTarget); var duration = Number(form.get('duration')); var start = new Date(Math.ceil(Date.now() / 300000) * 300000); try { await api('/api/bookings', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, subject: $('bookingSubject').value, start: start.toISOString(), end: new Date(start.getTime() + duration * 60000).toISOString() }) }); $('bookingPanel').classList.add('hidden'); showToast('Room reserved'); document.dispatchEvent(new CustomEvent('room-booked')); await loadEvents(); } catch (error) { $('bookingError').textContent = error.message; } });
 setInterval(updateClock, 1000); setInterval(heartbeat, 45000); setInterval(render, 30000); document.addEventListener('visibilitychange', function () { if (!document.hidden && state.room) { heartbeat(); loadEvents(); } });
 var requestedRoom = roomIdFromLocation(); if (requestedRoom) initializeRoom(requestedRoom).catch(async function (error) { localStorage.removeItem('selectedRoomId'); showToast(error.message); await chooseRoom(); }); else chooseRoom().catch(function (error) { showToast(error.message); });
 
@@ -254,6 +278,7 @@ async function bookNow(minutes) {
   try {
     await api('/api/bookings', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, subject: 'Reserved', start: start.toISOString(), end: new Date(start.getTime() + minutes * 60000).toISOString() }) });
     showToast('Room reserved for ' + minutes + ' minutes');
+    document.dispatchEvent(new CustomEvent('room-booked'));
     await loadEvents();
   } catch (error) { showToast(error.message); }
   booking = false;

@@ -56,8 +56,8 @@ done
 
 say() { printf '\n== %s\n' "$*"; }
 die() { printf '\nSTOPPED: %s\n' "$*" >&2; exit 1; }
-# Files the deploy must never overwrite or remove: the server's own settings and room list.
-EXCLUDES=(--exclude .git --exclude .env --exclude config/rooms.json --exclude node_modules --exclude .DS_Store --exclude .agents --exclude teams-app-build)
+# Files the deploy must never overwrite or remove: the server's own settings, room list and saved data (data/: scheduled outfits).
+EXCLUDES=(--exclude .git --exclude .env --exclude config/rooms.json --exclude /data --exclude node_modules --exclude .DS_Store --exclude .agents --exclude teams-app-build)
 
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 health() { curl -fsS --max-time 5 "$HEALTH_URL" 2>/dev/null; }

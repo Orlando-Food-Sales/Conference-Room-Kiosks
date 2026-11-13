@@ -68,6 +68,28 @@ function safeEqual(value, expected) {
   return a.length === b.length && a.length > 0 && crypto.timingSafeEqual(a, b);
 }
 
+// What the tablet is told when Microsoft fails. Microsoft's own wording ("Bad Gateway", "UnknownError") means nothing
+// to someone at the door, so each kind of failure gets a plain sentence, plus a "reason" the tablet can act on.
+// The Teams / dashboard alert for a room calendar that cannot be read, by kind of failure.
+export function calendarProblemText(problem) {
+  if (problem.kind === 'microsoft-down') return `Microsoft 365 is not responding (${problem.error}), so the room calendar cannot be read. This is on Microsoft's side and nothing needs changing here: the display keeps showing the last meetings it had, and booking from the tablet fails until Microsoft recovers. Microsoft's status page: https://status.cloud.microsoft (or Health > Service health in the Microsoft 365 admin center).`;
+  if (problem.kind === 'permission') return `the room calendar cannot be read (${problem.error}). The display may be showing old meetings. Check the Microsoft 365 app secret (CLIENT_SECRET, and whether it has expired) and the app's permissions.`;
+  if (problem.kind === 'not-found') return `the room's mailbox was not found (${problem.error}). Check the room's email address in config/rooms.json.`;
+  return `the room calendar cannot be read (${problem.error}). The display may be showing old meetings.`;
+}
+
+export function failureAnswer(error, pathname = '') {
+  const booking = pathname === '/api/bookings';
+  if (error.kind === 'microsoft-down') return { status: 503, body: { reason: 'microsoft-down', error: booking
+    ? 'Microsoft 365 is not responding right now, so the room could not be booked. Please try again in a few minutes, or book it in Outlook.'
+    : 'Microsoft 365 is not responding right now. The display is showing the last meetings it had.' } };
+  if (error.kind === 'permission') return { status: 502, body: { reason: 'permission', error: booking
+    ? 'The room display is not allowed to book this room in Microsoft 365. Please tell IT.'
+    : 'The room display is not allowed to read this room\'s calendar in Microsoft 365. Please tell IT.' } };
+  if (error.kind === 'not-found') return { status: 502, body: { reason: 'not-found', error: 'This room\'s mailbox was not found in Microsoft 365. Please tell IT.' } };
+  return { status: error.status || 502, body: { error: error.status ? error.message : 'The room calendar is temporarily unavailable.' } };
+}
+
 function roomWindow() {
   const now = Date.now();
   return { start: new Date(now - 60 * 60 * 1000).toISOString(), end: new Date(now + 18 * 60 * 60 * 1000).toISOString() };
@@ -114,13 +136,71 @@ export function createAppServer(options = {}) {
   const signIn = options.dashboardSignIn || new DashboardSignIn(config.dashboardSignIn, options.fetchImpl || fetch);
   const sseClients = new Set();
   const tablets = new Map();
-  const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, outfit: null, outfitLabel: '', outfitUntil: null, revision: 0 }]));
+  const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, outfit: null, outfitLabel: '', outfitUntil: null, outfitSchedule: [], revision: 0 }]));
+  // Outfit pushes and scheduled outfits are saved in <dataDir>/outfit-overrides.json, so a restart or a deploy keeps them.
+  // (Messages and display on/off are not saved: they are meant to be short-lived.) No dataDir, nothing is saved (tests).
+  const MAX_SCHEDULED = 30;
+  const outfitFile = options.dataDir ? path.join(options.dataDir, 'outfit-overrides.json') : null;
+  function saveOutfits() {
+    if (!outfitFile) return;
+    const rooms = {};
+    for (const [id, s] of controls) rooms[id] = { push: s.outfit ? { outfit: s.outfit, label: s.outfitLabel, until: s.outfitUntil } : null, schedule: s.outfitSchedule };
+    try {
+      fs.mkdirSync(path.dirname(outfitFile), { recursive: true });
+      fs.writeFileSync(`${outfitFile}.tmp`, JSON.stringify({ savedAt: new Date().toISOString(), rooms }, null, 1));
+      fs.renameSync(`${outfitFile}.tmp`, outfitFile);                    // all or nothing, never a half-written file
+    } catch (error) { logger.error?.(`Could not save the outfit overrides: ${error.message}`); }
+  }
+  (function loadOutfits() {
+    if (!outfitFile || !fs.existsSync(outfitFile)) return;
+    try {
+      const saved = JSON.parse(fs.readFileSync(outfitFile, 'utf8')).rooms || {};
+      const now = Date.now();
+      for (const [id, s] of controls) {
+        const r = saved[id];
+        if (!r) continue;
+        if (r.push && typeof r.push.outfit === 'string' && Date.parse(r.push.until) > now) Object.assign(s, { outfit: r.push.outfit, outfitLabel: String(r.push.label || ''), outfitUntil: new Date(r.push.until).toISOString() });
+        s.outfitSchedule = (Array.isArray(r.schedule) ? r.schedule : [])
+          .filter(e => e && typeof e.outfit === 'string' && Date.parse(e.start) < Date.parse(e.end) && Date.parse(e.end) > now)
+          .slice(0, MAX_SCHEDULED)
+          .map(e => ({ id: String(e.id || crypto.randomBytes(6).toString('hex')), outfit: e.outfit, label: String(e.label || ''), start: new Date(e.start).toISOString(), end: new Date(e.end).toISOString() }));
+      }
+    } catch (error) { logger.error?.(`Could not read the saved outfit overrides (starting without them): ${error.message}`); }
+  })();
   // The control state as tablets and the dashboard should see it: an outfit override that has run out is dropped.
   function liveControl(roomId, ms = Date.now()) {
     const state = controls.get(roomId);
     if (state.outfit && (!state.outfitUntil || Date.parse(state.outfitUntil) <= ms)) { state.outfit = null; state.outfitLabel = ''; state.outfitUntil = null; }
     return state;
   }
+  // What tablets and the dashboard see: the control state with the outfit that applies right now. A push from the
+  // dashboard wins; otherwise a scheduled outfit whose time has come (the latest-starting one if several overlap).
+  // ms is the moment to look at (tests and the start/end check look ahead); only the real clock removes anything.
+  function effectiveControl(roomId, ms = Date.now()) {
+    const state = liveControl(roomId);
+    const kept = state.outfitSchedule.filter(e => Date.parse(e.end) > Date.now());
+    if (kept.length !== state.outfitSchedule.length) { state.outfitSchedule = kept; saveOutfits(); }
+    const pushed = Boolean(state.outfit) && Date.parse(state.outfitUntil) > ms;
+    const view = { ...state, outfitSchedule: state.outfitSchedule.map(e => ({ ...e })), outfitSource: pushed ? 'push' : null, outfitScheduleId: null };
+    if (!pushed) {
+      Object.assign(view, { outfit: null, outfitLabel: '', outfitUntil: null });
+      const current = state.outfitSchedule.filter(e => Date.parse(e.start) <= ms && Date.parse(e.end) > ms).sort((a, b) => Date.parse(b.start) - Date.parse(a.start))[0];
+      if (current) Object.assign(view, { outfit: current.outfit, outfitLabel: current.label, outfitUntil: current.end, outfitSource: 'schedule', outfitScheduleId: current.id });
+    }
+    return view;
+  }
+  // Tablets learn about a scheduled outfit starting or ending from this check (every 15 seconds).
+  const lastOutfitKey = new Map();
+  const outfitKey = c => `${c.outfit || ''}|${c.outfitUntil || ''}`;
+  function checkOutfitSchedules(ms = Date.now()) {
+    for (const room of config.rooms) {
+      const control = effectiveControl(room.id, ms);
+      if (lastOutfitKey.has(room.id) && lastOutfitKey.get(room.id) !== outfitKey(control)) notifyRoom(room.id, 'room.control', { action: 'outfitSchedule', control });
+      lastOutfitKey.set(room.id, outfitKey(control));
+    }
+  }
+  // An outfit choice from the dashboard: an outfit id from outfits.json whose art is here, or "none" for plain Snoopy.
+  function outfitChoice(id) { return String(id || '') === 'none' ? { id: 'none', label: 'No outfit' } : pushableOutfits().find(o => o.id === String(id || '')); }
   // Outfits that can be pushed from the dashboard: those in public/snoopy/outfits.json whose art is on the server.
   function pushableOutfits() {
     let list = [];
@@ -233,7 +313,7 @@ export function createAppServer(options = {}) {
       const problem = calendarProblems.get(room.id);
       if (problem && ms - problem.since >= delay && !alertState.get(calendarKey)) {
         alertState.set(calendarKey, true);
-        await sendAlert(`${room.name}: the room calendar cannot be read (${problem.error}). The display may be showing old meetings. Check the Microsoft 365 app secret and permissions.`);
+        await sendAlert(`${room.name}: ${calendarProblemText(problem)}`);
       } else if (!problem && alertState.get(calendarKey)) {
         alertState.delete(calendarKey);
         await sendAlert(`${room.name}: the room calendar can be read again.`);
@@ -299,7 +379,7 @@ export function createAppServer(options = {}) {
       busy = true;
       for (const room of config.rooms) {
         try { await refreshRoom(room.id); }
-        catch (error) { if (!calendarProblems.has(room.id)) calendarProblems.set(room.id, { since: Date.now(), error: String(error.message || error).slice(0, 140) }); if (Date.now() - lastWatchError > 60000) { lastWatchError = Date.now(); logger.error?.(`Calendar change check failed for ${room.id}: ${error.message}`); } }
+        catch (error) { if (!calendarProblems.has(room.id)) calendarProblems.set(room.id, { since: Date.now(), error: String(error.message || error).slice(0, 140), kind: error.kind || 'other' }); if (Date.now() - lastWatchError > 60000) { lastWatchError = Date.now(); logger.error?.(`Calendar change check failed for ${room.id}: ${error.message}`); } }
       }
       busy = false;
     };
@@ -366,7 +446,7 @@ export function createAppServer(options = {}) {
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
-        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: liveControl(room.id) });
+        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: effectiveControl(room.id) });
       }
       if (req.method === 'GET' && url.pathname === '/api/events') {
         const roomId = url.searchParams.get('room') || config.rooms[0].id;
@@ -460,7 +540,7 @@ export function createAppServer(options = {}) {
             let events = [], error = null;
             try { events = await calendars.get(room.id).listEvents(window.start, window.end); } catch (e) { error = e.message; }
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
-            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: liveControl(room.id), error };
+            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), error };
           }));
           return sendJson(res, 200, { version: VERSION, rooms, outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
@@ -482,8 +562,7 @@ export function createAppServer(options = {}) {
           else if (action === 'outfit') {
             // body.outfit: an outfit id from outfits.json, or "none" for plain Snoopy.
             // body.until: "today" (to midnight, room time) or "tomorrow" (to midnight tomorrow); otherwise ttlMinutes (1 minute to 7 days).
-            const id = String(body.outfit || '');
-            const choice = id === 'none' ? { id: 'none', label: 'No outfit' } : pushableOutfits().find(o => o.id === id);
+            const choice = outfitChoice(body.outfit);
             if (!choice) return sendJson(res, 400, { error: 'Unknown outfit, or its picture is not on the server yet.' });
             const now = Date.now();
             let until;
@@ -497,12 +576,34 @@ export function createAppServer(options = {}) {
             state.outfit = choice.id; state.outfitLabel = choice.label; state.outfitUntil = new Date(until).toISOString();
           }
           else if (action === 'clearOutfit') { state.outfit = null; state.outfitLabel = ''; state.outfitUntil = null; }
+          else if (action === 'scheduleOutfit') {
+            // body.outfit as for "outfit"; body.start and body.end are dates (ISO), up to a year ahead and 14 days long.
+            const choice = outfitChoice(body.outfit);
+            if (!choice) return sendJson(res, 400, { error: 'Unknown outfit, or its picture is not on the server yet.' });
+            const start = Date.parse(body.start), end = Date.parse(body.end), now = Date.now();
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return sendJson(res, 400, { error: 'Pick when it starts and when it ends.' });
+            if (end <= start) return sendJson(res, 400, { error: 'The end must be after the start.' });
+            if (end <= now) return sendJson(res, 400, { error: 'That time has already passed.' });
+            if (start > now + 366 * 86400000) return sendJson(res, 400, { error: 'An outfit can be scheduled at most a year ahead.' });
+            if (end - start > 14 * 86400000) return sendJson(res, 400, { error: 'A scheduled outfit can last at most 14 days.' });
+            if (state.outfitSchedule.length >= MAX_SCHEDULED) return sendJson(res, 400, { error: `This room already has ${MAX_SCHEDULED} scheduled outfits. Remove some first.` });
+            state.outfitSchedule.push({ id: crypto.randomBytes(6).toString('hex'), outfit: choice.id, label: choice.label, start: new Date(start).toISOString(), end: new Date(end).toISOString() });
+            state.outfitSchedule.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+          }
+          else if (action === 'unscheduleOutfit') {
+            const kept = state.outfitSchedule.filter(e => e.id !== String(body.id || ''));
+            if (kept.length === state.outfitSchedule.length) return sendJson(res, 404, { error: 'That scheduled outfit is not there any more (it may have ended).' });
+            state.outfitSchedule = kept;
+          }
           else if (action === 'displayOn') state.displayEnabled = true;
           else if (action === 'displayOff') state.displayEnabled = false;
           else if (action !== 'refresh') return sendJson(res, 400, { error: 'Unsupported control action.' });
           state.revision += 1;
-          notifyRoom(roomId, 'room.control', { action, control: state });
-          return sendJson(res, 200, { ok: true, roomId, control: state });
+          if (['outfit', 'clearOutfit', 'scheduleOutfit', 'unscheduleOutfit'].includes(action)) saveOutfits();
+          const control = effectiveControl(roomId);
+          lastOutfitKey.set(roomId, outfitKey(control));
+          notifyRoom(roomId, 'room.control', { action, control });
+          return sendJson(res, 200, { ok: true, roomId, control });
         }
       }
       if ((req.method === 'GET' || isHead) && (url.pathname === '/' || url.pathname === '/index.html' || /^\/room\/[a-z0-9-]+\/?$/.test(url.pathname))) return void serveStatic(req, res, 'index.html');
@@ -511,13 +612,14 @@ export function createAppServer(options = {}) {
       return sendJson(res, 404, { error: 'Not found.' }, isHead);
     } catch (error) {
       logger.error?.(error);
-      if (!res.headersSent) return sendJson(res, error.status || 502, { error: error.status ? error.message : 'The room calendar is temporarily unavailable.' });
+      if (!res.headersSent) { const answer = failureAnswer(error, url.pathname); return sendJson(res, answer.status, answer.body); }
       res.end();
     }
   });
 
-  server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); });
-  server.appState = { config, calendars, tablets, controls, signIn, liveControl, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
+  let scheduleTimer = null;
+  server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); });
+  server.appState = { config, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {
@@ -526,13 +628,15 @@ export function createAppServer(options = {}) {
     checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
     }, 60000); monitor.unref?.();
   }
+  checkOutfitSchedules();
+  if (options.startSubscriptions !== false) { scheduleTimer = setInterval(() => checkOutfitSchedules(), 15000); scheduleTimer.unref?.(); }
   if (options.startSubscriptions !== false) subscriptions.start().catch(error => logger.error('Subscriptions did not start:', error.message));
   return server;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   loadDotEnv();
-  const server = createAppServer();
+  const server = createAppServer({ dataDir: process.env.DATA_DIR || path.join(ROOT, 'data') });
   server.listen(server.appState.config.port, '0.0.0.0', () => console.log(`M365 room display listening on http://0.0.0.0:${server.appState.config.port} for ${server.appState.config.rooms.length} room(s)`));
   const shutdown = signal => {
     console.log(`${signal} received; shutting down.`);
