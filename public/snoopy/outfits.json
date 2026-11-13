@@ -1,20 +1,34 @@
 {
-  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday' (a birthday or work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'nthWeekday': {\"month\": 5, \"weekday\": 1, \"nth\": -1} (a holiday fixed to a weekday: here the last Monday in May; nth 1 to 4, or -1 for the last one; weekday 0 = Sunday); 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, ice, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
+  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday', 'anniversary' or 'birthday+anniversary' (a birthday and/or a work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'nthWeekday': {\"month\": 5, \"weekday\": 1, \"nth\": -1} (a holiday fixed to a weekday: here the last Monday in May; nth 1 to 4, or -1 for the last one; weekday 0 = Sunday; optional 'before'/'after' days also show it on the days around it); 'dates': {\"on\": [\"YYYY-MM-DD\", ...], \"before\": 0, \"after\": 0} (holidays that follow a lunar calendar, listed per year); 'hebrew': {\"month\": \"Kislev\", \"day\": 25, \"days\": 8} (a Hebrew calendar date, worked out every year); when two festive rules apply on one day, the shorter (more specific) one is listed first, so it wins; 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, ice, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
   "outfits": [
     {
+      "id": "birthday-work-anniversary",
+      "label": "Anniversary vest and party hat (a birthday and a work anniversary on the same day)",
+      "file": "outfits/birthday-work-anniversary.png",
+      "rows": 11,
+      "event": "birthday+anniversary"
+    },
+    {
       "id": "party-hat",
-      "label": "Party hat (birthday or work anniversary)",
+      "label": "Party hat (a birthday on the display today)",
       "file": "outfits/party-hat.png",
       "rows": 11,
       "event": "birthday"
     },
     {
-      "id": "christmas",
-      "label": "Christmas",
+      "id": "work-anniversary",
+      "label": "Navy-and-gold anniversary vest (a work anniversary on the display today)",
+      "file": "outfits/work-anniversary.png",
+      "rows": 11,
+      "event": "anniversary"
+    },
+    {
+      "id": "christmas-day",
+      "label": "Christmas Eve and Christmas Day (kept even when Hanukkah falls on them)",
       "file": "outfits/christmas.png",
       "rows": 11,
-      "from": "12-01",
-      "to": "12-26"
+      "from": "12-24",
+      "to": "12-25"
     },
     {
       "id": "new-year",
@@ -23,6 +37,25 @@
       "rows": 11,
       "from": "12-27",
       "to": "01-02"
+    },
+    {
+      "id": "hanukkah",
+      "label": "Hanukkah (25 Kislev, eight days; worked out from the Hebrew calendar every year)",
+      "file": "outfits/hanukkah.png",
+      "rows": 11,
+      "hebrew": {
+        "month": "Kislev",
+        "day": 25,
+        "days": 8
+      }
+    },
+    {
+      "id": "christmas",
+      "label": "Christmas",
+      "file": "outfits/christmas.png",
+      "rows": 11,
+      "from": "12-01",
+      "to": "12-26"
     },
     {
       "id": "mlk-day",
@@ -36,12 +69,12 @@
       }
     },
     {
-      "id": "valentines",
-      "label": "Valentine's Day",
-      "file": "outfits/valentines.png",
+      "id": "groundhog-day",
+      "label": "Groundhog Day (February 2)",
+      "file": "outfits/groundhog-day.png",
       "rows": 11,
-      "from": "02-10",
-      "to": "02-14"
+      "from": "02-02",
+      "to": "02-02"
     },
     {
       "id": "presidents-day",
@@ -53,6 +86,35 @@
         "weekday": 1,
         "nth": 3
       }
+    },
+    {
+      "id": "lunar-new-year",
+      "label": "Lunar New Year (the day and the two after; dates listed through 2035)",
+      "file": "outfits/lunar-new-year.png",
+      "rows": 11,
+      "dates": {
+        "on": [
+          "2027-02-06",
+          "2028-01-26",
+          "2029-02-13",
+          "2030-02-03",
+          "2031-01-23",
+          "2032-02-11",
+          "2033-01-31",
+          "2034-02-19",
+          "2035-02-08"
+        ],
+        "before": 0,
+        "after": 2
+      }
+    },
+    {
+      "id": "valentines",
+      "label": "Valentine's Day",
+      "file": "outfits/valentines.png",
+      "rows": 11,
+      "from": "02-10",
+      "to": "02-14"
     },
     {
       "id": "st-patricks",
@@ -81,6 +143,26 @@
       }
     },
     {
+      "id": "april-fools",
+      "label": "April Fools' Day (April 1; Easter week wins when they meet)",
+      "file": "outfits/april-fools.png",
+      "rows": 11,
+      "from": "04-01",
+      "to": "04-01"
+    },
+    {
+      "id": "mothers-day",
+      "label": "Mother's Day (second Sunday in May, also the Friday and Saturday before)",
+      "file": "outfits/mothers-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 5,
+        "weekday": 0,
+        "nth": 2,
+        "before": 2
+      }
+    },
+    {
       "id": "memorial-day",
       "label": "Memorial Day (last Monday in May)",
       "file": "outfits/memorial-day.png",
@@ -92,12 +174,32 @@
       }
     },
     {
+      "id": "flag-day",
+      "label": "Flag Day (June 14)",
+      "file": "outfits/flag-day.png",
+      "rows": 11,
+      "from": "06-14",
+      "to": "06-14"
+    },
+    {
       "id": "juneteenth",
       "label": "Juneteenth (June 19)",
       "file": "outfits/juneteenth.png",
       "rows": 11,
       "from": "06-19",
       "to": "06-19"
+    },
+    {
+      "id": "fathers-day",
+      "label": "Father's Day (third Sunday in June, also the Friday and Saturday before)",
+      "file": "outfits/fathers-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 6,
+        "weekday": 0,
+        "nth": 3,
+        "before": 2
+      }
     },
     {
       "id": "july-4th",
@@ -108,6 +210,14 @@
       "to": "07-05"
     },
     {
+      "id": "national-dog-day",
+      "label": "National Dog Day (August 26)",
+      "file": "outfits/national-dog-day.png",
+      "rows": 11,
+      "from": "08-26",
+      "to": "08-26"
+    },
+    {
       "id": "labor-day",
       "label": "Labor Day (first Monday in September)",
       "file": "outfits/labor-day.png",
@@ -116,6 +226,49 @@
         "month": 9,
         "weekday": 1,
         "nth": 1
+      }
+    },
+    {
+      "id": "columbus-day",
+      "label": "Columbus Day (second Monday in October)",
+      "file": "outfits/columbus-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 10,
+        "weekday": 1,
+        "nth": 2
+      }
+    },
+    {
+      "id": "indigenous-peoples-day",
+      "label": "Indigenous Peoples' Day (second Monday in October; Columbus Day is listed first, so it shows only if that outfit is removed)",
+      "file": "outfits/indigenous-peoples-day.png",
+      "rows": 11,
+      "nthWeekday": {
+        "month": 10,
+        "weekday": 1,
+        "nth": 2
+      }
+    },
+    {
+      "id": "diwali",
+      "label": "Diwali (the main day and the day before; dates listed through 2035)",
+      "file": "outfits/diwali.png",
+      "rows": 11,
+      "dates": {
+        "on": [
+          "2027-10-29",
+          "2028-10-17",
+          "2029-11-05",
+          "2030-10-26",
+          "2031-11-14",
+          "2032-11-02",
+          "2033-10-22",
+          "2034-11-10",
+          "2035-10-30"
+        ],
+        "before": 1,
+        "after": 0
       }
     },
     {

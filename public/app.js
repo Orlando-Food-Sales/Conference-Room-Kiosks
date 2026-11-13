@@ -105,8 +105,11 @@ function showCelebrations(items) {
   lines.forEach(function (text) { var line = document.createElement('p'); line.textContent = text; box.appendChild(line); });
   box.classList.toggle('hidden', lines.length === 0);
   if (lines.length) document.documentElement.dataset.celebrate = '1'; else delete document.documentElement.dataset.celebrate;
-  // Party hat only for entries that are today (not the weekend ones shown early on Friday).
-  if ((items || []).some(function (item) { return !item.day; })) document.documentElement.dataset.birthday = '1'; else delete document.documentElement.dataset.birthday;
+  // Snoopy's party look only for entries that are today (not the weekend ones shown early on Friday): a birthday
+  // (party hat), a work anniversary (anniversary vest), or both on the same day (vest and party hat).
+  var todays = (items || []).filter(function (item) { return !item.day; });
+  if (todays.some(function (item) { return item.kind === 'birthday'; })) document.documentElement.dataset.birthday = '1'; else delete document.documentElement.dataset.birthday;
+  if (todays.some(function (item) { return item.kind === 'anniversary'; })) document.documentElement.dataset.anniversary = '1'; else delete document.documentElement.dataset.anniversary;
   fitRows();
 }
 function applyHoliday(name) { var next = name || ''; if (next !== (state.holiday || '')) { state.holiday = next; render(); } }

@@ -805,7 +805,10 @@ test('desktop test browsers never raise offline alerts; wall tablets, touch scre
   const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
   assert.equal(overview.rooms[0].tablets.find(x => x.tabletId === 'mac-test').wallTablet, false, 'the dashboard can mark test browsers');
 
-  await state.checkTablets(Date.now() + 15 * 60000);                      // everyone has been quiet for 15 minutes
+  // Everyone has been quiet for 15 minutes on a Tuesday afternoon (a fixed time: alerts are quiet outside office hours,
+  // so using the real clock made this test fail before 8 AM and at weekends).
+  for (const tablet of state.tablets.values()) tablet.lastSeen = new Date(TUESDAY_3PM - 15 * 60000).toISOString();
+  await state.checkTablets(TUESDAY_3PM);
   const quiet = state.alerts.map(a => a.text).filter(text => /has not checked in/.test(text));
   assert.deepEqual(quiet.map(text => text.match(/tablet "([^"]+)"/)[1]).sort(), ['ipad-as-mac', 'mac-in-kiosk', 'samsung'], 'only real displays alert');
 

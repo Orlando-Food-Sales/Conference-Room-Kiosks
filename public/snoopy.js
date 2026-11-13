@@ -203,6 +203,43 @@
   function inRange(from, to, today) {
     return from <= to ? (today >= from && today <= to) : (today >= from || today <= to);   // wraps the new year
   }
+  // A day k days from the given one (k may be negative), as [year, month, day]. UTC, so daylight saving cannot move it.
+  function shiftDay(year, month, day, k) {
+    var t = new Date(Date.UTC(year, month - 1, day + k));
+    return [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()];
+  }
+  // True when isHoliday(y, m, d) is true for a day from `after` days ago to `before` days ahead: that is, today is
+  // within `before` days before the holiday or `after` days after it. (Mother's Day with "before": 2 also shows on Friday.)
+  function aroundMatches(isHoliday, before, after, year, month, day) {
+    for (var k = -(after || 0); k <= (before || 0); k += 1) {
+      var s = shiftDay(year, month, day, k);
+      if (isHoliday(s[0], s[1], s[2])) return true;
+    }
+    return false;
+  }
+  // The Hebrew calendar date of a Gregorian day, worked out by the browser (the Hebrew calendar is exact arithmetic,
+  // so this never needs a yearly list). null if the browser cannot do it: the rule then simply does not apply.
+  var hebrewFormat = null;
+  function hebrewDate(year, month, day) {
+    try {
+      if (!hebrewFormat) hebrewFormat = new Intl.DateTimeFormat('en-US-u-ca-hebrew', { timeZone: 'UTC', month: 'long', day: 'numeric' });
+      var parts = {};
+      hebrewFormat.formatToParts(new Date(Date.UTC(year, month - 1, day, 12))).forEach(function (p) { parts[p.type] = p.value; });
+      return { month: parts.month, day: Number(parts.day) };
+    } catch (_) { return null; }
+  }
+  // Whether a date rule applies on a day: true or false, or null when the outfit has no date rule.
+  //   from/to (MM-DD), easter, nthWeekday (+ before/after), dates (a list of YYYY-MM-DD, + before/after: holidays that follow
+  //   a lunar calendar), hebrew (a Hebrew calendar date + days: Hanukkah is 25 Kislev for 8 days).
+  function dateRuleMatches(o, year, month, day) {
+    var mmdd = ('0' + month).slice(-2) + '-' + ('0' + day).slice(-2);
+    if (o.from && o.to) return inRange(o.from, o.to, mmdd);
+    if (o.easter) return easterRuleMatches(o.easter, year, month, day);
+    if (o.nthWeekday) return aroundMatches(function (y, m, d) { return nthWeekdayMatches(o.nthWeekday, y, m, d); }, o.nthWeekday.before, o.nthWeekday.after, year, month, day);
+    if (o.dates) return aroundMatches(function (y, m, d) { return o.dates.on.indexOf(y + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2)) !== -1; }, o.dates.before, o.dates.after, year, month, day);
+    if (o.hebrew) return aroundMatches(function (y, m, d) { var h = hebrewDate(y, m, d); return !!h && h.month === o.hebrew.month && h.day === o.hebrew.day; }, 0, (o.hebrew.days || 1) - 1, year, month, day);
+    return null;
+  }
 
   function chooseOutfit() {
     if (forcedOutfit) return outfits.filter(function (o) { return o.id === forcedOutfit && known[o.file] !== false; })[0] || null;
@@ -225,6 +262,7 @@
     }
     var root = document.documentElement.dataset;
     var birthday = root.birthday === '1';
+    var anniversary = root.anniversary === '1';
     var closed = root.closed === '1';
     var weather = document.documentElement.dataset.weather || '';
     var isDay = document.documentElement.dataset.day !== '0';
@@ -234,11 +272,11 @@
       if (known[o.file] === false) return false;                          // art not supplied yet
       if (o.year && o.year !== year) return false;                        // a rule for one particular year (Easter moves)
       if (o.weekdays && o.weekdays.indexOf(weekday) === -1) return false;  // 0 = Sunday ... 5 = Friday
-      if (o.from && o.to) return inRange(o.from, o.to, today);
-      if (o.easter) return easterRuleMatches(o.easter, year, Number(today.slice(0, 2)), Number(today.slice(3, 5)));   // around Easter, whichever date that is this year
-      if (o.nthWeekday) return nthWeekdayMatches(o.nthWeekday, year, Number(today.slice(0, 2)), Number(today.slice(3, 5)));   // e.g. the last Monday in May
+      var dated = dateRuleMatches(o, year, Number(today.slice(0, 2)), Number(today.slice(3, 5)));   // festive dates, worked out for this year
+      if (dated !== null) return dated;
       if (o.weekdays && !o.weather && !o.closed && !o.event) return true;  // a plain weekday rule (chef on Fridays)
-      if (o.event === 'birthday') return birthday;                         // a birthday or work anniversary is on the display today
+      // A birthday and/or a work anniversary is on the display today (app.js sets data-birthday and data-anniversary).
+      if (o.event) return o.event === 'birthday+anniversary' ? (birthday && anniversary) : (o.event === 'birthday' ? birthday : (o.event === 'anniversary' && anniversary));
       if (o.closed) return closed && !o.weather;                           // the display says Closed (after hours, weekend, holiday)
       if (o.weather || o.minTempC !== undefined || o.maxTempC !== undefined) {
         if (o.weather && o.weather.indexOf(weather) === -1) return false;
@@ -278,7 +316,7 @@
   fetch('/snoopy/outfits.json').then(function (r) { return r.ok ? r.json() : { outfits: [] }; })
     .then(function (data) { outfits = data.outfits || []; refreshOutfit(); })
     .catch(function () { });
-  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-closed', 'data-outfit-override', 'data-outfit-until'] });
+  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-anniversary', 'data-closed', 'data-outfit-override', 'data-outfit-until'] });
   setInterval(refreshOutfit, 60000);                                       // catches midnight / date changes
 
   draw();
