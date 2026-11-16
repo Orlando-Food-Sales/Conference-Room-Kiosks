@@ -269,13 +269,14 @@
   //   from/to (MM-DD), easter, nthWeekday (+ before/after), dates (a list of YYYY-MM-DD, + before/after: holidays that follow
   //   a lunar calendar), hebrew (a Hebrew calendar date + days: Hanukkah is 25 Kislev for 8 days).
   // Whether a weather rule applies: true or false, or null when the outfit has no weather or temperature rule.
-  // feels is the feels-like temperature in Celsius, or null when it is not known: an unknown temperature passes a
-  // minimum but never a maximum (so "cold" never shows on a guess).
+  // feels is the feels-like temperature in Celsius, or null when it is not known. A rule with a temperature limit
+  // needs a known temperature, so neither the Hawaiian shirt nor a coat ever shows on a guess. Both limits include
+  // their number (at exactly 4 C the cold rule, listed first, wins over the chilly one).
   function weatherRuleMatches(o, weather, isDay, feels) {
     if (!o.weather && o.minTempC === undefined && o.maxTempC === undefined) return null;
     if (o.weather && o.weather.indexOf(weather) === -1) return false;
     if (o.daytimeOnly && !isDay) return false;
-    if (o.minTempC !== undefined && feels !== null && feels < o.minTempC) return false;
+    if (o.minTempC !== undefined && (feels === null || feels < o.minTempC)) return false;
     if (o.maxTempC !== undefined && (feels === null || feels > o.maxTempC)) return false;
     return true;
   }

@@ -1,5 +1,5 @@
 {
-  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday', 'anniversary' or 'birthday+anniversary' (a birthday and/or a work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'nthWeekday': {\"month\": 5, \"weekday\": 1, \"nth\": -1} (a holiday fixed to a weekday: here the last Monday in May; nth 1 to 4, or -1 for the last one; weekday 0 = Sunday; optional 'before'/'after' days also show it on the days around it); 'dates': {\"on\": [\"YYYY-MM-DD\", ...], \"before\": 0, \"after\": 0} (holidays that follow a lunar calendar, listed per year); 'hebrew': {\"month\": \"Kislev\", \"day\": 25, \"days\": 8} (a Hebrew calendar date, worked out every year); when two festive rules apply on one day, the shorter (more specific) one is listed first, so it wins; 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, ice, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). An unknown temperature passes a minTempC rule but never a maxTempC rule. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
+  "_help": "First match wins, top to bottom. Rule types: 'event': 'birthday', 'anniversary' or 'birthday+anniversary' (a birthday and/or a work anniversary is on the display today); 'from'/'to' (MM-DD, may wrap the new year) with an optional 'year' for rules that only apply in one year; 'easter': {\"before\": 7, \"after\": 0} (from that many days before Easter Sunday to that many days after it; Easter is worked out for every year); 'nthWeekday': {\"month\": 5, \"weekday\": 1, \"nth\": -1} (a holiday fixed to a weekday: here the last Monday in May; nth 1 to 4, or -1 for the last one; weekday 0 = Sunday; optional 'before'/'after' days also show it on the days around it); 'dates': {\"on\": [\"YYYY-MM-DD\", ...], \"before\": 0, \"after\": 0} (holidays that follow a lunar calendar, listed per year); 'hebrew': {\"month\": \"Kislev\", \"day\": 25, \"days\": 8} (a Hebrew calendar date, worked out every year); when two festive rules apply on one day, the shorter (more specific) one is listed first, so it wins; 'closed': true (the display says Closed: after hours, weekends, holidays); 'weekdays' (0 = Sunday ... 5 = Friday); 'weather' (clear, clouds, rain, storm, snow, ice, fog), 'daytimeOnly', and feels-like temperature limits 'minTempC' / 'maxTempC' in Celsius (4 C is 39 F, 18 C is 64 F). Both limits include their number. A rule with a temperature limit needs a known temperature (an unknown one passes neither limit). Cold and chilly rules list the dry conditions (clear, clouds, fog), so they never show in rain or snow even if those sheets are missing. When nothing matches, Snoopy wears no outfit. While the display says Closed the sleeping Snoopy (snoopy-sleep.js, not these rules) is shown instead of any outfit. Several entries may share one image file. Outfits whose image file is missing are skipped. 'rows' is the number of 208px rows in the sheet: 11 for sheets with look-around, 9 for older ones.",
   "outfits": [
     {
       "id": "birthday-work-anniversary",
@@ -354,14 +354,24 @@
       "label": "Wool peacoat, scarf and beanie (dry and cold, feels 4 C / 39 F or less)",
       "file": "outfits/winter-cold-coat.png",
       "rows": 11,
-      "maxTempC": 4
+      "maxTempC": 4,
+      "weather": [
+        "clear",
+        "clouds",
+        "fog"
+      ]
     },
     {
       "id": "winter-cold",
       "label": "Winter coat (cold, feels 4 C / 39 F or less; only if the peacoat sheet is missing)",
       "file": "outfits/winter-snow.png",
       "rows": 11,
-      "maxTempC": 4
+      "maxTempC": 4,
+      "weather": [
+        "clear",
+        "clouds",
+        "fog"
+      ]
     },
     {
       "id": "chilly",
@@ -369,19 +379,23 @@
       "file": "outfits/chilly.png",
       "rows": 11,
       "minTempC": 4,
-      "maxTempC": 12
+      "maxTempC": 12,
+      "weather": [
+        "clear",
+        "clouds",
+        "fog"
+      ]
     },
     {
       "id": "heatwave",
-      "label": "Sun hat and tank top (clear and hot, feels 29 C / 84 F or more, daytime; never on an unknown temperature)",
+      "label": "Sun hat and tank top (clear and hot, feels 29 C / 84 F or more, daytime)",
       "file": "outfits/heatwave.png",
       "rows": 11,
       "weather": [
         "clear"
       ],
       "minTempC": 29,
-      "daytimeOnly": true,
-      "maxTempC": 60
+      "daytimeOnly": true
     },
     {
       "id": "summer-sunshine",

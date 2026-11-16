@@ -15,7 +15,9 @@ Weather outfits (art by Codex, 11-row sheets, every row checked against the base
 | `chilly.png` | Dry and feels above 4 C up to 12 C / 39 to 54 F | Light knit sweater |
 | `heatwave.png` | Clear, daytime, feels 29 C / 84 F or more (the Hawaiian shirt stays for 18 to 29 C) | Sun hat and light tank top, no sunglasses (they hide the eyes) |
 
-Weather order (first match wins): storm, rain, ice, snow, fog, cold, chilly, heatwave, warm and sunny. Cloudy and mild days (12 to 18 C) and hot nights stay plain Snoopy. A test checks what Snoopy wears for each case, both before and after the new sheets arrive.
+Weather order (first match wins): storm, rain, ice, snow, fog, cold, chilly, heatwave, warm and sunny. Cold and chilly clothes list the dry conditions (clear, clouds, fog) themselves, so they never show in rain or snow even if a wet-weather sheet is missing. Temperature limits include their number (exactly 4 C is cold, exactly 12 C is chilly, exactly 18 C is warm) and need a known temperature: with no reading, no temperature outfit is worn. When nothing matches, Snoopy wears no outfit.
+
+While the display says Closed (after hours, weekends, company holidays) the sleeping Snoopy on his doghouse is shown instead of any outfit, birthdays and holidays included. That is `snoopy-sleep.js` (tap to wake for 15 seconds, `wakeMs` in `../sleep-manifest.json`), not these rules; the `pajamas` rule only matters if the sleep art cannot be loaded. Cloudy and mild days (12 to 18 C) and hot nights stay plain Snoopy. A test checks what Snoopy wears for each case, both before and after the new sheets arrive.
 
 Holiday and celebration outfits (art by Codex, 11-row sheets, every row checked against the base Snoopy):
 

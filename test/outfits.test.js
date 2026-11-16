@@ -171,7 +171,7 @@ test('each kind of weather gets its own outfit once the art is there, and today\
     ['clear', 29, true, 'summer-sunshine', 'heatwave'],
     ['clear', 33, false, null, null],
     ['clouds', 33, true, null, null],
-    ['clear', null, true, 'summer-sunshine', 'summer-sunshine'],
+    ['clear', null, true, null, null],   // unknown temperature: no Hawaiian shirt on a guess
     ['clouds', null, true, null, null]
   ];
   for (const [weather, feels, isDay, before, after] of cases) {
@@ -180,6 +180,17 @@ test('each kind of weather gets its own outfit once the art is there, and today\
     assert.equal(wears(weather, feels, { isDay, drawn: all }), after, `${label}: with the new sheets`);
   }
   assert.equal(wears('ice', -2, { drawn: today.concat('fog') }), 'winter-snow', 'ice keeps the winter coat until its own sheet lands');
+  // Cold and chilly clothes are for dry weather by their own rule, even if the rain or snow sheets were missing.
+  const noWet = all.filter(id => !['storm', 'spring-raincoat', 'ice', 'winter-snow'].includes(id));
+  for (const [weather, feels] of [['rain', 8], ['rain', 2], ['storm', 3], ['snow', -3], ['ice', 0]]) assert.equal(wears(weather, feels, { drawn: noWet }), null, `${weather} at ${feels} C without its sheet: no dry-weather clothes`);
+  assert.equal(wears('fog', 2, { drawn: noWet.filter(id => id !== 'fog') }), 'winter-cold-coat', 'fog is dry: the cold coat if the fog sheet is missing');
+  assert.equal(wears('', 2), null, 'unknown weather: nothing');
+  // Both limits include their number.
+  assert.equal(wears('clouds', 12), 'chilly', '12 C is still chilly');
+  assert.equal(wears('clouds', 12.1), null);
+  assert.equal(wears('clear', 18), 'summer-sunshine', '18 C is warm');
+  assert.equal(wears('clear', 17.9), null);
+  for (const id of ['winter-cold-coat', 'winter-cold', 'chilly']) assert.deepEqual(outfits.find(o => o.id === id).weather, ['clear', 'clouds', 'fog'], `${id} lists the dry conditions`);
   for (const id of ['ice', 'fog', 'winter-cold-coat', 'chilly', 'heatwave']) assert.equal(outfits.find(o => o.id === id).file, `outfits/${id}.png`);
 });
 
