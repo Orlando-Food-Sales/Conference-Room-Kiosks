@@ -64,18 +64,19 @@ test('sign-in settings: off unless set, both IDs together, https (or localhost),
   const load = env => loadConfig({ DEMO_MODE: 'true', ROOMS_JSON: JSON.stringify(ROOMS), TENANT_ID: TENANT, ...env }).dashboardSignIn;
   assert.deepEqual(load({}), { enabled: false });
   const on = { DASHBOARD_SIGNIN_CLIENT_ID: SIGNIN_APP, DASHBOARD_SIGNIN_CLIENT_SECRET: 's', DASHBOARD_ADMIN_EMAILS: 'a@example.com', PUBLIC_BASE_URL: 'https://rooms.example.com' };
+  const off = env => { const s = load(env); assert.equal(s.enabled, false, 'a bad setting turns sign-in off'); return s.problem; };
   const settings = load(on);
   assert.equal(settings.enabled, true);
   assert.equal(settings.redirectUri, 'https://rooms.example.com/auth/callback', 'defaults to PUBLIC_BASE_URL + /auth/callback');
   assert.equal(settings.tenantId, TENANT, 'defaults to TENANT_ID');
   assert.equal(settings.sessionHours, 8);
-  assert.throws(() => load({ DASHBOARD_SIGNIN_CLIENT_ID: SIGNIN_APP }), /together/);
-  assert.throws(() => load({ ...on, DASHBOARD_SIGNIN_CLIENT_ID: 'not-a-guid' }), /GUID/);
-  assert.throws(() => load({ ...on, PUBLIC_BASE_URL: 'http://192.168.80.157' }), /must use https/);
+  assert.match(off({ DASHBOARD_SIGNIN_CLIENT_ID: SIGNIN_APP }), /together/);
+  assert.match(off({ ...on, DASHBOARD_SIGNIN_CLIENT_ID: 'not-a-guid' }), /GUID/);
+  assert.match(off({ ...on, PUBLIC_BASE_URL: 'http://192.168.80.157' }), /must use https/);
   assert.equal(load({ ...on, DASHBOARD_SIGNIN_REDIRECT_URI: 'http://localhost:3000/auth/callback' }).redirectUri, 'http://localhost:3000/auth/callback', 'plain http only for localhost');
-  assert.throws(() => load({ ...on, DASHBOARD_SIGNIN_REDIRECT_URI: 'https://rooms.example.com/somewhere' }), /\/auth\/callback/);
-  assert.throws(() => load({ ...on, DASHBOARD_ADMIN_EMAILS: '' }), /needs someone/);
-  assert.throws(() => load({ ...on, DASHBOARD_ADMIN_EMAILS: 'not-an-email' }), /invalid address/);
+  assert.match(off({ ...on, DASHBOARD_SIGNIN_REDIRECT_URI: 'https://rooms.example.com/somewhere' }), /\/auth\/callback/);
+  assert.match(off({ ...on, DASHBOARD_ADMIN_EMAILS: '' }), /needs someone/);
+  assert.match(off({ ...on, DASHBOARD_ADMIN_EMAILS: 'not-an-email' }), /invalid address/);
   assert.equal(load({ ...on, DASHBOARD_SESSION_HOURS: '99' }).sessionHours, 24, 'at most a day');
   assert.equal(load({ ...on, DASHBOARD_SESSION_HOURS: '2' }).sessionHours, 2);
 });
@@ -90,7 +91,7 @@ test('who may sign in: the Teams alert people by default, DASHBOARD_ADMIN_EMAILS
 
 test('a person on the list signs in, uses the dashboard, and signs out', async t => {
   const { base, microsoft } = await start(t);
-  assert.deepEqual(await (await get(base, '/api/auth/me')).json(), { signInEnabled: true, tokenEnabled: true, signedIn: false, name: '', email: '', expiresAt: null });
+  assert.deepEqual(await (await get(base, '/api/auth/me')).json(), { signInEnabled: true, signInProblem: false, tokenEnabled: true, signedIn: false, name: '', email: '', expiresAt: null });
 
   const { login, authorize, callback, session } = await signInFlow(base, microsoft);
   // Step 1: off to Microsoft, with everything a safe sign-in needs.
@@ -254,4 +255,38 @@ test('the dashboard page offers Microsoft sign-in, keeps the token as the backup
   assert.match(js, /'Backup: administrator token'/);
   assert.match(js, /token\?\{'authorization':'Bearer '\+token\}:\{\}/, 'no empty Bearer header when signed in with Microsoft');
   assert.match(js, /fetch\('\/auth\/logout', \{ method: 'POST' \}\)/);
+});
+
+test('a mistake in the sign-in settings never stops the app: sign-in is off, the token works, the problem is logged and shown', async t => {
+  const logged = [];
+  const server = createAppServer({ env: { ...BASE_ENV, DASHBOARD_SIGNIN_REDIRECT_URI: 'http://192.168.80.157/auth/callback' }, startSubscriptions: false, logger: { error: m => logged.push(String(m)), warn() { }, log() { } }, celebrations: QUIET });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  t.after(() => { server.closeAllConnections?.(); server.close(); });
+  const base = `http://127.0.0.1:${server.address().port}`;
+  assert.match(logged.join('\n'), /Dashboard sign-in with Microsoft is OFF because of a settings problem \(the administrator token still works\): DASHBOARD_SIGNIN_REDIRECT_URI must use https/);
+  const me = await (await get(base, '/api/auth/me')).json();
+  assert.equal(me.signInEnabled, false);
+  assert.equal(me.signInProblem, true);
+  assert.equal((await get(base, '/auth/login')).status, 404);
+  assert.equal((await get(base, '/api/admin/overview', { authorization: `Bearer ${TOKEN}` })).status, 200, 'the token still works');
+  assert.equal((await get(base, '/healthz')).status, 200, 'the door screens keep working');
+  const js = (await import('node:fs')).readFileSync(new URL('../public/dashboard.js', import.meta.url), 'utf8');
+  assert.match(js, /if \(me\.signInProblem\) \$\('error'\)\.textContent = 'Microsoft sign-in is set up but turned off because of a settings problem/);
+});
+
+test('the HTTPS nginx configuration moves only the dashboard and sign-in to HTTPS; the door tablets stay on plain HTTP', async () => {
+  const fs = await import('node:fs');
+  const conf = fs.readFileSync(new URL('../deploy/nginx-https.conf', import.meta.url), 'utf8');
+  const [plain, secure] = conf.split(/\nserver \{/).slice(1);
+  assert.match(plain, /listen 80 default_server;/);
+  assert.match(plain, /location = \/dashboard  \{ return 301 https:\/\/ROOMS_HOSTNAME\$request_uri; \}/);
+  assert.match(plain, /location \^~ \/auth\/     \{ return 301 https:\/\/ROOMS_HOSTNAME\$request_uri; \}/);
+  assert.match(plain, /location \/ \{\s*proxy_pass http:\/\/127\.0\.0\.1:3000;/, 'everything else, the tablets included, as before');
+  assert.doesNotMatch(plain, /location[^{]*\/room/, 'the tablet pages are not redirected');
+  assert.match(secure, /listen 443 ssl;/);
+  assert.match(secure, /ssl_protocols TLSv1\.2 TLSv1\.3;/);
+  assert.match(secure, /proxy_set_header X-Forwarded-Proto https;/);
+  assert.match(secure, /proxy_read_timeout 3600s;/, 'long enough for the dashboard live view');
+  const installed = fs.readFileSync(new URL('../deploy/nginx.conf', import.meta.url), 'utf8');
+  assert.doesNotMatch(installed, /443|ssl/, 'the installed default stays plain HTTP until HTTPS is set up by hand');
 });

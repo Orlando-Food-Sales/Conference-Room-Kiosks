@@ -203,7 +203,10 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     rooms: loadRooms(env, cwd)
   };
   config.teamsAlerts = loadTeamsAlerts(env, config.tenantId);
-  config.dashboardSignIn = loadDashboardSignIn(env, config.tenantId, config.teamsAlerts.recipients, config.publicBaseUrl);
+  // A mistake in the sign-in settings turns Microsoft sign-in off (the administrator token still works) and is logged;
+  // it never stops the app, so the door screens keep working.
+  try { config.dashboardSignIn = loadDashboardSignIn(env, config.tenantId, config.teamsAlerts.recipients, config.publicBaseUrl); }
+  catch (error) { config.dashboardSignIn = { enabled: false, problem: error.message }; }
   if (config.alertWebhookUrl && !/^https:\/\//i.test(config.alertWebhookUrl)) throw new Error('ALERT_WEBHOOK_URL must start with https://');
   const birthdayZone = String(env.BIRTHDAY_TIME_ZONE || '').trim() || config.rooms[0].timeZone;
   try { new Intl.DateTimeFormat('en-US', { timeZone: birthdayZone }).format(); }

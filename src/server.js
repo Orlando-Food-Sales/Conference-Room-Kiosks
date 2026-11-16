@@ -134,6 +134,8 @@ export function createAppServer(options = {}) {
   const teams = options.teamsAlerts || new TeamsAlerts(config.teamsAlerts, options.fetchImpl || fetch);
   const celebrations = options.celebrations || new CelebrationService(config, tokenProvider, options.fetchImpl || fetch);
   const signIn = options.dashboardSignIn || new DashboardSignIn(config.dashboardSignIn, options.fetchImpl || fetch);
+  const signInProblem = config.dashboardSignIn?.problem || '';
+  if (signInProblem) logger.error?.(`Dashboard sign-in with Microsoft is OFF because of a settings problem (the administrator token still works): ${signInProblem}`);
   const sseClients = new Set();
   const tablets = new Map();
   const controls = new Map(config.rooms.map(room => [room.id, { displayEnabled: true, message: '', messageExpiresAt: null, outfit: null, outfitLabel: '', outfitUntil: null, outfitSchedule: [], revision: 0 }]));
@@ -500,7 +502,7 @@ export function createAppServer(options = {}) {
       // Microsoft sign-in for the dashboard (off unless DASHBOARD_SIGNIN_* is set; the administrator token always works too).
       if (req.method === 'GET' && url.pathname === '/api/auth/me') {
         const who = adminFrom(req);
-        return sendJson(res, 200, { signInEnabled: signIn.enabled, tokenEnabled: Boolean(config.adminToken), signedIn: who?.via === 'session', name: who?.session?.name || '', email: who?.session?.email || '', expiresAt: who?.session ? new Date(who.session.expires).toISOString() : null });
+        return sendJson(res, 200, { signInEnabled: signIn.enabled, signInProblem: Boolean(signInProblem), tokenEnabled: Boolean(config.adminToken), signedIn: who?.via === 'session', name: who?.session?.name || '', email: who?.session?.email || '', expiresAt: who?.session ? new Date(who.session.expires).toISOString() : null });
       }
       if (req.method === 'GET' && url.pathname === '/auth/login') {
         if (!signIn.enabled) return sendJson(res, 404, { error: 'Microsoft sign-in is not set up on this server.' });

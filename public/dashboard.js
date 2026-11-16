@@ -88,6 +88,7 @@ async function startAuth() {
   var me = {};
   try { me = await (await fetch('/api/auth/me', { cache: 'no-store' })).json(); } catch (_) { }
   if (me.signInEnabled) { $('signin').classList.remove('hidden'); $('tokenLabel').firstChild.textContent = 'Backup: administrator token'; }
+  if (me.signInProblem) $('error').textContent = 'Microsoft sign-in is set up but turned off because of a settings problem (see the server log). Use the administrator token.';
   if (me.signedIn) {
     $('login').classList.add('hidden');
     $('account').classList.remove('hidden');
