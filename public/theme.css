@@ -534,19 +534,21 @@ body.display-off::before, body.display-off::after { display: none; }
 .status-panel.closed:before { background: var(--muted); }
 .status-panel.closed .status-copy > p:first-of-type { color: var(--muted); }
 
-/* ---- Fit the tablet (Samsung Galaxy Tab A7 Lite 8.7in, 1340x800 native) ----
-   The page always fits the screen height: the status card shrinks to its content, the schedule gets
-   the rest, and rows that do not fit are hidden (public/app.js fitRows) instead of scrolling. */
+/* ---- Fit the tablets ----
+   The room tablets report 1139x711 at 1.13x (both rooms, from Nov 2026); the older Samsung Galaxy Tab A7 Lite reports
+   1006x600 at 1.33x. The page always fits the screen height: the status card shrinks to its content, the schedule gets
+   the rest, and rows that do not fit are hidden (public/app.js fitRows) instead of scrolling. The compact spacing below
+   applies to screens up to 760 px tall, which covers both tablets but not full-size screens (800 px and taller). */
 .display { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; grid-template-rows: auto auto minmax(0, 1fr); padding: clamp(14px, 2.4vw, 40px); gap: clamp(10px, 1.8vw, 24px); }
 .status-panel { min-height: 0; padding: clamp(16px, 3vw, 48px) clamp(20px, 4vw, 56px); }
 .status-copy h2 { font-size: clamp(2.2rem, min(8vw, 15vh), 7rem); }
 .schedule { display: flex; flex-direction: column; min-height: 0; }
 .event-list { position: relative; flex: 1; min-height: 0; overflow: hidden; align-content: start; }
 .snoopy { width: auto; aspect-ratio: 192 / 208; height: min(216px, 80%); }
-.topbar h1 { font-size: clamp(1.6rem, min(4vw, 7vh), 4.4rem); }
+.topbar h1 { font-size: clamp(1.5rem, min(3vw, 6.5vh), 4.4rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .clock-block strong { font-size: clamp(1.8rem, min(5vw, 9vh), 5rem); }
 
-@media (max-height: 700px) {
+@media (max-height: 760px) {
   .eyebrow { margin-bottom: 4px; }
   .status-copy > p:first-of-type { margin-bottom: 8px; }
   .status-detail { margin-top: 10px; }
@@ -555,12 +557,17 @@ body.display-off::before, body.display-off::after { display: none; }
   .celebration { margin-top: 10px; gap: 2px; }
   .celebration p { font-size: 1rem; }
   .section-heading { padding-bottom: 4px; }
+  .event-list { gap: 8px; padding-top: 8px; }
+  .event.meeting-row { padding: 11px 18px; }
+  .clock-block span { font-size: .8rem; }
+  .reserve { padding: 12px 20px; }
+}
+/* Smaller meeting rows only on the older 600 px tablet; the room tablets (711 px) keep the larger, easier-to-read rows. */
+@media (max-height: 640px) {
   .event-list { gap: 6px; padding-top: 6px; }
   .event.meeting-row { padding: 8px 14px; }
   .meeting-subject { font-size: 1.05rem; }
   .meeting-time { font-size: .9rem; }
-  .clock-block span { font-size: .8rem; }
-  .reserve { padding: 12px 20px; }
 }
 @media (max-height: 540px) {
   .clock-block span, .eyebrow { display: none; }
@@ -577,16 +584,16 @@ body.display-off::before, body.display-off::after { display: none; }
 
 /* "Closed tomorrow" heads-up on the status card. */
 .closed-soon { margin-top: 16px; padding: 8px 14px; border: 1px solid var(--amber, #ffbf47); border-radius: 12px; color: var(--amber, #ffbf47); font-weight: 800; font-size: clamp(1rem, 2vw, 1.4rem); width: fit-content; max-width: 100%; }
-@media (max-height: 700px) { .closed-soon { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
+@media (max-height: 760px) { .closed-soon { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
 
 /* Official weather warning (National Weather Service) on the status card. Amber for watches and advisories, red for warnings. */
 .weather-alert { margin-top: 16px; padding: 8px 14px; border: 1px solid var(--amber, #ffbf47); border-radius: 12px; color: var(--amber, #ffbf47); font-weight: 800; font-size: clamp(1rem, 2vw, 1.4rem); width: fit-content; max-width: 100%; overflow-wrap: anywhere; }
 .weather-alert[data-level="severe"] { border-color: var(--red, #ff5f62); color: var(--red, #ff5f62); background: color-mix(in srgb, var(--red, #ff5f62) 14%, transparent); }
-@media (max-height: 700px) { .weather-alert { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
+@media (max-height: 760px) { .weather-alert { margin-top: 8px; padding: 4px 12px; font-size: 1rem; } }
 
 /* Orlando Foods logo: white version on the dark theme, colour version on the light theme (the colour one has dark
    lettering that would vanish on dark). It sits in the middle of the top bar, a little smaller on screens 540 px tall or less, and is hidden on narrow portrait
-   screens. (The real Galaxy Tab A7 Lite reports a 1006x600 page at 1.33x, so it gets the normal size.) srcset gives the browser pre-scaled copies. */
+   screens. (The room tablets report 1139x711 at 1.13x and the older Galaxy Tab A7 Lite 1006x600 at 1.33x; both get the normal size.) srcset gives the browser pre-scaled copies. */
 .brand-logo { display: flex; align-items: center; justify-content: center; flex: 0 0 auto; align-self: center; height: clamp(34px, 8.5vh, 76px); }
 .brand-logo img { height: 100%; width: auto; display: block; }
 .brand-logo .logo-for-light { display: none; }

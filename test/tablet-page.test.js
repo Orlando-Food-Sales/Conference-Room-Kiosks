@@ -138,7 +138,7 @@ test('every weather in the preview has a background mood, and the tour covers th
 
 test('the preview offers the real tablet size and the warning examples the display understands', () => {
   const screens = options('screen').map(o => o.value);
-  for (const size of ['1006x600', '600x1006', '1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
+  for (const size of ['1139x711', '711x1139', '1006x600', '600x1006', '1340x800', '800x1340', '1000x500']) assert.ok(screens.includes(size), `${size} is offered`);
   const warnings = options('warning').map(o => o.value);
   assert.ok(warnings.some(w => w.includes(';')), 'several warnings at once');
   assert.ok(warnings.some(w => w.endsWith('|watch')) && warnings.some(w => w && w !== 'none' && !w.includes('|')), 'both red and amber');
@@ -194,4 +194,16 @@ test('the preview shows a real room from the server, and picking a room never dr
   assert.match(previewJs, /return '\/room\/' \+ encodeURIComponent\(\$\('room'\)\.value \|\| 'room'\) \+ '\?' \+ q;/);
   assert.doesNotMatch(previewJs, /'\/room\/room\?'/, 'no longer a fixed room that only the demo has');
   assert.match(app, /history\.replaceState\(\{\}, '', room\.displayUrl \+ location\.search\);/, 'choosing a room from the picker keeps ?kiosk=1 and preview settings');
+});
+
+test('the layout is sized for the room tablets (1139x711) and still fits the older 1006x600 one', () => {
+  const css = fs.readFileSync(new URL('../public/theme.css', import.meta.url), 'utf8');
+  assert.equal((css.match(/@media \(max-height: 760px\)/g) || []).length, 3, 'compact status-card spacing up to 760 px tall: both tablets (711 and 600), not full-size screens');
+  assert.doesNotMatch(css, /@media \(max-height: 700px\)/, 'the old 700 px limit missed the 711 px room tablets');
+  const small = css.match(/@media \(max-height: 640px\) \{([\s\S]*?)\n\}/);
+  assert.ok(small && /\.meeting-subject \{ font-size: 1\.05rem; \}/.test(small[1]), 'smaller meeting rows only on the 600 px tablet');
+  const compact = css.match(/@media \(max-height: 760px\) \{\n([\s\S]*?)\n\}/)[1];
+  assert.doesNotMatch(compact, /\.meeting-subject/, 'the room tablets keep the larger meeting titles');
+  assert.match(css, /\.topbar h1 \{ font-size: clamp\(1\.5rem, min\(3vw, 6\.5vh\), 4\.4rem\); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/, 'the room name stays on one line');
+  assert.match(css, /room tablets report 1139x711 at 1\.13x/, 'the target size is written down where the fit rules are');
 });
