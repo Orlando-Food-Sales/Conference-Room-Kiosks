@@ -7,6 +7,8 @@
 #   scripts/deploy-on-server.sh --yes            do not ask for confirmation
 #   scripts/deploy-on-server.sh --restart        restart even if only web files changed
 #   scripts/deploy-on-server.sh --no-restart     never restart (you do it yourself)
+#   scripts/deploy-on-server.sh --refresh        reload the tablets even if no web files changed
+#   scripts/deploy-on-server.sh --no-refresh     do not reload the tablets (do it later with Refresh display)
 #   From another computer: ssh -t user@server 'bash ~/kiosks/scripts/deploy-on-server.sh'
 #   (-t gives it a terminal for the question and the sudo password; without one it stops instead of hanging)
 #
@@ -19,7 +21,9 @@
 #   6. copies the new files over (never .env, config/rooms.json or node_modules)
 #   7. restarts the service only if server code changed (web-only changes need no restart)
 #   8. checks /healthz reports the new version and runs scripts/smoke-test.sh
-#   9. if step 7 or 8 fails, puts the old version back and restarts it, then tells you
+#   9. reloads the tablets if web files changed (the dashboard's Refresh display, for every room; after a restart it
+#      first waits up to a minute for the tablets to reconnect). Uses ADMIN_TOKEN from the app's .env.
+#  10. if step 7 or 8 fails, puts the old version back and restarts it, then tells you
 #
 # Settings (environment variables, all optional):
 #   APP_DIR       /opt/m365-room-display
@@ -41,7 +45,7 @@ RESTART_CMD=${RESTART_CMD:-sudo systemctl restart $SERVICE}
 BASE_URL=${HEALTH_URL%/healthz}
 SMOKE_CMD=${SMOKE_CMD:-BASE_URL=$BASE_URL bash $APP_DIR/scripts/smoke-test.sh}
 
-REF=main; DRY=0; ASSUME_YES=0; RESTART=auto
+REF=main; DRY=0; ASSUME_YES=0; RESTART=auto; REFRESH=auto
 while [[ $# -gt 0 ]]; do
   case $1 in
     --ref) REF=${2:?--ref needs a branch or tag}; shift 2 ;;
@@ -49,7 +53,9 @@ while [[ $# -gt 0 ]]; do
     --yes|-y) ASSUME_YES=1; shift ;;
     --restart) RESTART=yes; shift ;;
     --no-restart) RESTART=no; shift ;;
-    -h|--help) sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --refresh) REFRESH=yes; shift ;;
+    --no-refresh) REFRESH=no; shift ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; exit 0 ;;
     *) echo "Unknown option: $1 (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -109,6 +115,12 @@ printf '%s\n' "$CHANGES" | awk '{print $2}' | grep -E '^(src/|package(-lock)?\.j
 [[ $RESTART == no ]] && needs_restart=no
 case $RESTART:$needs_restart in auto:yes) why=' (server code changed)' ;; auto:no) why=' (only web files changed)' ;; *) why=' (you asked for that)' ;; esac
 echo "Restart needed: $needs_restart$why"
+needs_refresh=no
+printf '%s\n' "$CHANGES" | awk '{print $2}' | grep -E '^public/' >/dev/null && needs_refresh=yes
+[[ $REFRESH == yes ]] && needs_refresh=yes
+[[ $REFRESH == no ]] && needs_refresh=no
+case $REFRESH:$needs_refresh in auto:yes) why=' (web files changed)' ;; auto:no) why=' (no web files changed)' ;; *) why=' (you asked for that)' ;; esac
+echo "Reload the tablets afterwards: $needs_refresh$why"
 # Settings in the new .env.example that this server's .env does not have yet (informational: the app still starts, the feature is off).
 missing=$(grep -oE '^[A-Z][A-Z0-9_]*=' "$WORK/new/.env.example" | grep -vxFf <(grep -oE '^[A-Z][A-Z0-9_]*=' "$APP_DIR/.env" || true) | tr -d '=' | tr '\n' ' ' || true)
 [[ -z $missing ]] || echo "Settings in .env.example that your .env does not have (optional, features stay off): $missing"
@@ -137,6 +149,43 @@ backup="$BACKUP_DIR/room-display-$(date +%Y%m%d-%H%M%S)-v$old_version.tar.gz"
 ( umask 077; tar -czf "$backup" -C "$(dirname "$APP_DIR")" "$(basename "$APP_DIR")" )
 echo "Saved $backup ($(du -h "$backup" | cut -f1)); it contains .env, so keep it private."
 
+# ---- Reloading the tablets (the same request as the dashboard's Refresh display) ----
+# The admin token is read from the app's .env and handed to curl in a private file, never on the command line (where
+# other users on the server could see it in the process list). Every step is best effort: a failure here never fails the deploy.
+AUTH_FILE="$WORK/auth-header"
+admin_ready() {
+  local token
+  token=$(grep -E '^ADMIN_TOKEN=' "$APP_DIR/.env" | tail -n 1 | cut -d= -f2- | sed -E "s/^[\"']//; s/[\"']\$//") || return 1
+  [[ -n $token ]] || return 1
+  ( umask 077; printf 'authorization: Bearer %s\n' "$token" > "$AUTH_FILE" )
+}
+admin_call() { curl -fsS --max-time 10 -H @"$AUTH_FILE" "$@"; }
+online_tablets() {   # wall tablets the server sees as online right now (test browsers do not count)
+  admin_call "$BASE_URL/api/admin/overview" 2>/dev/null | python3 -c 'import json, sys
+d = json.load(sys.stdin)
+print(sum(1 for r in d["rooms"] for t in r["tablets"] if t.get("online") and t.get("wallTablet") is not False))' 2>/dev/null || echo 0
+}
+refresh_tablets() {
+  [[ $needs_refresh == yes ]] || return 0
+  if ! admin_ready; then echo "No ADMIN_TOKEN in $APP_DIR/.env, so the tablets were not reloaded. Use Refresh display on the dashboard."; return 0; fi
+  if [[ ${1:-} == after-restart && ${tablets_before:-0} -gt 0 ]]; then
+    # A restart drops every live connection; a message sent before a tablet reconnects would never reach it.
+    local waited=0 now
+    while now=$(online_tablets); [[ $now -lt $tablets_before && $waited -lt 60 ]]; do sleep 3; waited=$((waited + 3)); done
+    if [[ $waited -gt 0 ]]; then echo "$now of $tablets_before tablets reconnected after the restart (waited $waited s)."; else echo "$now of $tablets_before tablets reconnected after the restart."; fi
+  fi
+  local rooms sent=0 total=0 room
+  rooms=$(curl -fsS --max-time 10 "$BASE_URL/api/rooms" | python3 -c 'import json, sys; print(" ".join(r["id"] for r in json.load(sys.stdin)["rooms"]))' 2>/dev/null) || { echo "Could not list the rooms, so the tablets were not reloaded. Use Refresh display on the dashboard."; return 0; }
+  for room in $rooms; do
+    total=$((total + 1))
+    admin_call -X POST -H 'content-type: application/json' -d '{"action":"refresh"}' "$BASE_URL/api/admin/rooms/$room/control" >/dev/null 2>&1 && sent=$((sent + 1))
+  done
+  echo "Asked the tablets in $sent of $total rooms to reload (a tablet waits while someone has its booking or message panel open, at most 3 minutes)."
+  [[ $sent -eq $total ]] || echo "Some rooms did not take it: use Refresh display on the dashboard for those."
+}
+tablets_before=0
+if [[ $needs_refresh == yes && $needs_restart == yes ]] && admin_ready; then tablets_before=$(online_tablets); fi
+
 rollback() {
   say "ROLLING BACK to version $old_version"
   local old="$WORK/old"; mkdir -p "$old"
@@ -144,6 +193,8 @@ rollback() {
   rsync -rltc --executability --delete "${EXCLUDES[@]}" "$old/$(basename "$APP_DIR")/" "$APP_DIR/"
   if [[ $needs_restart == yes ]]; then eval "$RESTART_CMD" || echo "The restart command failed, restart the service by hand."; sleep 3; fi
   if h=$(health); then back=$(printf '%s' "$h" | field version); echo "Back on ${back:+version $back}${back:-the previous version (it does not report a version number)}."; else echo "The service is not answering. Restore by hand from $backup"; fi
+  # A tablet may have reloaded on its own during the copy; make sure every tablet is back on the old pages too.
+  if [[ $needs_restart == yes ]]; then refresh_tablets after-restart || true; else refresh_tablets || true; fi
   die "the update to $new_version failed and the old version was put back. Nothing else was changed."
 }
 
@@ -165,7 +216,7 @@ if [[ $needs_restart == yes ]]; then
   [[ $ok -eq 1 ]] || { echo "The service did not come back on version $new_version within 30 seconds."; rollback; }
   echo "Restarted: now version $new_version."
 else
-  say "7. No restart needed (only web files changed; tablets pick them up when they reload)"
+  say "7. No restart needed (only web files changed)"
   health >/dev/null || { echo "The service is not answering."; rollback; }
 fi
 
@@ -173,10 +224,15 @@ say "8. Smoke test"
 if eval "$SMOKE_CMD" > "$WORK/smoke.txt" 2>&1; then grep -E 'Running version|Smoke test passed' "$WORK/smoke.txt" || true
 else tail -15 "$WORK/smoke.txt"; echo "The smoke test failed."; rollback; fi
 
+if [[ $needs_refresh == yes ]]; then
+  say "9. Reloading the tablets"
+  if [[ $needs_restart == yes ]]; then refresh_tablets after-restart || true; else refresh_tablets || true; fi
+fi
+
 # Keep the newest few backups only.
 { ls -1t "$BACKUP_DIR"/room-display-*.tar.gz 2>/dev/null | tail -n +$((KEEP_BACKUPS + 1)) | while read -r old_backup; do rm -f "$old_backup"; done; } || true
 
 say "Done: $old_version -> $new_version ($new_commit)"
 echo "Backup: $backup"
 echo "Undo later with:  tar -xzf $backup -C $(dirname "$APP_DIR") && $RESTART_CMD"
-echo "Tablets that are already open keep the old page until they reload (nightly at about 3:30 AM, or reload them by hand)."
+[[ $needs_refresh == yes ]] || echo "The tablets were not reloaded (no web files changed, or --no-refresh). They pick up changes at the nightly reload (about 3:30 AM) or with Refresh display."

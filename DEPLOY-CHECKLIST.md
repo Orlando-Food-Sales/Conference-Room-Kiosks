@@ -30,7 +30,7 @@ After that first deploy the script lives in the app folder, so every later updat
 /opt/m365-room-display/scripts/deploy-on-server.sh
 ```
 
-Options: `--ref v2.1.0` (a tag or branch instead of main), `--yes` (no question), `--restart` / `--no-restart`. `--help` lists the
+Options: `--ref v2.1.0` (a tag or branch instead of main), `--yes` (no question), `--restart` / `--no-restart`, `--no-refresh` (do not reload the tablets; by default they are reloaded at the end when web files changed) / `--refresh`. `--help` lists the
 settings. New settings still go into `.env` by hand (section 3); the script lists the ones your `.env` does not have yet.
 
 From a laptop over ssh, add `-t` so the script has a terminal for its question and the sudo password:

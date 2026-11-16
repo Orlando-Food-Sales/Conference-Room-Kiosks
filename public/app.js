@@ -95,7 +95,7 @@ async function loadEvents() {
 // "Microsoft 365 is not responding · showing meetings from 2:41 PM" (Snoopy looks for "not responding" too).
 function outageText() { return 'Microsoft 365 is not responding' + (state.lastGoodAt ? ' \u00b7 showing meetings from ' + formatTime(state.lastGoodAt) : ''); }
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH }) }); } catch (_) { } }
-function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') await reloadPage(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
+function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') requestRefresh(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
 async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); loadWeatherAlerts(); }
 
@@ -223,6 +223,18 @@ function checkZoom() {
   reloadPage();
 }
 if (HAS_TOUCH || IS_KIOSK) setInterval(checkZoom, 5000);
+
+// A refresh from the dashboard or a deploy: reload now, unless someone is typing in the booking or message panel; then
+// as soon as it closes, or after 3 minutes in case it was left open. (The round button on the tablet reloads at once.)
+var REFRESH_WAIT_MS = 3 * 60000, refreshWantedAt = 0;
+function panelOpen() { return !$('bookingPanel').classList.contains('hidden') || !$('messagePanel').classList.contains('hidden'); }
+function requestRefresh() {
+  if (!refreshWantedAt) refreshWantedAt = Date.now();
+  clearTimeout(state.refreshWait);
+  if (panelOpen() && Date.now() - refreshWantedAt < REFRESH_WAIT_MS) { state.refreshWait = setTimeout(requestRefresh, 2000); return; }
+  refreshWantedAt = 0;
+  reloadPage();
+}
 
 async function reloadPage() {
   showToast('Refreshing\u2026');

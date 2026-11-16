@@ -185,7 +185,7 @@ test('the refresh button and the dashboard\'s Refresh display really reload the 
   assert.ok(reload[0].indexOf('/healthz') < reload[0].indexOf('location.reload()'), 'the check comes before the reload');
   assert.match(reload[0], /catch \(_\) \{[\s\S]*initializeRoom\(state\.room\.id\)[\s\S]*return;/, 'with the server down it stays on the page and re-reads the meetings');
   assert.match(app, /\$\('refreshButton'\)\.addEventListener\('click', function \(\) \{ reloadPage\(\); \}\)/, 'the tablet button uses it');
-  assert.match(app, /data\.detail\.action === 'refresh'\) await reloadPage\(\)/, 'the dashboard button uses it');
+  assert.match(app, /data\.detail\.action === 'refresh'\) requestRefresh\(\)/, 'the dashboard button (and a deploy) uses it, through requestRefresh');
 });
 
 test('the preview shows a real room from the server, and picking a room never drops the preview settings', () => {
@@ -268,4 +268,42 @@ test('during a meeting the door screen says how long is left ("ends in 12 min")'
   assert.match(app, /setInterval\(render, 30000\)/, 'redrawn every 30 seconds');
   const css = fs.readFileSync(new URL('../public/theme.css', import.meta.url), 'utf8');
   assert.match(css, /@media \(min-width: 801px\) \{ \.status-copy \{ max-width: calc\(100% - 420px\); \} \}/, 'a long title wraps before Snoopy instead of running under him');
+});
+
+test('a refresh from the dashboard or a deploy waits while someone is typing in a panel, at most 3 minutes', () => {
+  const source = app.match(/var REFRESH_WAIT_MS = [^\n]+\nfunction panelOpen\(\) \{[^\n]+\}\nfunction requestRefresh\(\) \{[\s\S]*?\n\}/)[0];
+  let clock = 0, timers = [], reloads = 0;
+  const open = { booking: false, message: false };
+  const el = id => ({ classList: { contains: () => !(id === 'bookingPanel' ? open.booking : open.message) } });
+  const make = new Function('$', 'state', 'reloadPage', 'setTimeout', 'clearTimeout', 'Date', `${source}\nreturn requestRefresh;`);
+  const requestRefresh = make(el, {}, () => { reloads += 1; }, (fn, ms) => { timers.push({ fn, at: clock + ms }); return timers.length; }, () => { timers = []; }, { now: () => clock });
+  const advance = ms => { const end = clock + ms; while (timers.length && timers[0].at <= end) { const t = timers.shift(); clock = t.at; t.fn(); } clock = end; };
+  requestRefresh();
+  assert.equal(reloads, 1, 'nobody typing: reloads at once');
+  open.booking = true;
+  requestRefresh();
+  advance(60000);
+  assert.equal(reloads, 1, 'booking panel open: waits');
+  open.booking = false;
+  advance(2000);
+  assert.equal(reloads, 2, 'reloads within 2 seconds of the panel closing');
+  open.message = true;
+  requestRefresh();
+  advance(3 * 60000 + 2000);
+  assert.equal(reloads, 3, 'a panel left open does not block the refresh for more than 3 minutes');
+  assert.match(app, /\$\('refreshButton'\)\.addEventListener\('click', function \(\) \{ reloadPage\(\); \}\)/, 'the round button on the tablet still reloads at once');
+});
+
+test('the deploy script reloads the tablets after a deploy that changed web files, safely', () => {
+  const script = fs.readFileSync(new URL('../scripts/deploy-on-server.sh', import.meta.url), 'utf8');
+  assert.match(script, /printf '%s\\n' "\$CHANGES" \| awk '\{print \$2\}' \| grep -E '\^public\/' >\/dev\/null && needs_refresh=yes/, 'only when web files changed');
+  assert.match(script, /--refresh\) REFRESH=yes;/); assert.match(script, /--no-refresh\) REFRESH=no;/);
+  assert.match(script, /admin_call\(\) \{ curl -fsS --max-time 10 -H @"\$AUTH_FILE" "\$@"; \}/, 'the token goes to curl in a file, never on the command line');
+  assert.match(script, /\( umask 077; printf 'authorization: Bearer %s\\n' "\$token" > "\$AUTH_FILE" \)/, 'the token file is private');
+  assert.doesNotMatch(script.replace(/printf 'authorization: Bearer %s\\n'/, ''), /Bearer \$/, 'no other use of the token');
+  assert.match(script, /-d '\{"action":"refresh"\}' "\$BASE_URL\/api\/admin\/rooms\/\$room\/control"/, 'the same request as the dashboard\'s Refresh display');
+  const finish = script.slice(script.indexOf('say "8. Smoke test"'));
+  assert.ok(finish.indexOf('say "9. Reloading the tablets"') > finish.indexOf('rollback; fi'), 'only after the smoke test passed');
+  assert.match(script, /refresh_tablets after-restart \|\| true; else refresh_tablets \|\| true; fi/, 'a failure here never fails the deploy');
+  assert.match(script, /while now=\$\(online_tablets\); \[\[ \$now -lt \$tablets_before && \$waited -lt 60 \]\]; do sleep 3;/, 'after a restart it waits up to a minute for the tablets to reconnect');
 });
