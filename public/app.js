@@ -201,6 +201,29 @@ setInterval(loadCelebrations, 15 * 60 * 1000);
 // Refresh button and "send a message" panel (uses the same admin API as the dashboard).
 // A real reload, so new code, styles and outfits are picked up (not just the meetings). Only when the server answers,
 // so a refresh during an outage never leaves the tablet on a browser error page; then it just re-reads the meetings.
+// ---- No zoom on the wall tablets ----
+// The viewport tag (user-scalable=no) and touch-action in theme.css stop most zooming. Some browsers still allow it
+// (Safari ignores user-scalable=no; Android has an accessibility setting that forces zoom), so the gestures are also
+// blocked here, and if the page is left zoomed in, it reloads itself (which resets the zoom) after 20 s without a touch.
+var ZOOM_RESET_MS = 20000, lastTouchAt = Date.now();
+function noZoom(event) { if (event.cancelable) event.preventDefault(); }
+document.addEventListener('touchstart', function (event) { lastTouchAt = Date.now(); if (event.touches.length > 1) noZoom(event); }, { passive: false });
+document.addEventListener('touchmove', function (event) { lastTouchAt = Date.now(); if (event.touches.length > 1 || (event.scale !== undefined && event.scale !== 1)) noZoom(event); }, { passive: false });
+['gesturestart', 'gesturechange', 'gestureend'].forEach(function (type) { document.addEventListener(type, noZoom, { passive: false }); });   // Safari pinch
+if (IS_KIOSK) {
+  // A keyboard or mouse plugged into a kiosk: no Ctrl+wheel or Ctrl +/-/0 zoom either.
+  document.addEventListener('wheel', function (event) { if (event.ctrlKey) noZoom(event); }, { passive: false });
+  document.addEventListener('keydown', function (event) { if ((event.ctrlKey || event.metaKey) && ['+', '=', '-', '_', '0'].indexOf(event.key) !== -1) noZoom(event); });
+}
+function zoomedIn() { var vv = globalThis.visualViewport; return Boolean(vv && vv.scale > 1.05); }
+function checkZoom() {
+  if (!zoomedIn() || Date.now() - lastTouchAt < ZOOM_RESET_MS) return;
+  if (!$('bookingPanel').classList.contains('hidden') || !$('messagePanel').classList.contains('hidden')) return;   // someone is typing
+  lastTouchAt = Date.now();                     // at most one try per 20 s
+  reloadPage();
+}
+if (HAS_TOUCH || IS_KIOSK) setInterval(checkZoom, 5000);
+
 async function reloadPage() {
   showToast('Refreshing\u2026');
   try {

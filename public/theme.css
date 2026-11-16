@@ -604,3 +604,9 @@ body.display-off::before, body.display-off::after { display: none; }
 .brand-logo-picker { justify-content: flex-start; height: clamp(40px, 8vh, 72px); margin-bottom: 18px; }
 @media (max-width: 800px) { .topbar > .brand-logo { display: none; } }
 @media (max-height: 540px) { .brand-logo { height: clamp(30px, 9vh, 44px); } }
+
+/* Wall tablets: no pinch or double-tap zoom (people pinch the screen and leave it zoomed in), and no text selection or
+   "copy" menu from a long press. Text boxes in the booking and message panels can still be selected and typed in.
+   public/app.js blocks the gestures this cannot (Safari pinch, two-finger moves) and resets a zoom that gets through. */
+html, body { touch-action: pan-x pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+input, textarea, select { -webkit-user-select: text; user-select: text; touch-action: manipulation; }

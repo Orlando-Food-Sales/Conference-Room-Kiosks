@@ -207,3 +207,23 @@ test('the layout is sized for the room tablets (1139x711) and still fits the old
   assert.match(css, /\.topbar h1 \{ font-size: clamp\(1\.5rem, min\(3vw, 6\.5vh\), 4\.4rem\); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/, 'the room name stays on one line');
   assert.match(css, /room tablets report 1139x711 at 1\.13x/, 'the target size is written down where the fit rules are');
 });
+
+test('the room display cannot be pinch-zoomed, and resets itself if a zoom gets through; the dashboard and preview still zoom', () => {
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/theme.css', import.meta.url), 'utf8');
+  assert.match(html, /<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">/);
+  assert.match(css, /html, body \{ touch-action: pan-x pan-y;/, 'no pinch or double-tap zoom');
+  assert.match(css, /input, textarea, select \{ -webkit-user-select: text; user-select: text;/, 'text boxes can still be typed in and selected');
+  assert.match(app, /addEventListener\('touchmove', function \(event\) \{[^\n]*event\.touches\.length > 1[^\n]*noZoom\(event\); \}, \{ passive: false \}\)/, 'two-finger moves are blocked (passive: false, or preventDefault is ignored)');
+  assert.match(app, /\['gesturestart', 'gesturechange', 'gestureend'\]\.forEach/, 'Safari pinch is blocked');
+  const check = app.match(/function checkZoom\(\) \{[\s\S]*?\n\}/)[0];
+  assert.match(check, /if \(!zoomedIn\(\) \|\| Date\.now\(\) - lastTouchAt < ZOOM_RESET_MS\) return;/, 'only after 20 s without a touch');
+  assert.match(check, /bookingPanel[\s\S]*messagePanel[\s\S]*return;/, 'never while someone is typing in a panel');
+  assert.match(check, /reloadPage\(\);/, 'the reload checks the server first, so an outage never leaves an error page');
+  assert.match(app, /var ZOOM_RESET_MS = 20000/);
+  for (const page of ['dashboard.html', 'preview.html']) {
+    const other = fs.readFileSync(new URL(`../public/${page}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(other, /user-scalable=no|maximum-scale=1/, `${page} keeps normal zoom (people use it at a desk)`);
+    assert.doesNotMatch(other, /theme\.css/, `${page} does not load the room display's no-zoom CSS`);
+  }
+});

@@ -16,6 +16,7 @@ dependencies; Node.js 22 or later.
 - Self-healing: the server pings each tablet every 25 seconds. A tablet whose live connection goes quiet reconnects, and after 5 minutes reloads itself (only when the server answers, at most every 10 minutes).
 - Microsoft 365 outages are named plainly: the tablet says "Microsoft 365 is not responding" and keeps the last meetings it had (one pop-up, not one a minute), a failed booking says to try again or book in Outlook, and the alert says it is Microsoft's problem (with a link to Microsoft's status page) instead of suggesting a secret or permission fix. Requests to Microsoft give up after 20 seconds instead of hanging.
 - Kiosk mode: add `?kiosk=1` to a room URL to hide the refresh and message buttons on wall tablets.
+- No pinch-zoom on the room display: zoom is turned off, and if a tablet's accessibility setting forces it anyway, the page resets itself after 20 seconds without a touch. The dashboard and preview page zoom normally.
 - Optional "Sign in with Microsoft" on the dashboard for an allowed list of people (by default the Teams alert people), with the administrator token as the backup. Needs HTTPS; setup in `INSTALL-UBUNTU.md`, section 12c.
 - Each tablet reloads itself once a night (3:30 to 3:50 in the room's time zone) so it starts fresh.
 - Orlando Foods look: dark by default (`?theme=light` or `?theme=auto` to change), with a background
