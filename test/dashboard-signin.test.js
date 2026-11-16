@@ -290,3 +290,19 @@ test('the HTTPS nginx configuration moves only the dashboard and sign-in to HTTP
   const installed = fs.readFileSync(new URL('../deploy/nginx.conf', import.meta.url), 'utf8');
   assert.doesNotMatch(installed, /443|ssl/, 'the installed default stays plain HTTP until HTTPS is set up by hand');
 });
+
+test('sign-in can use the room display\'s own app: then its CLIENT_SECRET is used, and only the listed people get in', () => {
+  const ROOM_APP = 'c2deafc4-291b-4216-8923-0ed7fd6d9b31';
+  const base = { DEMO_MODE: 'true', ROOMS_JSON: JSON.stringify(ROOMS), TENANT_ID: TENANT, CLIENT_ID: ROOM_APP, CLIENT_SECRET: 'room-app-secret', DASHBOARD_SIGNIN_REDIRECT_URI: 'https://rooms.example.com/auth/callback', DASHBOARD_ADMIN_EMAILS: 'hermes@example.com,kshitij@example.com' };
+  const s = loadConfig({ ...base, DASHBOARD_SIGNIN_CLIENT_ID: ROOM_APP }).dashboardSignIn;
+  assert.equal(s.enabled, true);
+  assert.equal(s.clientId, ROOM_APP);
+  assert.equal(s.clientSecret, 'room-app-secret', 'the room display\'s secret is reused');
+  assert.equal(s.sameApp, true);
+  assert.deepEqual(s.allowedEmails, ['hermes@example.com', 'kshitij@example.com']);
+  assert.equal(loadConfig({ ...base, DASHBOARD_SIGNIN_CLIENT_ID: ROOM_APP.toUpperCase() }).dashboardSignIn.clientSecret, 'room-app-secret', 'IDs compare without case');
+  assert.equal(loadConfig({ ...base, DASHBOARD_SIGNIN_CLIENT_ID: ROOM_APP, DASHBOARD_SIGNIN_CLIENT_SECRET: 'own-secret' }).dashboardSignIn.clientSecret, 'own-secret', 'a sign-in secret, if given, wins');
+  const other = loadConfig({ ...base, DASHBOARD_SIGNIN_CLIENT_ID: SIGNIN_APP }).dashboardSignIn;
+  assert.equal(other.enabled, false, 'a different app never borrows the room display\'s secret');
+  assert.match(other.problem, /together \(or neither\)/);
+});

@@ -135,9 +135,13 @@ function loadTeamsAlerts(env, tenantId) {
 // Who may sign in: DASHBOARD_ADMIN_EMAILS, or by default the people who get the Teams alerts.
 function loadDashboardSignIn(env, tenantId, teamsRecipients, publicBaseUrl) {
   const clientId = String(env.DASHBOARD_SIGNIN_CLIENT_ID || '').trim();
-  const clientSecret = String(env.DASHBOARD_SIGNIN_CLIENT_SECRET || '').trim();
+  let clientSecret = String(env.DASHBOARD_SIGNIN_CLIENT_SECRET || '').trim();
   if (!clientId && !clientSecret) return { enabled: false };
-  if (!clientId || !clientSecret) throw new Error('Dashboard sign-in needs DASHBOARD_SIGNIN_CLIENT_ID and DASHBOARD_SIGNIN_CLIENT_SECRET together (or neither).');
+  // Sign-in can use the room display's own app registration (CLIENT_ID): then its CLIENT_SECRET is used too, so there is
+  // only one secret to keep up to date.
+  const sameApp = Boolean(clientId) && clientId.toLowerCase() === String(env.CLIENT_ID || '').trim().toLowerCase();
+  if (!clientSecret && sameApp) clientSecret = String(env.CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) throw new Error('Dashboard sign-in needs DASHBOARD_SIGNIN_CLIENT_ID and DASHBOARD_SIGNIN_CLIENT_SECRET together (or neither). When DASHBOARD_SIGNIN_CLIENT_ID is the room display\'s own CLIENT_ID, CLIENT_SECRET is used and no separate secret is needed.');
   if (!GUID.test(clientId)) throw new Error('DASHBOARD_SIGNIN_CLIENT_ID must be the sign-in app registration\'s application (client) ID, a GUID.');
   const signInTenant = String(env.DASHBOARD_SIGNIN_TENANT_ID || '').trim() || tenantId;
   if (!GUID.test(signInTenant)) throw new Error('Dashboard sign-in needs the directory (tenant) ID as a GUID: set DASHBOARD_SIGNIN_TENANT_ID or TENANT_ID.');
@@ -152,7 +156,7 @@ function loadDashboardSignIn(env, tenantId, teamsRecipients, publicBaseUrl) {
   if (!allowedEmails.length) throw new Error('Dashboard sign-in needs someone who may sign in: set DASHBOARD_ADMIN_EMAILS (or TEAMS_ALERT_EMAILS).');
   for (const email of allowedEmails) if (!EMAIL.test(email)) throw new Error(`DASHBOARD_ADMIN_EMAILS has an invalid address: ${email}`);
   if (allowedEmails.length > 50) throw new Error('DASHBOARD_ADMIN_EMAILS can list at most 50 people.');
-  return { enabled: true, clientId, clientSecret, tenantId: signInTenant, redirectUri: url.href, allowedEmails, allowedFrom: listed.length ? 'DASHBOARD_ADMIN_EMAILS' : 'TEAMS_ALERT_EMAILS', sessionHours: integerValue(env.DASHBOARD_SESSION_HOURS, 8, 1, 24) };
+  return { enabled: true, clientId, clientSecret, sameApp, tenantId: signInTenant, redirectUri: url.href, allowedEmails, allowedFrom: listed.length ? 'DASHBOARD_ADMIN_EMAILS' : 'TEAMS_ALERT_EMAILS', sessionHours: integerValue(env.DASHBOARD_SESSION_HOURS, 8, 1, 24) };
 }
 
 export function loadConfig(env = process.env, cwd = process.cwd()) {
