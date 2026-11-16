@@ -1,9 +1,9 @@
 .env.example	4663 bytes
 .gitignore	92 bytes
-CHANGELOG.md	30542 bytes
+CHANGELOG.md	31034 bytes
 DEPLOY-CHECKLIST.md	8891 bytes
 INSTALL-UBUNTU.md	25489 bytes
-README.md	10023 bytes
+README.md	10182 bytes
 RELEASE_MANIFEST.md	1658 bytes
 REPO-FILE-MANIFEST.txt	329 bytes
 SECURITY.md	2423 bytes
@@ -26,7 +26,7 @@ public/dashboard.css	6661 bytes
 public/dashboard.html	1718 bytes
 public/dashboard.js	13479 bytes
 public/favicon.ico	4129 bytes
-public/index.html	6521 bytes
+public/index.html	6624 bytes
 public/logo/README.md	1788 bytes
 public/logo/orlando-foods-black.png	36192 bytes
 public/logo/orlando-foods-color-200.png	9536 bytes
@@ -97,8 +97,8 @@ public/snoopy/sleep-zs.png	30739 bytes
 public/snoopy/sleep.png	6475185 bytes
 public/snoopy/snoopy.png	1548606 bytes
 public/styles.css	7911 bytes
-public/theme.css	16517 bytes
-public/theme.js	2346 bytes
+public/theme.css	17162 bytes
+public/theme.js	4520 bytes
 scripts/backup.sh	889 bytes
 scripts/build-teams-app.sh	2118 bytes
 scripts/deploy-on-server.sh	11621 bytes
@@ -129,7 +129,7 @@ test/sleep-engine.test.mjs	4878 bytes
 test/sleep-extras.test.mjs	7276 bytes
 test/sleep-page.test.js	7706 bytes
 test/snoopy-meetings.test.js	4231 bytes
-test/tablet-page.test.js	17469 bytes
+test/tablet-page.test.js	20245 bytes
 test/teams-alerts.test.js	11179 bytes
 test/weather.test.js	16533 bytes
 tools/apply_single_line_update.py	6931 bytes

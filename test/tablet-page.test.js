@@ -227,3 +227,28 @@ test('the room display cannot be pinch-zoomed, and resets itself if a zoom gets 
     assert.doesNotMatch(other, /theme\.css/, `${page} does not load the room display's no-zoom CSS`);
   }
 });
+
+test('the current weather shows after the date under the clock, in Fahrenheit, without growing the top bar', () => {
+  const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../public/theme.css', import.meta.url), 'utf8');
+  const js = fs.readFileSync(new URL('../public/theme.js', import.meta.url), 'utf8');
+  assert.match(html, /<strong id="clock">--:--<\/strong><span class="clock-sub"><span id="date">—<\/span><span id="weatherNow" class="weather-now hidden"/, 'on the date line');
+  assert.match(css, /\.clock-sub \{ display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; \}/, 'one line, never wraps');
+  assert.match(css, /\.weather-now::before \{ content: " \\00b7\\0020"; \}/, '" · " between the date and the weather');
+  assert.match(css, /\.weather-now \.weather-icon \{ display: inline-block; height: 1em; line-height: 1;/, 'the emoji does not make the line taller');
+  const show = new Function('document', 'forcedTemp', 'forcedWeather', 'weather', `${js.match(/var ICONS = [^\n]+\n  var LABELS = [^\n]+\n  var fahrenheit = [^\n]+\n  function showWeather\([\s\S]*?\n  \}/)[0]}\nreturn showWeather;`);
+  const run = (weather, condition, isDay, { temp = null, forced = null } = {}) => {
+    const kids = [], box = { classList: { hidden: true, add() { this.hidden = true; }, remove() { this.hidden = false; } }, set textContent(v) { kids.length = 0; }, get firstChild() { return kids[0] || null; }, appendChild(k) { kids.push(k); } };
+    const doc = { getElementById: () => box, createElement: () => ({ setAttribute() { } }), createTextNode: text => ({ textContent: text }) };
+    show(doc, temp, forced, weather)(condition, isDay);
+    return box.classList.hidden ? null : kids.map(k => k.textContent).join('');
+  };
+  assert.equal(run({ temperatureC: 8.9, feelsLikeC: 5 }, 'clouds', true), '\u2601\ufe0f 48\u00b0F Cloudy \u00b7 feels 41\u00b0');
+  assert.equal(run({ temperatureC: 21.1, feelsLikeC: 21.6 }, 'clear', true), '\u2600\ufe0f 70\u00b0F Sunny', 'no "feels" within 5 F');
+  assert.equal(run({ temperatureC: 3, feelsLikeC: 1 }, 'clear', false), '\ud83c\udf19 37\u00b0F Clear', 'a moon at night');
+  assert.equal(run({ temperatureC: -1.1, feelsLikeC: -7.2 }, 'ice', true), '\ud83e\uddca 30\u00b0F Sleet \u00b7 feels 19\u00b0');
+  assert.equal(run(null, 'snow', true, { temp: '-2' }), '\u2744\ufe0f 28\u00b0F Snow', 'previews show too');
+  assert.equal(run(null, '', true), null, 'no weather: just the date');
+  assert.equal(run({ temperatureC: 10 }, 'clouds', true, { forced: 'none' }), null, '?weather=none hides it');
+  assert.match(js, /showWeather\(condition, root\.dataset\.day !== '0'\);/, 'updated with the background mood (every 10 minutes)');
+});

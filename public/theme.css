@@ -610,3 +610,9 @@ body.display-off::before, body.display-off::after { display: none; }
    public/app.js blocks the gestures this cannot (Safari pinch, two-finger moves) and resets a zoom that gets through. */
 html, body { touch-action: pan-x pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 input, textarea, select { -webkit-user-select: text; user-select: text; touch-action: manipulation; }
+
+/* Current weather after the date, under the clock: "Monday, November 16 · ☁️ 48°F Cloudy". Same line, so the top bar
+   does not grow; it never wraps and shortens with "…" on a narrow screen. Filled in by public/theme.js. */
+.clock-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.weather-now::before { content: " \00b7\0020"; }   /* " · " (a space right after an escape is swallowed, hence \0020) */
+.weather-now .weather-icon { display: inline-block; height: 1em; line-height: 1; vertical-align: -0.1em; }   /* an emoji is taller than text: keep the line (and the top bar) the same height */
