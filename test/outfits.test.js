@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const SNOOPY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'snoopy');
 const { outfits } = JSON.parse(fs.readFileSync(path.join(SNOOPY, 'outfits.json'), 'utf8'));
 
-const RULE_KEYS = ['from', 'easter', 'nthWeekday', 'dates', 'hebrew', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'maxTempC'];
+const RULE_KEYS = ['from', 'easter', 'nthWeekday', 'dates', 'hebrew', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'aboveTempC', 'maxTempC'];
 const KNOWN_KEYS = new Set(['id', 'label', 'file', 'rows', 'to', 'year', 'daytimeOnly', ...RULE_KEYS]);
 const WEATHER = new Set(['clear', 'clouds', 'rain', 'storm', 'snow', 'ice', 'fog']);
 
@@ -47,8 +47,10 @@ test('weather, temperature and weekday rules use values the display understands'
   for (const outfit of outfits) {
     for (const kind of outfit.weather || []) assert.ok(WEATHER.has(kind), `${outfit.id}: "${kind}" is not a weather condition`);
     for (const day of outfit.weekdays || []) assert.ok(Number.isInteger(day) && day >= 0 && day <= 6, `${outfit.id}: weekday ${day} is not 0 to 6`);
-    for (const key of ['minTempC', 'maxTempC']) if (outfit[key] !== undefined) assert.ok(Number.isFinite(outfit[key]), `${outfit.id}: ${key} must be a number`);
+    for (const key of ['minTempC', 'aboveTempC', 'maxTempC']) if (outfit[key] !== undefined) assert.ok(Number.isFinite(outfit[key]), `${outfit.id}: ${key} must be a number`);
     if (outfit.minTempC !== undefined && outfit.maxTempC !== undefined) assert.ok(outfit.minTempC <= outfit.maxTempC, `${outfit.id}: minTempC is above maxTempC`);
+    if (outfit.aboveTempC !== undefined && outfit.maxTempC !== undefined) assert.ok(outfit.aboveTempC < outfit.maxTempC, `${outfit.id}: aboveTempC must be below maxTempC`);
+    assert.ok(!(outfit.minTempC !== undefined && outfit.aboveTempC !== undefined), `${outfit.id}: use minTempC or aboveTempC, not both`);
     assert.ok([9, 11].includes(outfit.rows), `${outfit.id}: rows must be 9 or 11`);
   }
 });
@@ -148,7 +150,7 @@ test('each kind of weather gets its own outfit once the art is there, and today\
   assert.ok(fn, 'weatherRuleMatches is in public/snoopy.js');
   assert.match(snoopyCode, /var weathered = weatherRuleMatches\(o, weather, isDay, hasTemp \? feels : null\);/, 'the outfit chooser uses it');
   const matches = new Function(`${fn[0]}\nreturn weatherRuleMatches;`)();
-  const weatherRules = outfits.filter(o => o.weather || o.minTempC !== undefined || o.maxTempC !== undefined);
+  const weatherRules = outfits.filter(o => o.weather || o.minTempC !== undefined || o.aboveTempC !== undefined || o.maxTempC !== undefined);
   // What Snoopy wears (first match wins), with only some sheets drawn.
   const wears = (weather, feels, { isDay = true, drawn = null } = {}) =>
     weatherRules.find(o => (!drawn || drawn.includes(o.id)) && matches(o, weather, isDay, feels))?.id || null;
@@ -187,6 +189,17 @@ test('each kind of weather gets its own outfit once the art is there, and today\
   assert.equal(wears('', 2), null, 'unknown weather: nothing');
   // Both limits include their number.
   assert.equal(wears('clouds', 12), 'chilly', '12 C is still chilly');
+  // Exactly 4 C is cold, never chilly, even with both cold sheets missing (the order of the rules does not decide it).
+  const noCold = all.filter(id => !['winter-cold-coat', 'winter-cold'].includes(id));
+  assert.equal(wears('clouds', 4, { drawn: noCold }), null, '4 C without the cold sheets: no sweater');
+  assert.equal(wears('clouds', 4.1, { drawn: noCold }), 'chilly', 'just above 4 C: the sweater');
+  assert.equal(wears('clouds', 4), 'winter-cold-coat');
+  // No temperature is both cold and chilly: the two rules never overlap.
+  const cold = outfits.find(o => o.id === 'winter-cold-coat'), chilly = outfits.find(o => o.id === 'chilly');
+  for (let tenths = -100; tenths <= 200; tenths += 1) {
+    const t = tenths / 10;
+    assert.ok(!(matches(cold, 'clouds', true, t) && matches(chilly, 'clouds', true, t)), `${t} C matches both cold and chilly`);
+  }
   assert.equal(wears('clouds', 12.1), null);
   assert.equal(wears('clear', 18), 'summer-sunshine', '18 C is warm');
   assert.equal(wears('clear', 17.9), null);
