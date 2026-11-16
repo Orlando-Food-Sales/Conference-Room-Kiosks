@@ -545,6 +545,9 @@ body.display-off::before, body.display-off::after { display: none; }
 .schedule { display: flex; flex-direction: column; min-height: 0; }
 .event-list { position: relative; flex: 1; min-height: 0; overflow: hidden; align-content: start; }
 .snoopy { width: auto; aspect-ratio: 192 / 208; height: min(216px, 80%); }
+/* Landscape: the status text stops before Snoopy (he stands 240 px from the card's right edge and is up to 200 px wide),
+   so a long meeting title with "until 4:29 PM · ends in 1 h 20 min" wraps onto a second line instead of running under him. */
+@media (min-width: 801px) { .status-copy { max-width: calc(100% - 420px); } }
 .topbar h1 { font-size: clamp(1.5rem, min(3vw, 6.5vh), 4.4rem); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .clock-block strong { font-size: clamp(1.8rem, min(5vw, 9vh), 5rem); }
 

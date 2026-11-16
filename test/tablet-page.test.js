@@ -252,3 +252,20 @@ test('the current weather shows after the date under the clock, in Fahrenheit, w
   assert.equal(run({ temperatureC: 10 }, 'clouds', true, { forced: 'none' }), null, '?weather=none hides it');
   assert.match(js, /showWeather\(condition, root\.dataset\.day !== '0'\);/, 'updated with the background mood (every 10 minutes)');
 });
+
+test('during a meeting the door screen says how long is left ("ends in 12 min")', () => {
+  const endsInText = new Function(`${app.match(/function endsInText\(end, now\) \{[\s\S]*?\n\}/)[0]}\nreturn endsInText;`)();
+  const now = Date.parse('2027-03-10T15:00:00Z'), at = minutes => new Date(now + minutes * 60000).toISOString();
+  assert.equal(endsInText(at(12), now), 'ends in 12 min');
+  assert.equal(endsInText(at(11.5), now), 'ends in 12 min', 'rounded up');
+  assert.equal(endsInText(at(0.2), now), 'ends in 1 min', 'never "0 min" while the meeting is on');
+  assert.equal(endsInText(at(-0.5), now), 'ends in 1 min', 'a late redraw never shows a negative time');
+  assert.equal(endsInText(at(59), now), 'ends in 59 min');
+  assert.equal(endsInText(at(60), now), 'ends in 1 h');
+  assert.equal(endsInText(at(80), now), 'ends in 1 h 20 min');
+  assert.equal(endsInText(at(150), now), 'ends in 2 h 30 min');
+  assert.match(app, /\(current\.subject \|\| 'Reserved'\) \+ ' · until ' \+ formatTime\(current\.end\) \+ ' · ' \+ endsInText\(current\.end, now\)/, 'shown after the end time');
+  assert.match(app, /setInterval\(render, 30000\)/, 'redrawn every 30 seconds');
+  const css = fs.readFileSync(new URL('../public/theme.css', import.meta.url), 'utf8');
+  assert.match(css, /@media \(min-width: 801px\) \{ \.status-copy \{ max-width: calc\(100% - 420px\); \} \}/, 'a long title wraps before Snoopy instead of running under him');
+});
