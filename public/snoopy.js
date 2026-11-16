@@ -271,13 +271,14 @@
   // Whether a weather rule applies: true or false, or null when the outfit has no weather or temperature rule.
   // feels is the feels-like temperature in Celsius, or null when it is not known. A rule with a temperature limit
   // needs a known temperature, so neither the Hawaiian shirt nor a coat ever shows on a guess. minTempC and maxTempC
-  // include their number; aboveTempC does not (chilly is "above 4 C", so exactly 4 C is never chilly).
+  // include their number; aboveTempC and belowTempC do not, so neighbouring bands never overlap (4 C is cold, not chilly).
   function weatherRuleMatches(o, weather, isDay, feels) {
-    if (!o.weather && o.minTempC === undefined && o.aboveTempC === undefined && o.maxTempC === undefined) return null;
+    if (!o.weather && o.minTempC === undefined && o.aboveTempC === undefined && o.maxTempC === undefined && o.belowTempC === undefined) return null;
     if (o.weather && o.weather.indexOf(weather) === -1) return false;
     if (o.daytimeOnly && !isDay) return false;
     if (o.minTempC !== undefined && (feels === null || feels < o.minTempC)) return false;
     if (o.aboveTempC !== undefined && (feels === null || feels <= o.aboveTempC)) return false;   // more than, not equal
+    if (o.belowTempC !== undefined && (feels === null || feels >= o.belowTempC)) return false;   // less than, not equal
     if (o.maxTempC !== undefined && (feels === null || feels > o.maxTempC)) return false;
     return true;
   }

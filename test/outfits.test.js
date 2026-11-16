@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const SNOOPY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'snoopy');
 const { outfits } = JSON.parse(fs.readFileSync(path.join(SNOOPY, 'outfits.json'), 'utf8'));
 
-const RULE_KEYS = ['from', 'easter', 'nthWeekday', 'dates', 'hebrew', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'aboveTempC', 'maxTempC'];
+const RULE_KEYS = ['from', 'easter', 'nthWeekday', 'dates', 'hebrew', 'event', 'closed', 'weekdays', 'weather', 'minTempC', 'aboveTempC', 'maxTempC', 'belowTempC'];
 const KNOWN_KEYS = new Set(['id', 'label', 'file', 'rows', 'to', 'year', 'daytimeOnly', ...RULE_KEYS]);
 const WEATHER = new Set(['clear', 'clouds', 'rain', 'storm', 'snow', 'ice', 'fog']);
 
@@ -47,7 +47,7 @@ test('weather, temperature and weekday rules use values the display understands'
   for (const outfit of outfits) {
     for (const kind of outfit.weather || []) assert.ok(WEATHER.has(kind), `${outfit.id}: "${kind}" is not a weather condition`);
     for (const day of outfit.weekdays || []) assert.ok(Number.isInteger(day) && day >= 0 && day <= 6, `${outfit.id}: weekday ${day} is not 0 to 6`);
-    for (const key of ['minTempC', 'aboveTempC', 'maxTempC']) if (outfit[key] !== undefined) assert.ok(Number.isFinite(outfit[key]), `${outfit.id}: ${key} must be a number`);
+    for (const key of ['minTempC', 'aboveTempC', 'maxTempC', 'belowTempC']) if (outfit[key] !== undefined) assert.ok(Number.isFinite(outfit[key]), `${outfit.id}: ${key} must be a number`);
     if (outfit.minTempC !== undefined && outfit.maxTempC !== undefined) assert.ok(outfit.minTempC <= outfit.maxTempC, `${outfit.id}: minTempC is above maxTempC`);
     if (outfit.aboveTempC !== undefined && outfit.maxTempC !== undefined) assert.ok(outfit.aboveTempC < outfit.maxTempC, `${outfit.id}: aboveTempC must be below maxTempC`);
     assert.ok(!(outfit.minTempC !== undefined && outfit.aboveTempC !== undefined), `${outfit.id}: use minTempC or aboveTempC, not both`);
@@ -150,7 +150,7 @@ test('each kind of weather gets its own outfit once the art is there, and today\
   assert.ok(fn, 'weatherRuleMatches is in public/snoopy.js');
   assert.match(snoopyCode, /var weathered = weatherRuleMatches\(o, weather, isDay, hasTemp \? feels : null\);/, 'the outfit chooser uses it');
   const matches = new Function(`${fn[0]}\nreturn weatherRuleMatches;`)();
-  const weatherRules = outfits.filter(o => o.weather || o.minTempC !== undefined || o.aboveTempC !== undefined || o.maxTempC !== undefined);
+  const weatherRules = outfits.filter(o => o.weather || ['minTempC', 'aboveTempC', 'maxTempC', 'belowTempC'].some(k => o[k] !== undefined));
   // What Snoopy wears (first match wins), with only some sheets drawn.
   const wears = (weather, feels, { isDay = true, drawn = null } = {}) =>
     weatherRules.find(o => (!drawn || drawn.includes(o.id)) && matches(o, weather, isDay, feels))?.id || null;
@@ -168,11 +168,15 @@ test('each kind of weather gets its own outfit once the art is there, and today\
     ['clouds', 4.5, true, null, 'chilly'],
     ['clear', 9, true, null, 'chilly'],
     ['clouds', 12, false, null, 'chilly'],
-    ['clouds', 15, true, null, null],
+    ['clouds', 15, true, null, 'mild'],
+    ['clear', 15, false, null, 'mild'],
+    ['clouds', 18, true, null, 'warm-cloudy'],
     ['clear', 22, true, 'summer-sunshine', 'summer-sunshine'],
-    ['clear', 29, true, 'summer-sunshine', 'heatwave'],
+    ['clear', 29, true, null, 'heatwave'],   // the shirt stops where the heatwave starts (no overlap)
     ['clear', 33, false, null, null],
-    ['clouds', 33, true, null, null],
+    ['clouds', 33, true, null, 'warm-cloudy'],
+    ['clear', 28.9, true, 'summer-sunshine', 'summer-sunshine'],
+    ['clear', 20, false, null, null],
     ['clear', null, true, null, null],   // unknown temperature: no Hawaiian shirt on a guess
     ['clouds', null, true, null, null]
   ];
@@ -194,17 +198,28 @@ test('each kind of weather gets its own outfit once the art is there, and today\
   assert.equal(wears('clouds', 4, { drawn: noCold }), null, '4 C without the cold sheets: no sweater');
   assert.equal(wears('clouds', 4.1, { drawn: noCold }), 'chilly', 'just above 4 C: the sweater');
   assert.equal(wears('clouds', 4), 'winter-cold-coat');
+  // The dry-weather temperature bands never overlap, at any temperature, day or night: the order of the rules never decides.
+  const bands = ['winter-cold-coat', 'chilly', 'mild', 'summer-sunshine', 'heatwave', 'warm-cloudy'].map(id => outfits.find(o => o.id === id));
+  for (const weather of ['clear', 'clouds', 'fog']) for (const isDay of [true, false]) for (let tenths = -200; tenths <= 450; tenths += 1) {
+    const hit = bands.filter(o => matches(o, weather, isDay, tenths / 10)).map(o => o.id);
+    assert.ok(hit.length <= 1, `${weather}, ${isDay ? 'day' : 'night'}, ${tenths / 10} C matches ${hit.join(' and ')}`);
+  }
+  // What is still plain on purpose: warm clear nights, fog has its own coat, and no temperature reading.
+  assert.equal(wears('clear', 22, { isDay: false }), null);
+  assert.equal(wears('clouds', null), null);
+  for (const [t, id] of [[12, 'chilly'], [12.1, 'mild'], [17.9, 'mild'], [18, 'summer-sunshine'], [28.9, 'summer-sunshine'], [29, 'heatwave']]) assert.equal(wears('clear', t), id, `clear day at ${t} C`);
+  for (const [t, id] of [[12.1, 'mild'], [17.9, 'mild'], [18, 'warm-cloudy'], [35, 'warm-cloudy']]) assert.equal(wears('clouds', t), id, `cloudy at ${t} C`);
   // No temperature is both cold and chilly: the two rules never overlap.
   const cold = outfits.find(o => o.id === 'winter-cold-coat'), chilly = outfits.find(o => o.id === 'chilly');
   for (let tenths = -100; tenths <= 200; tenths += 1) {
     const t = tenths / 10;
     assert.ok(!(matches(cold, 'clouds', true, t) && matches(chilly, 'clouds', true, t)), `${t} C matches both cold and chilly`);
   }
-  assert.equal(wears('clouds', 12.1), null);
+  assert.equal(wears('clouds', 12.1), 'mild', 'just above 12 C: the windbreaker');
   assert.equal(wears('clear', 18), 'summer-sunshine', '18 C is warm');
-  assert.equal(wears('clear', 17.9), null);
+  assert.equal(wears('clear', 17.9), 'mild', 'just below 18 C: still the windbreaker');
   for (const id of ['winter-cold-coat', 'winter-cold', 'chilly']) assert.deepEqual(outfits.find(o => o.id === id).weather, ['clear', 'clouds', 'fog'], `${id} lists the dry conditions`);
-  for (const id of ['ice', 'fog', 'winter-cold-coat', 'chilly', 'heatwave']) assert.equal(outfits.find(o => o.id === id).file, `outfits/${id}.png`);
+  for (const id of ['ice', 'fog', 'winter-cold-coat', 'chilly', 'heatwave', 'mild', 'warm-cloudy']) assert.equal(outfits.find(o => o.id === id).file, `outfits/${id}.png`);
 });
 
 test('the Easter dates offered on the preview page really fall inside or outside the Easter window', () => {
