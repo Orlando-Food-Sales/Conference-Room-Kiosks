@@ -1,6 +1,6 @@
 .env.example	5588 bytes
 .gitignore	92 bytes
-CHANGELOG.md	37932 bytes
+CHANGELOG.md	38100 bytes
 DEPLOY-CHECKLIST.md	9038 bytes
 INSTALL-UBUNTU.md	34205 bytes
 README.md	10859 bytes
@@ -23,9 +23,9 @@ package.json	382 bytes
 patches/0001-single-line-upcoming-meetings.patch	3566 bytes
 public/app.js	36167 bytes
 public/apple-touch-icon.png	6688 bytes
-public/dashboard.css	6970 bytes
+public/dashboard.css	7065 bytes
 public/dashboard.html	2014 bytes
-public/dashboard.js	15723 bytes
+public/dashboard.js	16101 bytes
 public/favicon.ico	4129 bytes
 public/index.html	6715 bytes
 public/logo/README.md	1788 bytes
@@ -120,7 +120,7 @@ src/teams-alerts.js	9082 bytes
 src/weather.js	14798 bytes
 test/celebrations.test.js	13053 bytes
 test/config.test.js	10659 bytes
-test/dashboard-page.test.js	4055 bytes
+test/dashboard-page.test.js	4262 bytes
 test/dashboard-signin.test.js	23736 bytes
 test/outage.test.js	9801 bytes
 test/outfit-schedule.test.js	11107 bytes

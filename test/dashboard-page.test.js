@@ -57,8 +57,10 @@ test('the dashboard shows each tablet\'s battery, and "not reported" when it can
   assert.match(css, /\.devices \.low\{/);
 });
 test('the dashboard has Take photo and Live camera for rooms with a camera, and a viewer that can be closed', () => {
-  assert.match(js, /if\(room\.camera\)\{controls\.appendChild\(button\('Take photo'/);
-  assert.match(js, /button\('Live camera',function\(\)\{cameraView\(room,true\)\}\)/);
+  assert.match(js, /var photo=button\('Take photo',function\(\)\{cameraView\(room,false\)\}\)/);
+  assert.match(js, /var live=button\('Live camera',function\(\)\{cameraView\(room,true\)\}\)/);
+  assert.match(js, /if\(!room\.camera\)\{photo\.disabled=live\.disabled=true;/, 'shown on every room, greyed out until the camera is set up');
+  assert.match(js, /Camera not set up yet/);
   assert.match(js, /Date\.now\(\)-started>=300000/, 'live view stops by itself after 5 minutes');
   assert.match(js, /URL\.revokeObjectURL/, 'old pictures are released, not kept');
   assert.match(html, /<section id="camera" class="camera hidden"/);
