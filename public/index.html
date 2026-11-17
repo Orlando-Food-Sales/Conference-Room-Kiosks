@@ -52,10 +52,13 @@
       <div class="section-heading">
         <h2>Today's schedule</h2>
         <div id="cameraNotice" class="camera-notice" role="status">&#9679; Camera on</div>
+        <div id="micNotice" class="mic-notice" role="status">&#9679; Microphone on</div>
+        <div id="noiseNotice" class="noise-notice" role="status">&#9680; Noise meter on (no sound is sent or kept)</div>
         <div class="heading-tools">
           <span id="syncState">Connecting…</span>
           <button id="refreshButton" class="icon-button" type="button" aria-label="Refresh this screen" title="Refresh">&#8635;</button>
           <button id="messageButton" class="icon-button" type="button" aria-label="Send a message to this screen" title="Message">&#9993;</button>
+          <button id="callButton" class="icon-button hidden" type="button" aria-label="Call the office" title="Call">&#9742;</button>
         </div>
       </div>
       <div id="eventList" class="event-list"></div>
@@ -87,6 +90,14 @@
       <div class="actions"><button id="messageCancel" class="secondary" type="button">Cancel</button><button id="messageClear" class="secondary" type="button">Clear</button><button class="primary" type="submit">Send</button></div>
       <a class="modal-link" href="/dashboard">Open the full dashboard</a>
     </form>
+  </section>
+  <section id="callPanel" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="callTitle">
+    <div class="modal-card">
+      <h2 id="callTitle">Call the office</h2>
+      <p id="callStatus" class="call-status" role="status" aria-live="polite"></p>
+      <audio id="callAudio" autoplay></audio>
+      <div class="actions"><button id="callHangup" class="primary" type="button">Hang up</button></div>
+    </div>
   </section>
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="/app.js"></script>

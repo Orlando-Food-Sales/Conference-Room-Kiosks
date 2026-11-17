@@ -70,3 +70,31 @@ test('the camera viewer can switch between the front and back camera', () => {
   assert.match(html, /<button id="cameraFront" type="button">Front camera<\/button> <button id="cameraBack" type="button">Back camera<\/button>/);
   assert.match(js, /\/camera\/side',\{method:'POST',body:JSON\.stringify\(\{side:side\}\)\}/);
 });
+test('the dashboard has no control that starts a call: only the answer, signal, hangup and stream routes', () => {
+  assert.ok(!/\/api\/intercom\//.test(js), 'the public ring route is not used');
+  assert.ok(!/intercom\/ring/.test(js));
+  const routes = new Set([...js.matchAll(/\/api\/admin\/intercom\/([a-z]+)/g)].map(m => m[1]));
+  assert.deepEqual([...routes].sort(), ['answer', 'hangup', 'signal', 'stream']);
+  assert.match(js, /fetch\('\/api\/admin\/intercom\/stream\?client='[^)]*authorization: 'Bearer '/, 'the stream sends the token');
+  assert.match(html, /id="intercomAudio" autoplay/);
+  assert.match(js, /getUserMedia\(\{ audio: true \}\)/);
+  assert.match(js, /new RTCPeerConnection\(\{ iceServers: \[\] \}\)/);
+  assert.equal((js.match(/getUserMedia\(/g) || []).length, 1, 'the microphone is only opened after Answer');
+  assert.match(js, /async function answerCall\(\)[\s\S]*intercom\/answer[\s\S]*getUserMedia/, 'Answer posts first, then opens the microphone');
+});
+test('noise and location text per tablet, with a safe map link', () => {
+  assert.match(js, /function noiseText\(t\)/);
+  assert.match(js, /noise not measured/);
+  assert.match(js, /noiseText\(t\)/);
+  assert.match(js, /locationText\(t\)/);
+  assert.match(js, /Location not reported/);
+  assert.match(js, /https:\/\/www\.openstreetmap\.org\/\?mlat='/);
+  assert.match(js, /link\.target = '_blank'; link\.rel = 'noopener'/);
+  assert.match(js, /this tablet is on plain http: intercom, noise and location need https/);
+});
+test('the intercom additions need no inline scripts or styles (CSP)', () => {
+  assert.ok(!/<script(?![^>]*\bsrc=)/.test(html), 'no inline script');
+  assert.ok(!/\sstyle="/.test(html), 'no inline style attribute');
+  assert.ok(!/setAttribute\('style'|\.style\.cssText/.test(js));
+  assert.match(css, /\.intercom\.ringing/);
+});

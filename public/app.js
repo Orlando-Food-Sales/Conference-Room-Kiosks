@@ -28,7 +28,7 @@ async function api(url, options) { var response = await fetch(url, Object.assign
 function formatTime(value) { return new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', timeZone: state.room ? state.room.timeZone : undefined }).format(new Date(value)); }
 function formatRange(event) { return formatTime(event.start) + '–' + formatTime(event.end); }
 function updateClock() { if (!state.room) return; var now = new Date(); $('clock').textContent = new Intl.DateTimeFormat([], { hour: 'numeric', minute: '2-digit', timeZone: state.room.timeZone }).format(now); $('date').textContent = new Intl.DateTimeFormat([], { weekday: 'long', month: 'long', day: 'numeric', timeZone: state.room.timeZone }).format(now); }
-function activeControl(control) { control = control || { displayEnabled: true }; document.body.classList.toggle('display-off', control.displayEnabled === false); var visible = control.message && (!control.messageExpiresAt || new Date(control.messageExpiresAt) > new Date()); $('notice').textContent = visible ? control.message : ''; $('notice').classList.toggle('hidden', !visible); pushOutfit(control); }
+function activeControl(control) { control = control || { displayEnabled: true }; document.body.classList.toggle('display-off', control.displayEnabled === false); var visible = control.message && (!control.messageExpiresAt || new Date(control.messageExpiresAt) > new Date()); $('notice').textContent = visible ? control.message : ''; $('notice').classList.toggle('hidden', !visible); pushOutfit(control); syncNoise(); }
 // An outfit pushed from the dashboard: Snoopy (snoopy.js) wears it until outfitUntil, then goes back to the automatic choice.
 function pushOutfit(control) {
   var root = document.documentElement;
@@ -111,15 +111,15 @@ function batteryInfo() { return fullyBattery(window.fully) || (BATTERY && typeof
 // "Camera on" while an admin looks through this tablet's camera (the server says for how many seconds).
 var cameraTimer = null;
 function showCamera(seconds) { var el = $('cameraNotice'); if (!el || !(seconds > 0)) return; el.classList.add('on'); clearTimeout(cameraTimer); cameraTimer = setTimeout(function () { el.classList.remove('on'); }, Math.min(seconds, 60) * 1000); }
-async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH, battery: batteryInfo() }) }); } catch (_) { } }
-function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('camera', function (event) { try { showCamera(Number(JSON.parse(event.data).detail.seconds)); } catch (_) { } }); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') requestRefresh(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
+async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH, battery: batteryInfo(), secure: SECURE, noise: noiseReading(), noiseStatus: noiseStatusText(), location: locationReading(), locationStatus: locationStatusText() }) }); } catch (_) { } }
+function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('camera', function (event) { try { showCamera(Number(JSON.parse(event.data).detail.seconds)); } catch (_) { } }); source.addEventListener('intercom', onIntercomEvent); source.addEventListener('intercom.signal', onIntercomSignal); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') requestRefresh(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
-async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); heartbeat(); loadCelebrations(); loadWeatherAlerts(); }
+async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); startExtras(); heartbeat(); loadCelebrations(); loadWeatherAlerts(); }
 
 $('reserveButton').addEventListener('click', function () { $('bookingPanel').classList.remove('hidden'); });
 $('cancelBooking').addEventListener('click', function () { $('bookingPanel').classList.add('hidden'); });
 $('bookingForm').addEventListener('submit', async function (event) { event.preventDefault(); $('bookingError').textContent = ''; var form = new FormData(event.currentTarget); var duration = Number(form.get('duration')); var start = new Date(Math.ceil(Date.now() / 300000) * 300000); try { await api('/api/bookings', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, subject: $('bookingSubject').value, start: start.toISOString(), end: new Date(start.getTime() + duration * 60000).toISOString() }) }); $('bookingPanel').classList.add('hidden'); showToast('Room reserved'); document.dispatchEvent(new CustomEvent('room-booked')); await loadEvents(); } catch (error) { $('bookingError').textContent = error.message; } });
-setInterval(updateClock, 1000); setInterval(heartbeat, 45000); setInterval(render, 30000); document.addEventListener('visibilitychange', function () { if (!document.hidden && state.room) { heartbeat(); loadEvents(); } });
+setInterval(updateClock, 1000); setInterval(heartbeat, 45000); setInterval(render, 30000); document.addEventListener('visibilitychange', function () { syncNoise(); if (!document.hidden && state.room) { heartbeat(); loadEvents(); } });
 var requestedRoom = roomIdFromLocation(); if (requestedRoom) initializeRoom(requestedRoom).catch(async function (error) { localStorage.removeItem('selectedRoomId'); showToast(error.message); await chooseRoom(); }); else chooseRoom().catch(function (error) { showToast(error.message); });
 
 // Birthdays and work anniversaries from the shared calendar (see /api/celebrations).
@@ -446,4 +446,243 @@ function noMoreText(now, todayKey) {
   if (!later) return 'No more meetings today.';
   var label = dayKey(later.start) === nextDayKey(todayKey) ? 'tomorrow' : new Intl.DateTimeFormat([], { weekday: 'long', timeZone: state.room.timeZone }).format(new Date(later.start));
   return 'No more meetings today. Next: ' + label + ' at ' + formatTime(later.start) + '.';
+}
+
+// ---- Door intercom, noise meter and location (INSTALL-UBUNTU.md section 12f) ----
+// The microphone is never opened for a call until the office has answered. The noise meter measures a level and
+// sends only that number; no sound is recorded, buffered beyond the current second, or sent. Both need https.
+var SECURE = Boolean(window.isSecureContext);
+var CAN_MEDIA = Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
+var features = { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: false };
+var door = { id: '', token: '', state: '', stream: null, pc: null, guard: null, pending: [], hideTimer: null, placing: false };
+var noise = { running: false, starting: false, gen: 0, stream: null, ctx: null, analyser: null, buf: null, timer: null, sum: 0, ticks: 0, blocks: [], current: null, refused: false, retryAt: 0, extraAt: 0 };
+var place = { current: null, status: '' };
+var extrasStarted = false;
+
+function noiseLevel(db, talkingDb, loudDb) {
+  if (!(db >= talkingDb)) return 'quiet';
+  return db <= loudDb ? 'talking' : 'loud';
+}
+// The third loudest of the blocks (ten per report), so one door slam does not count but steady talking does.
+function loudestBlock(blocks) {
+  var list = (blocks || []).filter(function (value) { return typeof value === 'number' && isFinite(value); }).sort(function (a, b) { return b - a; });
+  if (!list.length) return null;
+  return list[Math.min(2, list.length - 1)];
+}
+function stopStream(stream) { try { stream.getTracks().forEach(function (track) { track.stop(); }); } catch (_) { } }
+function callSupported() { return features.intercom && SECURE && CAN_MEDIA && typeof window.RTCPeerConnection === 'function' && !NO_STREAM && Boolean(globalThis.EventSource); }
+
+// Noise meter.
+function noiseWanted() {
+  return features.noise.enabled && SECURE && CAN_MEDIA && !NO_STREAM && Boolean(state.room) && !document.hidden && !document.body.classList.contains('display-off') && !door.id && Date.now() >= noise.retryAt;
+}
+function noiseReading() { return noise.current ? { level: noise.current.level, db: noise.current.db } : null; }
+function noiseStatusText() {
+  if (noise.current) return '';
+  if (!features.noise.enabled) return 'off';
+  if (!SECURE) return 'plain http';
+  if (!CAN_MEDIA) return 'no microphone';
+  if (noise.refused) return 'microphone refused';
+  if (door.id) return 'in a call';
+  if (document.body.classList.contains('display-off')) return 'display off';
+  if (document.hidden) return 'page hidden';
+  return 'starting';
+}
+function syncNoise() {
+  var want = noiseWanted();
+  if (want && !noise.running && !noise.starting) startNoise();
+  else if (!want && (noise.running || noise.starting)) stopNoise();
+}
+async function startNoise() {
+  var gen = ++noise.gen;
+  noise.starting = true;
+  var stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+  catch (_) { if (gen === noise.gen) { noise.starting = false; noise.refused = true; noise.retryAt = Date.now() + 600000; } return; }
+  if (gen !== noise.gen || !noiseWanted()) { stopStream(stream); if (gen === noise.gen) noise.starting = false; return; }
+  try {
+    var AudioCtx = window.AudioContext || window.webkitAudioContext;
+    var ctx = new AudioCtx();
+    var analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    ctx.createMediaStreamSource(stream).connect(analyser);   // not connected to the speakers
+    if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(function () { });
+    noise.ctx = ctx; noise.analyser = analyser; noise.buf = new Float32Array(analyser.fftSize);
+  } catch (_) { stopStream(stream); noise.starting = false; noise.retryAt = Date.now() + 600000; return; }
+  noise.stream = stream; noise.starting = false; noise.running = true; noise.refused = false;
+  noise.sum = 0; noise.ticks = 0; noise.blocks = [];
+  stream.getTracks().forEach(function (track) { track.onended = function () { if (gen === noise.gen) { stopNoise(); noise.retryAt = Date.now() + 60000; } }; });
+  noise.timer = setInterval(noiseTick, 100);
+  $('noiseNotice').classList.add('on');
+}
+function noiseTick() {
+  if (!noise.analyser) return;
+  noise.analyser.getFloatTimeDomainData(noise.buf);
+  var sum = 0;
+  for (var i = 0; i < noise.buf.length; i += 1) sum += noise.buf[i] * noise.buf[i];
+  noise.sum += sum / noise.buf.length; noise.ticks += 1;
+  if (noise.ticks < 10) return;
+  var mean = noise.sum / noise.ticks;
+  noise.sum = 0; noise.ticks = 0;
+  noise.blocks.push(mean > 1e-12 ? 10 * Math.log10(mean) : -120);
+  if (noise.blocks.length >= 10) reportNoise();
+}
+function reportNoise() {
+  var db = loudestBlock(noise.blocks);
+  noise.blocks = [];
+  if (db === null) return;
+  db = Math.max(-120, Math.min(0, Math.round(db)));
+  var level = noiseLevel(db, features.noise.talkingDb, features.noise.loudDb);
+  var changed = !noise.current || noise.current.level !== level;
+  noise.current = { level: level, db: db };
+  if (changed && Date.now() - noise.extraAt >= 10000) { noise.extraAt = Date.now(); heartbeat(); }
+}
+function stopNoise() {
+  noise.gen += 1; noise.starting = false; noise.running = false;
+  clearInterval(noise.timer); noise.timer = null;
+  if (noise.stream) stopStream(noise.stream);
+  if (noise.ctx) { try { noise.ctx.close(); } catch (_) { } }
+  noise.stream = null; noise.ctx = null; noise.analyser = null; noise.buf = null;
+  noise.sum = 0; noise.ticks = 0; noise.blocks = []; noise.current = null;
+  var pill = $('noiseNotice'); if (pill) pill.classList.remove('on');
+}
+
+// Location, read at page start and every 6 hours (a wall tablet does not move).
+function locationReading() { return place.current; }
+function locationStatusText() { return place.current ? '' : place.status; }
+function readLocation() {
+  if (!features.location || NO_STREAM) { place.current = null; place.status = ''; return; }
+  if (!SECURE) { place.current = null; place.status = 'insecure'; return; }
+  if (!navigator.geolocation) { place.current = null; place.status = 'unavailable'; return; }
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    var round = function (value) { return Math.round(value * 100000) / 100000; };
+    place.current = { lat: round(pos.coords.latitude), lon: round(pos.coords.longitude), accuracy: Math.round(pos.coords.accuracy || 0) };
+    place.status = '';
+    heartbeat();
+  }, function (error) {
+    place.current = null;
+    place.status = error && error.code === 1 ? 'denied' : (error && error.code === 3 ? 'timeout' : 'unavailable');
+    heartbeat();
+  }, { enableHighAccuracy: false, timeout: 20000, maximumAge: 21600000 });
+}
+
+// Door call.
+function setCallStatus(text, ended) {
+  $('callStatus').textContent = text;
+  $('callHangup').textContent = ended ? 'Close' : 'Hang up';
+  $('callPanel').classList.remove('hidden');
+}
+function micSync() {
+  var on = Boolean(door.stream && door.stream.getTracks().some(function (track) { return track.readyState === 'live'; }));
+  $('micNotice').classList.toggle('on', on);
+}
+function armGuard(ms) {
+  clearTimeout(door.guard);
+  door.guard = setTimeout(function () {
+    if (door.id && door.state !== 'connected') endCall(door.state === 'ringing' ? 'Nobody answered. Please knock or try again.' : 'Could not connect. Please try again.', true);
+  }, ms);
+}
+async function pressCall() {
+  if (door.id) { $('callPanel').classList.remove('hidden'); return; }
+  if (door.placing) return;
+  door.placing = true;
+  clearTimeout(door.hideTimer);
+  setCallStatus('Calling\u2026 please wait', false);
+  var reply;
+  try { reply = await api('/api/intercom/ring', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId }) }); }
+  catch (error) { door.placing = false; setCallStatus(error.message || 'The call could not be placed.', true); return; }
+  door.placing = false;
+  if (reply.state === 'nobody') { setCallStatus('Nobody is signed in to the dashboard right now. Please try again or knock.', true); return; }
+  if (reply.state !== 'ringing' || !reply.callId) { setCallStatus('The call could not be placed.', true); return; }
+  door.id = reply.callId; door.token = reply.token; door.state = 'ringing'; door.pending = [];
+  syncNoise();
+  armGuard(60000);
+}
+function endCall(text, tellServer) {
+  var id = door.id, token = door.token;
+  clearTimeout(door.guard);
+  if (door.stream) stopStream(door.stream);
+  door.stream = null;
+  if (door.pc) { try { door.pc.close(); } catch (_) { } }
+  door.pc = null;
+  $('callAudio').srcObject = null;
+  door.id = ''; door.token = ''; door.state = ''; door.pending = [];
+  micSync();
+  if (id && tellServer) api('/api/intercom/hangup', { method: 'POST', body: JSON.stringify({ callId: id, token: token }) }).catch(function () { });
+  setCallStatus(text, true);
+  clearTimeout(door.hideTimer);
+  door.hideTimer = setTimeout(function () { if (!door.id) $('callPanel').classList.add('hidden'); }, 8000);
+  syncNoise();
+}
+function sendSignal(kind, data) {
+  if (!door.id) return;
+  api('/api/intercom/signal', { method: 'POST', body: JSON.stringify({ callId: door.id, token: door.token, kind: kind, data: data }) }).catch(function () { });
+}
+function onIntercomEvent(event) {
+  var detail;
+  try { detail = JSON.parse(event.data).detail; } catch (_) { return; }
+  if (!detail || !door.id || detail.callId !== door.id) return;
+  if (detail.state === 'answered' && door.state === 'ringing') { door.state = 'answered'; setCallStatus('Connecting\u2026', false); armGuard(30000); startCallMedia(door.id); }
+  else if (detail.state === 'unanswered') endCall('Nobody answered. Please knock or try again.', false);
+  else if (detail.state === 'ended') endCall('Call ended', false);
+}
+// The only place the call opens the microphone, reached only from the 'answered' event above.
+async function startCallMedia(id) {
+  var stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
+  catch (_) { if (door.id === id) endCall('Could not start the microphone.', true); return; }
+  if (door.id !== id) { stopStream(stream); return; }
+  door.stream = stream;
+  stream.getTracks().forEach(function (track) { track.enabled = false; track.onended = micSync; });
+  micSync();
+  var pc = door.pc = new RTCPeerConnection({ iceServers: [] });
+  stream.getTracks().forEach(function (track) { pc.addTrack(track, stream); });
+  pc.ontrack = function (event) { var audio = $('callAudio'); audio.srcObject = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]); var started = audio.play(); if (started && started.catch) started.catch(function () { }); };
+  pc.onicecandidate = function (event) { if (door.pc === pc && event.candidate) sendSignal('ice', event.candidate.toJSON ? event.candidate.toJSON() : event.candidate); };
+  pc.onconnectionstatechange = function () {
+    if (door.pc !== pc) return;
+    if (pc.connectionState === 'connected') {
+      stream.getTracks().forEach(function (track) { track.enabled = true; });
+      door.state = 'connected'; clearTimeout(door.guard);
+      setCallStatus('Connected', false);
+      sendSignal('connected');
+    } else if (pc.connectionState === 'failed') endCall('Call ended', true);
+  };
+  try {
+    var offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    if (door.pc === pc) sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+  } catch (_) { if (door.pc === pc) endCall('Could not connect. Please try again.', true); }
+}
+function onIntercomSignal(event) {
+  var detail;
+  try { detail = JSON.parse(event.data).detail; } catch (_) { return; }
+  if (!detail || !door.id || detail.callId !== door.id || !door.pc) return;
+  var pc = door.pc, data = detail.data;
+  if (typeof data === 'string') { try { data = JSON.parse(data); } catch (_) { return; } }
+  if (detail.kind === 'answer') {
+    pc.setRemoteDescription(data).then(function () {
+      var queued = door.pending; door.pending = [];
+      queued.forEach(function (candidate) { pc.addIceCandidate(candidate).catch(function () { }); });
+    }).catch(function () { if (door.pc === pc) endCall('Could not connect. Please try again.', true); });
+  } else if (detail.kind === 'ice') {
+    if (pc.remoteDescription) pc.addIceCandidate(data).catch(function () { }); else door.pending.push(data);
+  }
+}
+$('callButton').addEventListener('click', function () { pressCall(); });
+$('callHangup').addEventListener('click', function () { if (door.id) endCall('Call ended', true); else $('callPanel').classList.add('hidden'); });
+
+// Called once the room settings are known (and again if the room is picked again).
+function startExtras() {
+  var f = (state.room && state.room.features) || {};
+  var n = f.noise || {};
+  features = {
+    intercom: f.intercom === true,
+    noise: { enabled: n.enabled === true, talkingDb: typeof n.talkingDb === 'number' ? n.talkingDb : -50, loudDb: typeof n.loudDb === 'number' ? n.loudDb : -35 },
+    location: f.location === true
+  };
+  $('callButton').classList.toggle('hidden', !callSupported());
+  syncNoise();
+  readLocation();
+  if (!extrasStarted) { extrasStarted = true; setInterval(syncNoise, 60000); setInterval(readLocation, 6 * 3600000); }
 }

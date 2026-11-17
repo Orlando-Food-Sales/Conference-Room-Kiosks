@@ -38,7 +38,7 @@ test('the tablet page only reloads after /healthz answers, so an outage never le
 test('the tablet reports its battery level and charging state with each check-in, when the browser can', () => {
   assert.match(app, /navigator\.getBattery\(\)\.then/);
   assert.match(app, /level: Math\.round\(BATTERY\.level \* 100\), charging: Boolean\(BATTERY\.charging\)/);
-  assert.match(app, /touch: HAS_TOUCH, battery: batteryInfo\(\) \}/);
+  assert.match(app, /touch: HAS_TOUCH, battery: batteryInfo\(\)[,} ]/);
 });
 test('the tablet shows "Camera on" while an admin uses its camera', () => {
   assert.match(html, /id="cameraNotice"[^>]*>&#9679; Camera on</);
@@ -332,4 +332,71 @@ test('the deploy script reloads the tablets after a deploy that changed web file
   assert.ok(finish.indexOf('say "9. Reloading the tablets"') > finish.indexOf('rollback; fi'), 'only after the smoke test passed');
   assert.match(script, /refresh_tablets after-restart \|\| true; else refresh_tablets \|\| true; fi/, 'a failure here never fails the deploy');
   assert.match(script, /while now=\$\(online_tablets\); \[\[ \$now -lt \$tablets_before && \$waited -lt 60 \]\]; do sleep 3;/, 'after a restart it waits up to a minute for the tablets to reconnect');
+});
+// Door intercom, noise meter and location on the tablet page.
+function body(name) { const m = app.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`)); assert.ok(m, `${name} is in public/app.js`); return m[0]; }
+test('the call button, call panel and the two notices are on the tablet page', () => {
+  assert.match(html, /<button id="callButton" class="icon-button hidden"/);
+  assert.match(html, /<div id="micNotice" class="mic-notice" role="status">&#9679; Microphone on<\/div>/);
+  assert.match(html, /<div id="noiseNotice" class="noise-notice" role="status">&#9680; Noise meter on \(no sound is sent or kept\)<\/div>/);
+  assert.match(html, /id="callStatus"[^>]*aria-live="polite"/);
+  for (const id of ['callPanel', 'callHangup', 'callAudio']) assert.ok(html.includes(`id="${id}"`), `#${id}`);
+  assert.match(css, /\.mic-notice \{[^}]*display: none[^}]*background: #b3121f/);
+  assert.match(css, /\.mic-notice\.on \{ display: block; \}/);
+  assert.match(css, /\.noise-notice \{[^}]*display: none/);
+  assert.match(css, /\.noise-notice\.on \{ display: block; \}/);
+});
+test('noiseLevel and loudestBlock: thresholds, and one slam does not count', () => {
+  const { noiseLevel, loudestBlock } = new Function(`${body('noiseLevel')}\n${body('loudestBlock')}\nreturn { noiseLevel, loudestBlock };`)();
+  assert.equal(noiseLevel(-60, -50, -35), 'quiet');
+  assert.equal(noiseLevel(-50, -50, -35), 'talking');
+  assert.equal(noiseLevel(-35, -50, -35), 'talking');
+  assert.equal(noiseLevel(-34, -50, -35), 'loud');
+  assert.equal(noiseLevel(NaN, -50, -35), 'quiet');
+  const quiet = [-70, -70, -70, -70, -70, -70, -70, -70, -70];
+  assert.equal(loudestBlock([...quiet, -5]), -70, 'a single slam is ignored');
+  assert.equal(loudestBlock([-60, -30, -31, -32, -70, -70, -70, -70, -70, -70]), -32, 'third loudest');
+  assert.equal(loudestBlock([-40, -20]), -40, 'fewer than three: the quietest of them');
+  assert.equal(loudestBlock([]), null);
+});
+test('nothing opens a microphone or a peer connection when the page loads, and the call microphone only after "answered"', () => {
+  assert.equal((app.match(/getUserMedia\(/g) || []).length, 2, 'one for the noise meter, one for the call');
+  assert.equal((app.match(/new RTCPeerConnection\(/g) || []).length, 1);
+  assert.ok(body('startCallMedia').includes('getUserMedia(') && body('startCallMedia').includes('new RTCPeerConnection('), 'both live in startCallMedia');
+  assert.ok(body('startNoise').includes('getUserMedia('), 'the other one is the meter');
+  assert.equal((app.match(/startCallMedia\(/g) || []).length, 2, 'defined once and called once');
+  assert.match(body('onIntercomEvent'), /detail\.state === 'answered'[^\n]*startCallMedia\(door\.id\)/);
+  assert.match(body('pressCall'), /\/api\/intercom\/ring/);
+  assert.ok(!/getUserMedia|RTCPeerConnection/.test(body('pressCall')), 'pressing the button opens nothing');
+  assert.match(body('startCallMedia'), /track\.enabled = false/, 'the track is muted until connected');
+  assert.match(body('startCallMedia'), /connectionState === 'connected'[\s\S]*track\.enabled = true/);
+  assert.match(body('startCallMedia'), /iceServers: \[\]/);
+  assert.match(app, /source\.addEventListener\('intercom', onIntercomEvent\)/);
+  assert.match(app, /source\.addEventListener\('intercom\.signal', onIntercomSignal\)/);
+  assert.match(body('onIntercomSignal'), /detail\.callId !== door\.id/, 'events for other calls are ignored');
+});
+test('the call button needs a secure page, a microphone, WebRTC and a live stream', () => {
+  const supported = body('callSupported');
+  for (const need of ['features.intercom', 'SECURE', 'CAN_MEDIA', 'RTCPeerConnection', '!NO_STREAM']) assert.ok(supported.includes(need), need);
+  assert.match(app, /var SECURE = Boolean\(window\.isSecureContext\)/);
+  assert.match(app, /\$\('callButton'\)\.classList\.toggle\('hidden', !callSupported\(\)\)/);
+  assert.match(app, /var f = \(state\.room && state\.room\.features\) \|\| \{\}/, 'an older server without features still works');
+});
+test('the heartbeat carries secure, noise and location', () => {
+  assert.match(app, /secure: SECURE, noise: noiseReading\(\), noiseStatus: noiseStatusText\(\), location: locationReading\(\), locationStatus: locationStatusText\(\)/);
+  const loc = body('readLocation');
+  assert.match(loc, /enableHighAccuracy: false, timeout: 20000, maximumAge: 21600000/);
+  assert.match(loc, /Math\.round\(value \* 100000\) \/ 100000/);
+  for (const word of ['denied', 'unavailable', 'timeout', 'insecure']) assert.ok(loc.includes(`'${word}'`), word);
+  assert.match(app, /setInterval\(readLocation, 6 \* 3600000\)/);
+});
+test('the noise meter stops when hidden, display off or in a call, and sends only a level', () => {
+  const wanted = body('noiseWanted');
+  for (const need of ['document.hidden', "contains('display-off')", '!door.id', 'SECURE', '!NO_STREAM']) assert.ok(wanted.includes(need), need);
+  assert.match(app, /pushOutfit\(control\); syncNoise\(\); \}/, 'a display switch-off is noticed');
+  assert.match(app, /addEventListener\('visibilitychange', function \(\) \{ syncNoise\(\);/);
+  assert.match(body('startNoise'), /echoCancellation: false, noiseSuppression: false, autoGainControl: false/);
+  assert.match(body('stopNoise'), /stopStream\(noise\.stream\)[\s\S]*ctx\.close\(\)/);
+  assert.match(body('startNoise'), /classList\.add\('on'\)/);
+  assert.ok(!/connect\(noise\.ctx\.destination|\.destination/.test(body('startNoise')), 'the microphone is never played back');
 });
