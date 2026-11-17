@@ -1,0 +1,22 @@
+{
+  "project_type": "Node 22 ES-module HTTP server (src/server.js, createAppServer) + vanilla browser JS pages in public/ (tablet display app.js, admin dashboard.js); no runtime npm dependencies",
+  "language": "JavaScript (ES modules on the server; ES5-style var/function in public/*.js)",
+  "build_system": "none; npm scripts only. `npm run check` = node --check src/*.js public/*.js && node --test",
+  "test_framework": "node:test with node:assert/strict, files in test/*.test.js; server tests start a real createAppServer on a free port via helper start(t,{env,...options}) in test/server.test.js; page tests read public/* source and assert regexes or run extracted functions with new Function",
+  "build_command": "npm run check",
+  "test_command": "npm run check",
+  "verification_instructions": "Run `npm run check` (must pass). For FEAT-003 also run `node tools/e2e-intercom.mjs` (starts `node src/server.js` from the repo folder on a spare port with DEMO_MODE=true and a test ADMIN_TOKEN given through the environment, and drives ~/.cache/puppeteer/chrome-headless-shell/mac_arm-131.0.6778.204/chrome-headless-shell-mac-arm64/chrome-headless-shell with --use-fake-device-for-media-stream --use-fake-ui-for-media-stream over http://localhost, a secure context). Before committing run `git add` for new files, then `bash scripts/update-manifests.sh`.",
+  "snapshot_or_generated_files": "MANIFEST.txt and SHA256SUMS are generated from git ls-files by `bash scripts/update-manifests.sh` and committed; run it after editing any doc or adding a file, before the commit.",
+  "environment_constraints": "Work directly on main in /Users/kshitjisharma/Desktop/Kiosks/Conference-Room-Kiosks (no worktree). Commit locally, NEVER push, NEVER deploy, NEVER contact the live server 192.168.80.19 or the tablets (192.168.80.172, .179). Do not print or commit .env values, ADMIN_TOKEN or the Fully Remote Admin password; there is no local .env, pass test settings through the process environment. Edit files with exact-string replacements that assert exactly one match (write a script file, confirm it exists, then run it) because the IDE formatter reflows files. No puppeteer npm package exists; use Node 22's global WebSocket against the Chrome DevTools protocol. Never leave a started server or Chrome running.",
+  "contribution_requirements": "No new runtime dependencies (test/project.test.js checks). Keep the existing code style. Tests under test/. Update INSTALL-UBUNTU.md, README.md, CHANGELOG.md, .env.example. Version, lock file, CHANGELOG heading and DEPLOY-CHECKLIST 'Running version' are tied together by test/project.test.js.",
+  "key_patterns": "Door camera is the model: src/server.js lines ~231-280 and ~685-710 (admin-only routes under /api/admin/, who = who.via === 'session' ? who.session.email : 'the administrator token', one logger.log line per use, SSE event so the tablet shows #cameraNotice badge), public/app.js showCamera, public/dashboard.js cameraView, tests 'Door camera' in test/server.test.js. Tablet fields ride the heartbeat like battery (batteryFrom/recordTablet in src/server.js; fullyBattery/batteryInfo/heartbeat in public/app.js). Config with a `problem` string on bad settings turns a feature off (loadCamera in src/config.js). notifyRoom also reaches the public room=* stream, so call data must use a new tablet-only notify.",
+  "relevant_files": [
+    "src/server.js", "src/config.js", "src/intercom.js (new)",
+    "public/app.js", "public/index.html", "public/theme.css",
+    "public/dashboard.js", "public/dashboard.html", "public/dashboard.css",
+    "test/server.test.js", "test/intercom.test.js (new)", "test/tablet-page.test.js", "test/dashboard-page.test.js", "test/config.test.js", "test/project.test.js",
+    "tools/e2e-intercom.mjs (new)",
+    "INSTALL-UBUNTU.md", "README.md", "CHANGELOG.md", ".env.example", "deploy/nginx-https.conf", "DEPLOY-CHECKLIST.md", "package.json", "package-lock.json", "scripts/update-manifests.sh"
+  ],
+  "directory_structure": "src/ server modules (server.js, config.js, ...); public/ static pages and scripts served as-is (index.html tablet display, dashboard.html/js/css admin, theme.css); test/ node:test files; deploy/ nginx and systemd templates; scripts/ shell scripts; tools/ helper scripts; .agents/tasks/intercom-noise-location/ holds plan.md and these FEAT files (outside the commit)."
+}

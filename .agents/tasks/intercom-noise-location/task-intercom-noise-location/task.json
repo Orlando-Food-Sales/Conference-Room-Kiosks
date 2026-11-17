@@ -1,0 +1,7 @@
+{
+  "task_id": "task-intercom-noise-location",
+  "task_description": "Door intercom (door-started voice call, admin answers on the dashboard), coarse room noise level, and tablet location on the dashboard; plus secure (https) page support. Design in /Users/kshitjisharma/Desktop/Kiosks/Conference-Room-Kiosks/.agents/tasks/intercom-noise-location/plan.md",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}
