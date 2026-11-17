@@ -349,6 +349,59 @@ export function createAppServer(options = {}) {
     const when = status.daysLeft < 0 ? `expired on ${status.expires}` : status.daysLeft === 0 ? `expires today (${status.expires})` : `expires in ${status.daysLeft} ${status.daysLeft === 1 ? 'day' : 'days'} (${status.expires})`;
     await sendAlert(`The Microsoft 365 app secret ${when}. ${status.daysLeft < 0 ? 'Room calendars stop updating until it is replaced.' : 'Room calendars stop updating when it expires.'} Create a new client secret in Microsoft Entra (App registrations > Certificates & secrets), put it in CLIENT_SECRET${config.teamsAlerts?.enabled ? ' (and TEAMS_BOT_APP_SECRET if the bot uses the same app)' : ''}, set CLIENT_SECRET_EXPIRES to its new date and restart the service.`);
   }
+  // Days from today (in the first room's time zone) to a YYYY-MM-DD date, and the reminder stage it has reached.
+  function expiryStage(expires, ms, stages) {
+    const zone = config.rooms[0]?.timeZone || 'UTC';
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(new Date(ms));
+    const daysLeft = Math.round((Date.parse(`${expires}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    const stage = daysLeft < 0 ? 'expired' : stages.find(limit => daysLeft <= limit) || null;
+    return { expires, daysLeft, stage };
+  }
+  function whenText(status) {
+    return status.daysLeft < 0 ? `expired on ${status.expires}` : status.daysLeft === 0 ? `expires today (${status.expires})` : `expires in ${status.daysLeft} ${status.daysLeft === 1 ? 'day' : 'days'} (${status.expires})`;
+  }
+  // The login that renews the HTTPS certificate (CERT_RENEWAL_SECRET_EXPIRES): same stages as the app secret.
+  function certRenewalSecretStatus(ms = Date.now()) {
+    return config.certRenewalSecretExpires ? expiryStage(config.certRenewalSecretExpires, ms, [1, 3, 7, 14, 30]) : null;
+  }
+  // The HTTPS certificate itself (HTTPS_CERT_FILE). It renews by itself about 30 days before it ends, so the first
+  // reminder comes at 14 days left: by then the automatic renewal has failed for two weeks.
+  let certCache = { mtimeMs: -1, expires: '', error: '' };
+  function httpsCertStatus(ms = Date.now()) {
+    if (!config.httpsCertFile) return null;
+    try {
+      const { mtimeMs } = fs.statSync(config.httpsCertFile);
+      if (mtimeMs !== certCache.mtimeMs) {
+        const end = new Date(new crypto.X509Certificate(fs.readFileSync(config.httpsCertFile)).validTo);
+        if (Number.isNaN(end.getTime())) throw new Error('no end date in the certificate');
+        const zone = config.rooms[0]?.timeZone || 'UTC';
+        certCache = { mtimeMs, expires: new Intl.DateTimeFormat('en-CA', { timeZone: zone }).format(end), error: '' };
+      }
+    } catch (error) {
+      certCache = { mtimeMs: -1, expires: '', error: error.code === 'ENOENT' ? 'the file does not exist' : error.code === 'EACCES' ? 'the service may not read it' : error.message };
+    }
+    if (certCache.error) return { expires: '', daysLeft: null, stage: 'unreadable', error: certCache.error };
+    return expiryStage(certCache.expires, ms, [1, 3, 7, 14]);
+  }
+  async function checkCertExpiry(ms = Date.now()) {
+    const cert = httpsCertStatus(ms);
+    const login = certRenewalSecretStatus(ms);
+    const due = [];
+    if (cert?.stage && alertState.get('httpsCert') !== cert.stage) due.push('cert');
+    if (login?.stage && alertState.get('certLogin') !== login.stage) due.push('login');
+    if (!due.length) return;
+    if (config.rooms[0] && !officeSettled(config.rooms[0], ms)) return;
+    if (due.includes('cert')) {
+      alertState.set('httpsCert', cert.stage);
+      await sendAlert(cert.stage === 'unreadable'
+        ? `The dashboard HTTPS certificate cannot be checked (HTTPS_CERT_FILE ${config.httpsCertFile}: ${cert.error}). Fix the path or permissions, or empty HTTPS_CERT_FILE to stop this check.`
+        : `The dashboard HTTPS certificate ${whenText(cert)} and has not renewed by itself. ${cert.daysLeft < 0 ? 'Browsers now refuse the dashboard and Microsoft sign-in; the door tablets (plain http) are not affected.' : 'When it expires, browsers refuse the dashboard and Microsoft sign-in; the door tablets (plain http) are not affected.'} Check the renewal on the server: sudo /opt/acme.sh/acme.sh --cron --home /opt/acme.sh --config-home /etc/acme.sh (INSTALL-UBUNTU.md 13b).`);
+    }
+    if (due.includes('login')) {
+      alertState.set('certLogin', login.stage);
+      await sendAlert(`The login the server uses to renew its HTTPS certificate ${whenText(login)}. ${login.daysLeft < 0 ? 'Certificate renewals fail until it is replaced.' : 'Certificate renewals fail after that.'} Create a new secret (az ad sp credential reset --id <its app ID> --years 2), put it in AZUREDNS_CLIENTSECRET in /etc/acme.sh/account.conf on the server, set CERT_RENEWAL_SECRET_EXPIRES to its new date and restart the service (INSTALL-UBUNTU.md 13b).`);
+    }
+  }
   // Official weather warnings for the location (empty when off, outside the US, or unreachable). Never throws.
   async function currentWeatherAlerts() {
     try { return (await weather.alerts?.()) || []; } catch { return []; }
@@ -621,12 +674,13 @@ export function createAppServer(options = {}) {
 
   let scheduleTimer = null;
   server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); });
-  server.appState = { config, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
+  server.appState = { config, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {
       checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`));
       checkSecretExpiry().catch(error => logger.error?.(`Secret expiry check failed: ${error.message}`));
+      checkCertExpiry().catch(error => logger.error?.(`Certificate expiry check failed: ${error.message}`));
     checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
     }, 60000); monitor.unref?.();
   }

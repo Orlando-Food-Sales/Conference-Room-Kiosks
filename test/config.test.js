@@ -116,6 +116,13 @@ test('Teams alert settings must be complete and valid, or the server refuses to 
   assert.throws(() => loadConfig({ ...demo, ...BOT, TEAMS_ALERT_EMAILS: many }), /at most 10/);
 });
 
+test('HTTPS certificate file and renewal login date are optional; the date must be real', () => {
+  assert.equal(loadConfig(demo).httpsCertFile, '');
+  assert.equal(loadConfig(demo).certRenewalSecretExpires, '');
+  assert.equal(loadConfig({ ...demo, HTTPS_CERT_FILE: ' /etc/ssl/x.pem ' }).httpsCertFile, '/etc/ssl/x.pem');
+  assert.equal(loadConfig({ ...demo, CERT_RENEWAL_SECRET_EXPIRES: '2028-11-17' }).certRenewalSecretExpires, '2028-11-17');
+  assert.throws(() => loadConfig({ ...demo, CERT_RENEWAL_SECRET_EXPIRES: '2028-11-31' }), /CERT_RENEWAL_SECRET_EXPIRES must be a real date/);
+});
 test('client secret expiry date is optional and must be a real YYYY-MM-DD date', () => {
   assert.equal(loadConfig(demo).clientSecretExpires, '');
   assert.equal(loadConfig({ ...demo, CLIENT_SECRET_EXPIRES: ' 2027-05-04 ' }).clientSecretExpires, '2027-05-04');

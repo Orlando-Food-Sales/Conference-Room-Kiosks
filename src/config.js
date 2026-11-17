@@ -104,12 +104,12 @@ const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 // Alerts from a named Teams bot. All of it is optional; leave TEAMS_BOT_APP_ID empty to turn it off.
 // The day the Microsoft 365 client secret expires (YYYY-MM-DD), for the expiry reminders. Empty turns them off.
 // The app cannot read this from Microsoft itself, so it has to be written down here.
-function loadSecretExpiry(env) {
-  const value = String(env.CLIENT_SECRET_EXPIRES || '').trim();
+function loadSecretExpiry(env, name = 'CLIENT_SECRET_EXPIRES') {
+  const value = String(env[name] || '').trim();
   if (!value) return '';
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const date = match && new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  if (!date || date.toISOString().slice(0, 10) !== value) throw new Error('CLIENT_SECRET_EXPIRES must be a real date written as YYYY-MM-DD, for example 2027-05-04.');
+  if (!date || date.toISOString().slice(0, 10) !== value) throw new Error(`${name} must be a real date written as YYYY-MM-DD, for example 2027-05-04.`);
   return value;
 }
 
@@ -181,6 +181,10 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     alertAfterMinutes: integerValue(env.ALERT_AFTER_MINUTES, 10, 1, 1440),
     alertWebhookUrl: String(env.ALERT_WEBHOOK_URL || '').trim(),
     clientSecretExpires: loadSecretExpiry(env),
+    // The dashboard's HTTPS certificate (PEM file readable by the service), checked for renewals that stopped working,
+    // and the day the login that renews it expires (for example the Azure DNS login used by acme.sh). Empty = off.
+    httpsCertFile: String(env.HTTPS_CERT_FILE || '').trim(),
+    certRenewalSecretExpires: loadSecretExpiry(env, 'CERT_RENEWAL_SECRET_EXPIRES'),
     // Alerts from a named Teams bot to specific people (see INSTALL-UBUNTU.md, "Teams alerts").
     teamsAlerts: null,   // filled below, once the tenant ID is known
     // Outside these hours the display shows "Closed" instead of "Available". null turns it off.

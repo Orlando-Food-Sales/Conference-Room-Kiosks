@@ -47,7 +47,7 @@ Copy `.env.example` to `.env` and `config/rooms.example.json` to `config/rooms.j
 
 All settings are environment variables; see `.env.example`.
 
-- Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `CLIENT_SECRET_EXPIRES` (YYYY-MM-DD; reminders at 30, 14, 7, 3 and 1 days and on expiry), `ROOMS_FILE`
+- Microsoft 365: `TENANT_ID`, `CLIENT_ID`, `CLIENT_SECRET`, `CLIENT_SECRET_EXPIRES` (YYYY-MM-DD; reminders at 30, 14, 7, 3 and 1 days and on expiry), `HTTPS_CERT_FILE` and `CERT_RENEWAL_SECRET_EXPIRES` (HTTPS certificate and its renewal login, same kind of reminders), `ROOMS_FILE`
 - Refresh and tablets: `EVENT_REFRESH_SECONDS`, `TABLET_OFFLINE_SECONDS`, `CHANGE_CHECK_SECONDS`
 - Alerts: `ALERT_AFTER_MINUTES`, `ALERT_WEBHOOK_URL`, and for Teams `TEAMS_BOT_APP_ID`, `TEAMS_BOT_APP_SECRET`, `TEAMS_BOT_TENANT_ID`, `TEAMS_BOT_CATALOG_ID` (the app's ID in the Teams admin center), `TEAMS_ALERT_EMAILS`, and rarely `TEAMS_BOT_SERVICE_URL`
 - Office hours: `OFFICE_HOURS_START`, `OFFICE_HOURS_END`, `OFFICE_DAYS`, or `OFFICE_HOURS=off`

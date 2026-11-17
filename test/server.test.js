@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { createAppServer } from '../src/server.js';
 
 const config = { port: 0, demoMode: true, adminToken: 'test-token', eventRefreshSeconds: 60, tabletOfflineSeconds: 120, rooms: [{ id: 'front', name: 'Front Room', email: 'front@example.com', timeZone: 'UTC', allowQuickBooking: false }] };
@@ -560,6 +562,76 @@ test('secret reminders wait for office hours and do nothing when no date is set'
   assert.equal(none.state.alerts.length, 0);
 });
 
+// A throwaway self-signed test certificate (no key kept) that ends on 24 Nov 2026 at 12:00 UTC.
+const TEST_CERT_PEM = `-----BEGIN CERTIFICATE-----
+MIIBYjCCAQigAwIBAgIUGDaNaInWdye7R0l7Js1DS8cwAfswCgYIKoZIzj0EAwIw
+FzEVMBMGA1UEAwwMdGVzdC5pbnZhbGlkMB4XDTI2MTAwMTAwMDAwMFoXDTI2MTEy
+NDEyMDAwMFowFzEVMBMGA1UEAwwMdGVzdC5pbnZhbGlkMFkwEwYHKoZIzj0CAQYI
+KoZIzj0DAQcDQgAEo7FIH6JmbscZKjJW7o/NbMtyuedt1ym3VxrqqXBoKSrtcECH
+d8avWErYodhyeKiRrqHUdr0ifLEMJiaI4LXPSqMyMDAwHQYDVR0OBBYEFO6oROJ2
+Xsu+zlwWeZJN720f8aKPMA8GA1UdEwEB/wQFMAMBAf8wCgYIKoZIzj0EAwIDSAAw
+RQIgAnFMgyPvIlJ8FMW2kHt3oFM9p2/9pbiD4QNwnQpton8CIQCwl7m2IL7t739S
+JsiGbA2oJ2stAjX1/mix09ERyKtB5g==
+-----END CERTIFICATE-----
+`;
+function certFile(t, text = TEST_CERT_PEM) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'room-cert-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'fullchain.pem');
+  if (text !== null) fs.writeFileSync(file, text);
+  return file;
+}
+test('reminds people when the HTTPS certificate has not renewed by itself, from 14 days left', async t => {
+  const file = certFile(t);
+  const { state, posts } = await withAlerts(t, { env: { HTTPS_CERT_FILE: file } });
+  assert.deepEqual(state.httpsCertStatus(TUESDAY_3PM), { expires: '2026-11-24', daysLeft: 14, stage: 14 });
+  await state.checkCertExpiry(TUESDAY_3PM - DAY);                       // 15 days left: renewal may still happen
+  assert.equal(state.alerts.length, 0);
+  await state.checkCertExpiry(TUESDAY_3PM);
+  assert.equal(state.alerts.length, 1);
+  assert.match(state.alerts[0].text, /HTTPS certificate expires in 14 days \(2026-11-24\) and has not renewed/);
+  assert.match(state.alerts[0].text, /door tablets \(plain http\) are not affected/);
+  assert.equal(posts.length, 1, 'also sent to the chat webhook');
+  await state.checkCertExpiry(TUESDAY_3PM + 60000);
+  assert.equal(state.alerts.length, 1, 'no repeat within the same stage');
+  await state.checkCertExpiry(TUESDAY_3PM + 15 * DAY);                  // 25 Nov
+  assert.match(state.alerts[0].text, /expired on 2026-11-24/);
+  assert.match(state.alerts[0].text, /Browsers now refuse/);
+});
+test('a renewed certificate file is read again, and an unreadable one is reported once', async t => {
+  const file = certFile(t);
+  const { state } = await withAlerts(t, { env: { HTTPS_CERT_FILE: file } });
+  assert.equal(state.httpsCertStatus(TUESDAY_3PM).daysLeft, 14);
+  fs.rmSync(file);
+  assert.deepEqual(state.httpsCertStatus(TUESDAY_3PM), { expires: '', daysLeft: null, stage: 'unreadable', error: 'the file does not exist' });
+  await state.checkCertExpiry(TUESDAY_3PM);
+  await state.checkCertExpiry(TUESDAY_3PM + 60000);
+  assert.equal(state.alerts.length, 1);
+  assert.match(state.alerts[0].text, /cannot be checked \(HTTPS_CERT_FILE .*the file does not exist\)/);
+  fs.writeFileSync(file, 'not a certificate');
+  assert.equal(state.httpsCertStatus(TUESDAY_3PM).stage, 'unreadable');
+  fs.writeFileSync(file, TEST_CERT_PEM);
+  fs.utimesSync(file, new Date(), new Date(Date.now() + 5000));
+  assert.equal(state.httpsCertStatus(TUESDAY_3PM - 20 * DAY).stage, null, 'readable again, 34 days left');
+});
+test('reminds people before the certificate renewal login expires, and checks nothing when not set up', async t => {
+  const { state } = await withAlerts(t, { env: { CERT_RENEWAL_SECRET_EXPIRES: '2026-12-10' } });
+  assert.deepEqual(state.certRenewalSecretStatus(TUESDAY_3PM), { expires: '2026-12-10', daysLeft: 30, stage: 30 });
+  await state.checkCertExpiry(EST('2026-11-10T04:00:00Z'));            // 11 PM: waits for office hours
+  assert.equal(state.alerts.length, 0);
+  await state.checkCertExpiry(TUESDAY_3PM);
+  assert.equal(state.alerts.length, 1);
+  assert.match(state.alerts[0].text, /login the server uses to renew its HTTPS certificate expires in 30 days \(2026-12-10\)/);
+  assert.match(state.alerts[0].text, /AZUREDNS_CLIENTSECRET/);
+  assert.match(state.alerts[0].text, /CERT_RENEWAL_SECRET_EXPIRES/);
+  await state.checkCertExpiry(TUESDAY_3PM + 60000);
+  assert.equal(state.alerts.length, 1);
+  const none = await withAlerts(t);
+  assert.equal(none.state.httpsCertStatus(TUESDAY_3PM), null);
+  assert.equal(none.state.certRenewalSecretStatus(TUESDAY_3PM), null);
+  await none.state.checkCertExpiry(TUESDAY_3PM);
+  assert.equal(none.state.alerts.length, 0);
+});
 test('the live connection sends a named ping event so tablets can tell it is alive', async t => {
   const { base } = await start(t, { pingSeconds: 0.05 });
   const stream = await listen(base, 'front');
