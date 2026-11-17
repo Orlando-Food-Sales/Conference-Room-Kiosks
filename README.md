@@ -17,6 +17,8 @@ dependencies; Node.js 22 or later.
 - Microsoft 365 outages are named plainly: the tablet says "Microsoft 365 is not responding" and keeps the last meetings it had (one pop-up, not one a minute), a failed booking says to try again or book in Outlook, and the alert says it is Microsoft's problem (with a link to Microsoft's status page) instead of suggesting a secret or permission fix. Requests to Microsoft give up after 20 seconds instead of hanging.
 - Tablet battery: each tablet reports its battery level and whether it is charging (Chrome / Android WebView); the dashboard shows it next to the tablet, and an alert goes out when a wall tablet that is not charging drops below 10% and again below 5% (office hours), plus one when it is charging again.
 - Door camera (optional, Fully Kiosk Browser): Take photo and Live camera on the dashboard, admins only, nothing stored, every use logged, and a "Camera on" badge on the tablet while it is used (`INSTALL-UBUNTU.md` 12e).
+- Door intercom (kiosk tablets on https): a Call button rings the signed-in dashboards, an administrator answers and they talk. Sound is only used during a call the door starts, goes straight from the tablet to the administrator's browser, and is never stored, logged or sent through the server; the tablet shows a red "Microphone on" badge while it is open. Every call is logged with who answered (`INSTALL-UBUNTU.md` 12f).
+- Noise level and tablet location (kiosk tablets on https): the dashboard shows quiet / talking / loud with a dB number, and each tablet's position with an Open map link. The noise meter sends numbers only, never sound, and shows a grey "Noise meter on" note on the tablet while it runs.
 - Kiosk mode: add `?kiosk=1` to a room URL (the door tablets) to show the refresh and message buttons; the plain room URL hides them.
 - No pinch-zoom on the room display: zoom is turned off, and if a tablet's accessibility setting forces it anyway, the page resets itself after 20 seconds without a touch. The dashboard and preview page zoom normally.
 - The current weather in Fahrenheit after the date under the clock ("☁️ 48°F Cloudy · feels 41°"), from the same weather source as the background mood.
@@ -59,6 +61,7 @@ All settings are environment variables; see `.env.example`.
   "anniversary" are used; PTO and holidays on the same calendar are ignored. A yearly anniversary can carry the start
   year instead of a count, "Jodi Andrade - Work Anniversary (since 2025)", and the display works out the years
   ("Happy 1-year work anniversary, Jodi!" in 2026, 2-year in 2027).
+- Intercom, noise and location: `INTERCOM_ENABLED`, `INTERCOM_RING_SECONDS`, `INTERCOM_MAX_MINUTES`, `NOISE_METER`, `NOISE_TALKING_DB`, `NOISE_LOUD_DB`, `LOCATION_REPORT`
 - Per room, in `rooms.json`: `allowQuickBooking`, and `showCelebrations` (set `false` for
   client-facing rooms).
 
@@ -71,4 +74,5 @@ Query options on a room URL: `theme`, `weather`, `warning` (a banner such as `Wi
 
 ## Security
 
+Sound is used only during a call the person at the door starts and an administrator answers; it goes between the two browsers and is never stored or logged, and the tablet shows a "Microphone on" badge while its microphone is open. Nothing on the dashboard can start a call. The noise meter sends a level and a dB number, never sound. Calls work on the office network or VPN only (no relay server is used).
 No secrets, tenant IDs, room mailboxes or backups belong in this repository. See `SECURITY.md`.

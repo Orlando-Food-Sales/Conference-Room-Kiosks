@@ -1,9 +1,9 @@
-.env.example	5588 bytes
+.env.example	6573 bytes
 .gitignore	92 bytes
-CHANGELOG.md	38425 bytes
+CHANGELOG.md	40530 bytes
 DEPLOY-CHECKLIST.md	9038 bytes
-INSTALL-UBUNTU.md	34316 bytes
-README.md	10859 bytes
+INSTALL-UBUNTU.md	37360 bytes
+README.md	12150 bytes
 RELEASE_MANIFEST.md	1658 bytes
 REPO-FILE-MANIFEST.txt	329 bytes
 SECURITY.md	2423 bytes
@@ -13,7 +13,7 @@ assets/logo/Orlando-Foods_Logo_NoTagline_Color.png	65930 bytes
 assets/logo/Orlando-Foods_Logo_NoTagline_White.png	62669 bytes
 config/rooms.example.json	411 bytes
 deploy/m365-room-display.service	600 bytes
-deploy/nginx-https.conf	2612 bytes
+deploy/nginx-https.conf	2852 bytes
 deploy/nginx.conf	562 bytes
 deploy/teams-app/color.png	2350 bytes
 deploy/teams-app/manifest.template.json	1138 bytes
@@ -138,5 +138,6 @@ test/teams-alerts.test.js	11179 bytes
 test/weather.test.js	16533 bytes
 tools/apply_single_line_update.py	6931 bytes
 tools/build_sleep_extras.py	7023 bytes
+tools/e2e-intercom.mjs	20405 bytes
 tools/rebuild_sleep_hq.py	5560 bytes
 verification/VERIFICATION.txt	3229 bytes
