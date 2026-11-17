@@ -40,6 +40,20 @@ test('the tablet reports its battery level and charging state with each check-in
   assert.match(app, /level: Math\.round\(BATTERY\.level \* 100\), charging: Boolean\(BATTERY\.charging\)/);
   assert.match(app, /touch: HAS_TOUCH, battery: batteryInfo\(\) \}/);
 });
+test('in Fully Kiosk Browser the battery comes from its JavaScript interface, and bad answers are ignored', () => {
+  const start = app.indexOf('function fullyBattery');
+  const end = app.indexOf('\nfunction batteryInfo');
+  const fullyBattery = new Function(`${app.slice(start, end)}; return fullyBattery;`)();
+  const fake = (level, plugged) => ({ getBatteryLevel: () => level, isPlugged: () => plugged });
+  assert.deepEqual(fullyBattery(fake(87.0, true)), { level: 87, charging: true });
+  assert.deepEqual(fullyBattery(fake(8.4, false)), { level: 8, charging: false });
+  assert.equal(fullyBattery(undefined), null, 'not Fully, or its JavaScript interface is off');
+  assert.equal(fullyBattery({}), null);
+  assert.equal(fullyBattery(fake(-1, false)), null);
+  assert.equal(fullyBattery(fake('n/a', false)), null);
+  assert.equal(fullyBattery({ getBatteryLevel: () => { throw new Error('denied'); }, isPlugged: () => true }), null);
+  assert.match(app, /return fullyBattery\(window\.fully\) \|\|/, 'Fully first, then the browser');
+});
 test('the refresh and message buttons show only with ?kiosk=1; the plain address hides them and nothing else', () => {
   assert.match(app, /var IS_KIOSK = new URLSearchParams\(location\.search\)\.get\('kiosk'\) === '1';/);
   assert.match(app, /if \(IS_KIOSK\) document\.documentElement\.classList\.add\('kiosk'\);/);

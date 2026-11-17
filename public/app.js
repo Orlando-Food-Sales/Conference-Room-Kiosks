@@ -94,11 +94,20 @@ async function loadEvents() {
 }
 // "Microsoft 365 is not responding · showing meetings from 2:41 PM" (Snoopy looks for "not responding" too).
 function outageText() { return 'Microsoft 365 is not responding' + (state.lastGoodAt ? ' \u00b7 showing meetings from ' + formatTime(state.lastGoodAt) : ''); }
-// Battery level and charging state for the dashboard (and low-battery alerts). Chrome and Android WebView have it;
-// anything else, or a kiosk app that blocks it, reports null and the dashboard says "battery not reported".
+// Battery level and charging state for the dashboard (and low-battery alerts). Fully Kiosk Browser's JavaScript
+// interface first (fully.getBatteryLevel() is 0-100, fully.isPlugged(); needs "Enable JavaScript Interface"), then the
+// browser's Battery Status API (Chrome). Neither: null, and the dashboard says "battery not reported".
 var BATTERY = null;
 try { if (navigator.getBattery) navigator.getBattery().then(function (b) { BATTERY = b; }, function () { }); } catch (_) { }
-function batteryInfo() { return BATTERY && typeof BATTERY.level === 'number' ? { level: Math.round(BATTERY.level * 100), charging: Boolean(BATTERY.charging) } : null; }
+function fullyBattery(fully) {
+  try {
+    if (!fully || typeof fully.getBatteryLevel !== 'function' || typeof fully.isPlugged !== 'function') return null;
+    var level = Number(fully.getBatteryLevel());
+    if (!isFinite(level) || level < 0 || level > 100) return null;
+    return { level: Math.round(level), charging: Boolean(fully.isPlugged()) };
+  } catch (_) { return null; }
+}
+function batteryInfo() { return fullyBattery(window.fully) || (BATTERY && typeof BATTERY.level === 'number' ? { level: Math.round(BATTERY.level * 100), charging: Boolean(BATTERY.charging) } : null); }
 async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH, battery: batteryInfo() }) }); } catch (_) { } }
 function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') requestRefresh(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
