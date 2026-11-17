@@ -251,6 +251,64 @@ test('records the battery from check-ins, ignores junk, and keeps it across live
   await beat({ roomId: 'front', tabletId: 't2' });
   assert.equal(state.tablets.get('front:t2').battery, undefined, 'an older tablet page that sends nothing shows nothing');
 });
+// ---------------------------------------------------------------------------------------------
+// Door camera (Fully Kiosk Browser Remote Admin)
+// ---------------------------------------------------------------------------------------------
+const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
+function withCamera(t, { reply, env = {} } = {}) {
+  const calls = [];
+  const logs = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(String(url));
+    if (reply) return reply(String(url));
+    return new Response(JPEG, { status: 200, headers: { 'content-type': 'image/jpeg' } });
+  };
+  return start(t, { env: { FULLY_CAMERA_HOSTS: 'front=192.168.80.172', FULLY_REMOTE_PASSWORD: 'p&ss word', ...env }, fetchImpl, logger: { error() { }, warn() { }, log: line => logs.push(line) } }).then(s => ({ ...s, calls, logs }));
+}
+test('the door camera gives admins a picture from the room tablet, never cached by the browser', async t => {
+  const { base, calls, logs } = await withCamera(t);
+  assert.equal((await json(base, '/api/admin/rooms/front/camera')).status, 401, 'admins only');
+  const response = await json(base, '/api/admin/rooms/front/camera', { token: TOKEN });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('content-type'), 'image/jpeg');
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), JPEG);
+  const page = await fetch(`${base}/dashboard`);
+  assert.match(page.headers.get('content-security-policy'), /img-src 'self' data: blob:;/, 'the dashboard may show the picture it fetched (a blob: address)');
+  assert.deepEqual(calls, ['http://192.168.80.172:2323/?cmd=getCamshot&password=p%26ss%20word']);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /Door camera: photo of Front Conference Room by the administrator token/);
+  await json(base, '/api/admin/rooms/front/camera?live=1', { token: TOKEN });
+  assert.equal(calls.length, 1, 'a picture less than 0.7 s old is shared');
+  assert.equal(logs.length, 1, 'one log line per use, not per picture');
+  assert.equal((await json(base, '/api/admin/rooms/back/camera', { token: TOKEN })).status, 404, 'no camera set up for the back room');
+  assert.equal((await json(base, '/api/admin/rooms/nowhere/camera', { token: TOKEN })).status, 404);
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.deepEqual(overview.rooms.map(r => [r.id, r.camera]), [['front', true], ['back', false]]);
+});
+test('the tablet is told to show "Camera on" while the camera is used', async t => {
+  const { base } = await withCamera(t);
+  const stream = await listen(base, 'front');
+  await json(base, '/api/admin/rooms/front/camera', { token: TOKEN });
+  await waitFor(() => stream.text().includes('event: camera'), 'the camera event');
+  assert.match(stream.text(), /event: camera\ndata: .*"seconds":15/);
+  await stream.stop();
+});
+test('door camera problems come back as plain messages, and nothing is shown on the tablet', async t => {
+  const html = await withCamera(t, { reply: () => new Response('<html>login</html>', { status: 200, headers: { 'content-type': 'text/html' } }) });
+  const login = await json(html.base, '/api/admin/rooms/front/camera', { token: TOKEN });
+  assert.equal(login.status, 502);
+  assert.match((await login.json()).error, /did not send a picture \(200\).*FULLY_REMOTE_PASSWORD.*Motion Detection/);
+  assert.equal(html.logs.length, 0, 'a failed attempt is not logged as a camera use');
+  const down = await withCamera(t, { reply: () => { throw new Error('ECONNREFUSED'); } });
+  const answer = await json(down.base, '/api/admin/rooms/front/camera', { token: TOKEN });
+  assert.equal(answer.status, 502);
+  assert.match((await answer.json()).error, /Could not reach the tablet's camera at 192\.168\.80\.172/);
+  const off = await start(t, { env: { FULLY_CAMERA_HOSTS: 'front=8.8.8.8', FULLY_REMOTE_PASSWORD: 'pw' } });
+  const refused = await json(off.base, '/api/admin/rooms/front/camera', { token: TOKEN });
+  assert.equal(refused.status, 404);
+  assert.match((await refused.json()).error, /camera is off: .*private network address/);
+});
 test('only accepts Microsoft change notifications that carry the shared secret', async t => {
   const received = [];
   const subscriptions = { start: async () => { }, stop() { }, processNotifications: values => received.push(...values) };

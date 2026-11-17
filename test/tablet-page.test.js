@@ -40,6 +40,13 @@ test('the tablet reports its battery level and charging state with each check-in
   assert.match(app, /level: Math\.round\(BATTERY\.level \* 100\), charging: Boolean\(BATTERY\.charging\)/);
   assert.match(app, /touch: HAS_TOUCH, battery: batteryInfo\(\) \}/);
 });
+test('the tablet shows "Camera on" while an admin uses its camera', () => {
+  assert.match(html, /id="cameraNotice"[^>]*>&#9679; Camera on</);
+  assert.match(app, /source\.addEventListener\('camera', function \(event\) \{ try \{ showCamera\(Number\(JSON\.parse\(event\.data\)\.detail\.seconds\)\)/);
+  assert.match(app, /Math\.min\(seconds, 60\) \* 1000/, 'never stuck on for more than a minute per message');
+  assert.match(css, /\.camera-notice \{[^}]*display: none/);
+  assert.match(css, /\.camera-notice\.on \{ display: block; \}/);
+});
 test('in Fully Kiosk Browser the battery comes from its JavaScript interface, and bad answers are ignored', () => {
   const start = app.indexOf('function fullyBattery');
   const end = app.indexOf('\nfunction batteryInfo');

@@ -104,6 +104,29 @@ const EMAIL = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 // Alerts from a named Teams bot. All of it is optional; leave TEAMS_BOT_APP_ID empty to turn it off.
 // The day the Microsoft 365 client secret expires (YYYY-MM-DD), for the expiry reminders. Empty turns them off.
 // The app cannot read this from Microsoft itself, so it has to be written down here.
+// Door camera through Fully Kiosk Browser's Remote Admin (INSTALL-UBUNTU.md 12e). FULLY_CAMERA_HOSTS names each room's
+// tablet address (room=ip, comma separated) and FULLY_REMOTE_PASSWORD is the Remote Admin password. The addresses are
+// written down here on purpose: the server never sends that password to an address a browser reported about itself.
+function privateIPv4(ip) {
+  const o = ip.split('.').map(Number);
+  if (o.length !== 4 || o.some(n => !Number.isInteger(n) || n > 255)) return false;
+  return o[0] === 10 || (o[0] === 172 && o[1] >= 16 && o[1] <= 31) || (o[0] === 192 && o[1] === 168);
+}
+function loadCamera(env, rooms) {
+  const list = String(env.FULLY_CAMERA_HOSTS || '').trim();
+  const password = String(env.FULLY_REMOTE_PASSWORD || '');
+  if (!list && !password) return { enabled: false, hosts: {}, password: '', port: 2323 };
+  if (!list || !password) throw new Error('The door camera needs FULLY_CAMERA_HOSTS and FULLY_REMOTE_PASSWORD together (or neither).');
+  const hosts = {};
+  for (const part of list.split(',').map(s => s.trim()).filter(Boolean)) {
+    const match = part.match(/^([a-z0-9-]+)\s*=\s*([0-9.]+)$/);
+    if (!match) throw new Error(`FULLY_CAMERA_HOSTS: "${part}" should look like front=192.168.1.20.`);
+    if (!rooms.some(room => room.id === match[1])) throw new Error(`FULLY_CAMERA_HOSTS: there is no room "${match[1]}".`);
+    if (!privateIPv4(match[2])) throw new Error(`FULLY_CAMERA_HOSTS: ${match[2]} must be a private network address (10.x, 172.16-31.x or 192.168.x).`);
+    hosts[match[1]] = match[2];
+  }
+  return { enabled: true, hosts, password, port: integerValue(env.FULLY_REMOTE_PORT, 2323, 1, 65535) };
+}
 function loadSecretExpiry(env, name = 'CLIENT_SECRET_EXPIRES') {
   const value = String(env[name] || '').trim();
   if (!value) return '';
@@ -211,6 +234,9 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
     rooms: loadRooms(env, cwd)
   };
   config.teamsAlerts = loadTeamsAlerts(env, config.tenantId);
+  // Like sign-in, a camera settings mistake turns the camera off (and is logged); the door screens keep working.
+  try { config.camera = loadCamera(env, config.rooms); }
+  catch (error) { config.camera = { enabled: false, hosts: {}, password: '', port: 2323, problem: error.message }; }
   // A mistake in the sign-in settings turns Microsoft sign-in off (the administrator token still works) and is logged;
   // it never stops the app, so the door screens keep working.
   try { config.dashboardSignIn = loadDashboardSignIn(env, config.tenantId, config.teamsAlerts.recipients, config.publicBaseUrl); }

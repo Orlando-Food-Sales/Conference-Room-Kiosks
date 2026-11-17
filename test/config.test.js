@@ -116,6 +116,20 @@ test('Teams alert settings must be complete and valid, or the server refuses to 
   assert.throws(() => loadConfig({ ...demo, ...BOT, TEAMS_ALERT_EMAILS: many }), /at most 10/);
 });
 
+test('door camera settings: off by default, both or neither, known rooms and private addresses only', () => {
+  const rooms = JSON.stringify([{ id: 'front', name: 'Front', email: 'f@example.com' }, { id: 'back', name: 'Back', email: 'b@example.com' }]);
+  const cam = env => loadConfig({ ...demo, ROOMS_JSON: rooms, ...env }).camera;
+  assert.equal(cam({}).enabled, false);
+  assert.deepEqual(cam({ FULLY_CAMERA_HOSTS: ' front=192.168.80.172, back = 10.1.2.3 ', FULLY_REMOTE_PASSWORD: 'pw' }), { enabled: true, hosts: { front: '192.168.80.172', back: '10.1.2.3' }, password: 'pw', port: 2323 });
+  assert.equal(cam({ FULLY_CAMERA_HOSTS: 'front=172.20.0.9', FULLY_REMOTE_PASSWORD: 'pw', FULLY_REMOTE_PORT: '2324' }).port, 2324);
+  const problem = env => cam(env).problem || '';
+  assert.match(problem({ FULLY_CAMERA_HOSTS: 'front=192.168.80.172' }), /together/);
+  assert.match(problem({ FULLY_REMOTE_PASSWORD: 'pw' }), /together/);
+  assert.match(problem({ FULLY_CAMERA_HOSTS: 'side=192.168.80.5', FULLY_REMOTE_PASSWORD: 'pw' }), /no room "side"/);
+  for (const bad of ['8.8.8.8', '127.0.0.1', '192.168.80.300', '169.254.1.1', '172.32.0.1']) assert.match(problem({ FULLY_CAMERA_HOSTS: `front=${bad}`, FULLY_REMOTE_PASSWORD: 'pw' }), /private network address/, bad);
+  assert.match(problem({ FULLY_CAMERA_HOSTS: 'front=evil.example.com', FULLY_REMOTE_PASSWORD: 'pw' }), /should look like/);
+  assert.equal(cam({ FULLY_CAMERA_HOSTS: 'front=8.8.8.8', FULLY_REMOTE_PASSWORD: 'pw' }).enabled, false, 'a mistake turns the camera off instead of stopping the app');
+});
 test('HTTPS certificate file and renewal login date are optional; the date must be real', () => {
   assert.equal(loadConfig(demo).httpsCertFile, '');
   assert.equal(loadConfig(demo).certRenewalSecretExpires, '');

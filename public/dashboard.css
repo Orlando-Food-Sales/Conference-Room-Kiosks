@@ -47,6 +47,9 @@ input::placeholder{color:var(--muted)}
 .devices li{margin:.2rem 0}
 .devices .on{color:#8fe3b4}
 .devices .off{color:var(--red)}
+.camera{margin:1rem 0;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.camera h2{margin:0 0 .5rem;font-size:1.1rem}
+.camera img{display:block;max-width:100%;max-height:70vh;margin:.5rem 0;border-radius:8px;background:#000}
 .devices .low{color:var(--red);font-weight:600}
 .alert-tools{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .75rem;margin:.75rem 0 .25rem}
 .alert-tools button{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:700}

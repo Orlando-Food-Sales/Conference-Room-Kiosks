@@ -56,3 +56,11 @@ test('the dashboard shows each tablet\'s battery, and "not reported" when it can
   assert.match(js, /t\.battery\.level<10\?'low'/);
   assert.match(css, /\.devices \.low\{/);
 });
+test('the dashboard has Take photo and Live camera for rooms with a camera, and a viewer that can be closed', () => {
+  assert.match(js, /if\(room\.camera\)\{controls\.appendChild\(button\('Take photo'/);
+  assert.match(js, /button\('Live camera',function\(\)\{cameraView\(room,true\)\}\)/);
+  assert.match(js, /Date\.now\(\)-started>=300000/, 'live view stops by itself after 5 minutes');
+  assert.match(js, /URL\.revokeObjectURL/, 'old pictures are released, not kept');
+  assert.match(html, /<section id="camera" class="camera hidden"/);
+  assert.match(js, /\$\('cameraStop'\)\.addEventListener\('click',closeCamera\)/);
+});

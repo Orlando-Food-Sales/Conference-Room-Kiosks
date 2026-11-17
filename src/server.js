@@ -34,7 +34,7 @@ function securityHeaders(res) {
   res.setHeader('x-frame-options', 'SAMEORIGIN');
   res.setHeader('referrer-policy', 'no-referrer');
   res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
-  res.setHeader('content-security-policy', "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; frame-ancestors 'self'");
+  res.setHeader('content-security-policy', "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'self'");
   res.setHeader('cache-control', 'no-store');
 }
 
@@ -228,6 +228,37 @@ export function createAppServer(options = {}) {
     for (const client of sseClients) if (client.roomId === roomId || client.roomId === '*') client.res.write(`event: ${type}\ndata: ${data}\n\n`);
   }
 
+  // Door camera (Fully Kiosk Browser Remote Admin, getCamshot). A picture is fetched from the room's tablet only when a
+  // signed-in admin asks, and passed straight through: never stored or logged. Each use is logged with who asked, and
+  // the tablet shows "Camera on" while it is in use. One picture serves every viewer for 0.7 s.
+  const camera = config.camera || { enabled: false, hosts: {} };
+  if (camera.problem) logger.error?.(`Door camera is OFF because of a settings problem: ${camera.problem}`);
+  const cameraFrames = new Map();      // roomId -> { at, type, body }
+  const cameraUse = new Map();         // roomId -> { until, notifiedAt }
+  function markCamera(roomId, who, live, ms = Date.now()) {
+    const use = cameraUse.get(roomId);
+    const idle = !use || use.until < ms;
+    if (idle) logger.log?.(`Door camera: ${live ? 'live view' : 'photo'} of ${roomById.get(roomId).name} by ${who.via === 'session' ? who.session.email : 'the administrator token'}`);
+    const next = { until: Math.max(ms + (live ? 6000 : 15000), use?.until || 0), notifiedAt: use?.notifiedAt || 0 };
+    if (idle || ms - next.notifiedAt >= 3000) { next.notifiedAt = ms; notifyRoom(roomId, 'camera', { seconds: Math.ceil((next.until - ms) / 1000) }); }
+    cameraUse.set(roomId, next);
+  }
+  async function cameraFrame(roomId) {
+    const cached = cameraFrames.get(roomId);
+    if (cached && Date.now() - cached.at < 700) return cached;
+    const host = camera.hosts[roomId];
+    const fail = message => Object.assign(new Error(message), { status: 502 });
+    let response;
+    try { response = await (options.fetchImpl || fetch)(`http://${host}:${camera.port}/?cmd=getCamshot&password=${encodeURIComponent(camera.password)}`, { signal: AbortSignal.timeout(8000) }); }
+    catch { throw fail(`Could not reach the tablet's camera at ${host}. Check the tablet is on, Fully's Remote Admin is on, and FULLY_CAMERA_HOSTS still has its address.`); }
+    const type = String(response.headers.get('content-type') || '').split(';')[0].trim();
+    if (!response.ok || !/^image\/(jpeg|png|webp)$/i.test(type)) throw fail(`The tablet did not send a picture (${response.status}). In Fully, check Remote Admin is on with the password in FULLY_REMOTE_PASSWORD, and Motion Detection is on (Fully needs it for camera pictures).`);
+    const body = Buffer.from(await response.arrayBuffer());
+    if (!body.length || body.length > 8 * 1024 * 1024) throw fail('The tablet sent an empty or oversized picture.');
+    const frame = { at: Date.now(), type, body };
+    cameraFrames.set(roomId, frame);
+    return frame;
+  }
   // Latest events per room. One fetch serves every tablet for a few seconds, and any difference from the
   // previous fetch is pushed to the tablets straight away (this is what makes updates feel instant).
   const latest = new Map();
@@ -623,15 +654,26 @@ export function createAppServer(options = {}) {
             let events = [], error = null;
             try { events = await calendars.get(room.id).listEvents(window.start, window.end); } catch (e) { error = e.message; }
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
-            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), error };
+            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), error };
           }));
-          return sendJson(res, 200, { version: VERSION, rooms, outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
           alerts.unshift({ at: new Date().toISOString(), text: `Test alert sent from the dashboard.` });
           alerts.length = Math.min(alerts.length, 20);
           return sendJson(res, 200, await deliver(text, { title: 'Room Display test alert' }));
+        }
+        const cameraMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/camera$/);
+        if (req.method === 'GET' && cameraMatch) {
+          const roomId = cameraMatch[1];
+          if (!roomById.has(roomId)) return sendJson(res, 404, { error: 'Unknown room.' });
+          if (!camera.enabled || !camera.hosts[roomId]) return sendJson(res, 404, { error: camera.problem ? `The door camera is off: ${camera.problem}` : 'No camera is set up for this room (FULLY_CAMERA_HOSTS).' });
+          let frame;
+          try { frame = await cameraFrame(roomId); } catch (error) { return sendJson(res, error.status || 502, { error: error.message }); }
+          markCamera(roomId, who, url.searchParams.get('live') === '1');
+          res.writeHead(200, { 'content-type': frame.type, 'content-length': frame.body.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+          return res.end(frame.body);
         }
         const match = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/control$/);
         if (req.method === 'POST' && match) {
