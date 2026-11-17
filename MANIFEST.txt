@@ -25,7 +25,7 @@ public/app.js	36167 bytes
 public/apple-touch-icon.png	6688 bytes
 public/dashboard.css	7127 bytes
 public/dashboard.html	2162 bytes
-public/dashboard.js	16874 bytes
+public/dashboard.js	16898 bytes
 public/favicon.ico	4129 bytes
 public/index.html	6715 bytes
 public/logo/README.md	1788 bytes
