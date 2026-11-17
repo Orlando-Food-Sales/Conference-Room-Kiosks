@@ -345,6 +345,12 @@ Keep the application on loopback port 3000 and terminate TLS at Nginx; `deploy/n
 - Re-run the smoke test against the HTTPS URL.
 - Do not expose port 3000 through the firewall.
 
+### 13a. HTTPS with the server's own certificate authority (no outside certificate, renews by itself)
+For a server only reachable inside the office, when the dashboard is used from a few known computers. Browsers trust the certificate only on computers where its root certificate is installed (once); any other computer shows a warning.
+1. An internal DNS record for the name (for example `conference.yourcompany.com`) pointing at the server's fixed IP. If your company domain also has public DNS, an internal zone for that domain must have the record too, or office computers will not find it.
+2. On the server, from the repository clone: `sudo bash ~/kiosks/scripts/setup-local-https.sh conference.yourcompany.com`. It makes a certificate authority (10 years, name-constrained to that one name, so it cannot be used to fake other sites; key in `/etc/ssl/room-display/ca`, root only), a server certificate (397 days), installs `deploy/nginx-https.conf` with the name filled in (backs up the old site file; puts it back if `nginx -t` fails), and a monthly systemd timer `room-display-cert-renew.timer` that re-issues the certificate when less than 60 days are left and reloads nginx. Check it with `systemctl list-timers room-display-cert-renew.timer`; run a renewal by hand with `sudo room-display-cert-renew`.
+3. Copy `/etc/ssl/room-display/room-display-root-ca.crt` to each computer that opens the dashboard and compare the SHA-256 fingerprint the script printed. Windows: double-click it > Install Certificate > Current User > "Trusted Root Certification Authorities" (or push it by Group Policy). Mac: open it in Keychain Access (login keychain), double-click it > Trust > "Always Trust". Firefox uses its own list unless `security.enterprise_roots.enabled` is on. Restart the browser.
+4. Then sign-in, section 12c: the redirect URI is `https://conference.yourcompany.com/auth/callback`. The door tablets keep their `http://<server-ip>/room/...` addresses.
 ## 14. Backup the known-good installation
 
 After production validation:

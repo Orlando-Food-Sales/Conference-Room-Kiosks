@@ -1,8 +1,8 @@
 .env.example	4775 bytes
 .gitignore	92 bytes
-CHANGELOG.md	34449 bytes
+CHANGELOG.md	35200 bytes
 DEPLOY-CHECKLIST.md	9038 bytes
-INSTALL-UBUNTU.md	27079 bytes
+INSTALL-UBUNTU.md	29041 bytes
 README.md	10216 bytes
 RELEASE_MANIFEST.md	1658 bytes
 REPO-FILE-MANIFEST.txt	329 bytes
@@ -13,7 +13,7 @@ assets/logo/Orlando-Foods_Logo_NoTagline_Color.png	65930 bytes
 assets/logo/Orlando-Foods_Logo_NoTagline_White.png	62669 bytes
 config/rooms.example.json	411 bytes
 deploy/m365-room-display.service	600 bytes
-deploy/nginx-https.conf	2507 bytes
+deploy/nginx-https.conf	2612 bytes
 deploy/nginx.conf	562 bytes
 deploy/teams-app/color.png	2350 bytes
 deploy/teams-app/manifest.template.json	1138 bytes
@@ -104,6 +104,7 @@ scripts/backup.sh	889 bytes
 scripts/build-teams-app.sh	2118 bytes
 scripts/deploy-on-server.sh	15745 bytes
 scripts/install-ubuntu.sh	2978 bytes
+scripts/setup-local-https.sh	7469 bytes
 scripts/smoke-test.sh	1721 bytes
 scripts/update-manifests.sh	1003 bytes
 snippets/app.js-meeting-row.js	935 bytes
