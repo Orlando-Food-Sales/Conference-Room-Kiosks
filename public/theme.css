@@ -626,7 +626,5 @@ input, textarea, select { -webkit-user-select: text; user-select: text; touch-ac
 .mic-notice { position: fixed; top: 44px; left: 50%; transform: translateX(-50%); z-index: 60; display: none; padding: 4px 14px; border-radius: 999px; background: #b3121f; color: #fff; font-size: .9rem; font-weight: 700; letter-spacing: .02em; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
 .mic-notice.on { display: block; }
 /* Small grey pill while the noise meter runs (only a level number leaves the tablet). */
-.noise-notice { position: fixed; bottom: 8px; left: 8px; z-index: 30; display: none; padding: 3px 10px; border-radius: 999px; background: var(--panel); color: var(--muted); border: 1px solid var(--line); font-size: .72rem; opacity: .85; }
-.noise-notice.on { display: block; }
 /* Door call panel. */
 .call-status { margin: 0; font-size: 1.25rem; font-weight: 700; min-height: 1.6em; }

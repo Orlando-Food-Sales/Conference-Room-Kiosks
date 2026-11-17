@@ -70,6 +70,7 @@ export function createIntercom({ roomById, config = {}, logger = console, notify
       if (calls.has(roomId)) return { status: 409, state: 'busy', error: 'Someone is already calling.' };
       if (now() - (endedAt.get(roomId) ?? -Infinity) < cooldownMs) return { status: 429, state: 'cooldown', error: 'Please wait a moment before calling again.' };
       if (!admins.size) {
+        endedAt.set(roomId, now());
         logger.log?.(`Intercom: ${roomName(roomId)} call ended after 0 s (no administrator on the dashboard)`);
         return { status: 200, state: 'nobody' };
       }

@@ -511,9 +511,9 @@ async function startNoise() {
   } catch (_) { stopStream(stream); noise.starting = false; noise.retryAt = Date.now() + 600000; return; }
   noise.stream = stream; noise.starting = false; noise.running = true; noise.refused = false;
   noise.sum = 0; noise.ticks = 0; noise.blocks = [];
-  stream.getTracks().forEach(function (track) { track.onended = function () { if (gen === noise.gen) { stopNoise(); noise.retryAt = Date.now() + 60000; } }; });
+  stream.getTracks().forEach(function (track) { track.onended = function () { if (gen === noise.gen) { stopNoise(); noise.retryAt = Date.now() + 60000; } micSync(); }; });
   noise.timer = setInterval(noiseTick, 100);
-  $('noiseNotice').classList.add('on');
+  micSync();
 }
 function noiseTick() {
   if (!noise.analyser) return;
@@ -544,7 +544,7 @@ function stopNoise() {
   if (noise.ctx) { try { noise.ctx.close(); } catch (_) { } }
   noise.stream = null; noise.ctx = null; noise.analyser = null; noise.buf = null;
   noise.sum = 0; noise.ticks = 0; noise.blocks = []; noise.current = null;
-  var pill = $('noiseNotice'); if (pill) pill.classList.remove('on');
+  micSync();
 }
 
 // Location, read at page start and every 6 hours (a wall tablet does not move).
@@ -573,8 +573,10 @@ function setCallStatus(text, ended) {
   $('callPanel').classList.remove('hidden');
 }
 function micSync() {
-  var on = Boolean(door.stream && door.stream.getTracks().some(function (track) { return track.readyState === 'live'; }));
-  $('micNotice').classList.toggle('on', on);
+  var live = function (stream) { return Boolean(stream && stream.getTracks().some(function (track) { return track.readyState === 'live'; })); };
+  var call = live(door.stream), meter = live(noise.stream);
+  $('micNotice').textContent = call || !meter ? '\u25CF Microphone on' : '\u25CF Microphone on (noise level only)';
+  $('micNotice').classList.toggle('on', call || meter);
 }
 function armGuard(ms) {
   clearTimeout(door.guard);

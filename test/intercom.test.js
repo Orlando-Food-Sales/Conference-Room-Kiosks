@@ -63,6 +63,9 @@ test('ringing with nobody on the dashboard makes no call', async t => {
   assert.deepEqual(await answer.json(), { state: 'nobody' });
   assert.equal(state.intercom.callFor('front'), null);
   assert.ok(lines.some(l => /Front Conference Room call ended after 0 s \(no administrator on the dashboard\)/.test(l)));
+  const again = await ring(base);
+  assert.equal(again.status, 429, 'repeated rings with nobody there hit the cooldown');
+  assert.equal(lines.filter(l => /no administrator on the dashboard/.test(l)).length, 1, 'and write no further log lines');
 });
 
 test('a ring reaches the dashboards and only the ringing tablet, never the public room stream', async t => {

@@ -338,13 +338,22 @@ function body(name) { const m = app.match(new RegExp(`(?:async )?function ${name
 test('the call button, call panel and the two notices are on the tablet page', () => {
   assert.match(html, /<button id="callButton" class="icon-button hidden"/);
   assert.match(html, /<div id="micNotice" class="mic-notice" role="status">&#9679; Microphone on<\/div>/);
-  assert.match(html, /<div id="noiseNotice" class="noise-notice" role="status">&#9680; Noise meter on \(no sound is sent or kept\)<\/div>/);
+  assert.doesNotMatch(html, /noiseNotice/, 'one red badge covers the call and the noise meter');
   assert.match(html, /id="callStatus"[^>]*aria-live="polite"/);
   for (const id of ['callPanel', 'callHangup', 'callAudio']) assert.ok(html.includes(`id="${id}"`), `#${id}`);
   assert.match(css, /\.mic-notice \{[^}]*display: none[^}]*background: #b3121f/);
   assert.match(css, /\.mic-notice\.on \{ display: block; \}/);
-  assert.match(css, /\.noise-notice \{[^}]*display: none/);
-  assert.match(css, /\.noise-notice\.on \{ display: block; \}/);
+  assert.doesNotMatch(css, /noise-notice/);
+});
+test('the red microphone badge follows the call stream and the noise stream', () => {
+  const sync = body('micSync');
+  assert.match(sync, /door\.stream/);
+  assert.match(sync, /noise\.stream/);
+  assert.match(sync, /toggle\('on', call \|\| meter\)/);
+  assert.match(sync, /noise level only/);
+  assert.match(body('stopNoise'), /micSync\(\)/);
+  assert.match(app, /noise\.stream = stream;[\s\S]*?micSync\(\);\n\}/);
+  assert.doesNotMatch(app, /noiseNotice/);
 });
 test('noiseLevel and loudestBlock: thresholds, and one slam does not count', () => {
   const { noiseLevel, loudestBlock } = new Function(`${body('noiseLevel')}\n${body('loudestBlock')}\nreturn { noiseLevel, loudestBlock };`)();
@@ -397,6 +406,6 @@ test('the noise meter stops when hidden, display off or in a call, and sends onl
   assert.match(app, /addEventListener\('visibilitychange', function \(\) \{ syncNoise\(\);/);
   assert.match(body('startNoise'), /echoCancellation: false, noiseSuppression: false, autoGainControl: false/);
   assert.match(body('stopNoise'), /stopStream\(noise\.stream\)[\s\S]*ctx\.close\(\)/);
-  assert.match(body('startNoise'), /classList\.add\('on'\)/);
+  assert.match(body('startNoise'), /micSync\(\);\n\}$/);
   assert.ok(!/connect\(noise\.ctx\.destination|\.destination/.test(body('startNoise')), 'the microphone is never played back');
 });
