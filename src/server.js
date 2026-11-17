@@ -259,6 +259,17 @@ export function createAppServer(options = {}) {
     cameraFrames.set(roomId, frame);
     return frame;
   }
+  // Front or back camera: Fully's "Select Camera" (motionCameraId; Android camera 1 is the front, 0 the back).
+  async function setCameraSide(roomId, side) {
+    const host = camera.hosts[roomId];
+    const fail = message => Object.assign(new Error(message), { status: 502 });
+    let response, answer = null;
+    try { response = await (options.fetchImpl || fetch)(`http://${host}:${camera.port}/?cmd=setStringSetting&key=motionCameraId&value=${side === 'back' ? 0 : 1}&type=json&password=${encodeURIComponent(camera.password)}`, { signal: AbortSignal.timeout(8000) }); }
+    catch { throw fail(`Could not reach the tablet at ${host} to switch the camera.`); }
+    try { answer = await response.json(); } catch { }
+    if (!response.ok || answer?.status !== 'OK') throw fail(`The tablet did not switch the camera${answer?.statustext ? ` (${answer.statustext})` : ''}. Check Fully's Remote Admin password.`);
+    cameraFrames.delete(roomId);
+  }
   // Latest events per room. One fetch serves every tablet for a few seconds, and any difference from the
   // previous fetch is pushed to the tablets straight away (this is what makes updates feel instant).
   const latest = new Map();
@@ -674,6 +685,17 @@ export function createAppServer(options = {}) {
           markCamera(roomId, who, url.searchParams.get('live') === '1');
           res.writeHead(200, { 'content-type': frame.type, 'content-length': frame.body.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
           return res.end(frame.body);
+        }
+        const sideMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/camera\/side$/);
+        if (req.method === 'POST' && sideMatch) {
+          const roomId = sideMatch[1];
+          if (!roomById.has(roomId)) return sendJson(res, 404, { error: 'Unknown room.' });
+          if (!camera.enabled || !camera.hosts[roomId]) return sendJson(res, 404, { error: 'No camera is set up for this room (FULLY_CAMERA_HOSTS).' });
+          const side = String((await readJson(req)).side || '');
+          if (side !== 'front' && side !== 'back') return sendJson(res, 400, { error: 'Pick the front or the back camera.' });
+          try { await setCameraSide(roomId, side); } catch (error) { return sendJson(res, error.status || 502, { error: error.message }); }
+          logger.log?.(`Door camera: ${roomById.get(roomId).name} switched to the ${side} camera by ${who.via === 'session' ? who.session.email : 'the administrator token'}`);
+          return sendJson(res, 200, { ok: true, roomId, side });
         }
         const match = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/control$/);
         if (req.method === 'POST' && match) {

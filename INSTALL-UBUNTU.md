@@ -311,7 +311,7 @@ Admins can take a photo with a door tablet's camera, or watch it live (about one
 1. In Fully on each tablet: **Remote Administration > Enable Remote Administration** on, set a long **Remote Admin Password** (the same on every tablet), and **Remote Admin from Local Network** on. **Motion Detection > Enable Visual Motion Detection** on (Fully only takes camera pictures with it), using the front camera.
 2. Give each tablet a fixed address (a DHCP reservation). The server only sends the password to the addresses written in `.env`, never to an address a browser reported.
 3. In `/opt/m365-room-display/.env`: `FULLY_CAMERA_HOSTS=front=192.168.80.172,back=192.168.80.179` and `FULLY_REMOTE_PASSWORD=...`, then restart. A mistake turns the camera off and is logged ("Door camera is OFF because of a settings problem"); the door screens are not affected.
-Fully's Remote Admin is plain HTTP on the office network and gives full control of the tablet to anyone with the password, so keep the password long and the tablets on the office network only.
+**Front camera** / **Back camera** in the viewer switch which camera Fully uses (its "Select Camera" setting). Fully's Remote Admin is plain HTTP on the office network and gives full control of the tablet to anyone with the password, so keep the password long and the tablets on the office network only.
 ## 12b. Teams alerts from a named bot (optional)
 Alerts (a tablet offline, a room calendar that cannot be read) can arrive as a Teams message from a bot with its own name, for example **Room Display Alerts**, sent to specific people. It is one-way: nobody can reply to it and it cannot read anyone's chats. Without this, alerts still appear on the dashboard and, if `ALERT_WEBHOOK_URL` is set, in a chat channel.
 

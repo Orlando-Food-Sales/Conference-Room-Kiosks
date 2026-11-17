@@ -66,3 +66,7 @@ test('the dashboard has Take photo and Live camera for rooms with a camera, and 
   assert.match(html, /<section id="camera" class="camera hidden"/);
   assert.match(js, /\$\('cameraStop'\)\.addEventListener\('click',closeCamera\)/);
 });
+test('the camera viewer can switch between the front and back camera', () => {
+  assert.match(html, /<button id="cameraFront" type="button">Front camera<\/button> <button id="cameraBack" type="button">Back camera<\/button>/);
+  assert.match(js, /\/camera\/side',\{method:'POST',body:JSON\.stringify\(\{side:side\}\)\}/);
+});

@@ -47,6 +47,7 @@ input::placeholder{color:var(--muted)}
 .devices li{margin:.2rem 0}
 .devices .on{color:#8fe3b4}
 .devices .off{color:var(--red)}
+.camera-tools{display:flex;flex-wrap:wrap;gap:.5rem;margin:0}
 .camera-note{flex-basis:100%;font-size:.85rem}
 button:disabled{opacity:.45;cursor:not-allowed}
 .camera{margin:1rem 0;padding:1rem;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
