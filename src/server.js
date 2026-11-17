@@ -259,15 +259,22 @@ export function createAppServer(options = {}) {
     cameraFrames.set(roomId, frame);
     return frame;
   }
-  // Front or back camera: Fully's "Select Camera" (motionCameraId; Android camera 1 is the front, 0 the back).
+  // Front or back camera: Fully's "Select Camera" (motionCameraId; Android camera 1 is the front, 0 the back). Fully
+  // keeps using the old camera until motion detection restarts, so it is switched off and on again afterwards.
   async function setCameraSide(roomId, side) {
     const host = camera.hosts[roomId];
     const fail = message => Object.assign(new Error(message), { status: 502 });
-    let response, answer = null;
-    try { response = await (options.fetchImpl || fetch)(`http://${host}:${camera.port}/?cmd=setStringSetting&key=motionCameraId&value=${side === 'back' ? 0 : 1}&type=json&password=${encodeURIComponent(camera.password)}`, { signal: AbortSignal.timeout(8000) }); }
-    catch { throw fail(`Could not reach the tablet at ${host} to switch the camera.`); }
-    try { answer = await response.json(); } catch { }
-    if (!response.ok || answer?.status !== 'OK') throw fail(`The tablet did not switch the camera${answer?.statustext ? ` (${answer.statustext})` : ''}. Check Fully's Remote Admin password.`);
+    const fully = async query => {
+      let response, answer = null;
+      try { response = await (options.fetchImpl || fetch)(`http://${host}:${camera.port}/?${query}&type=json&password=${encodeURIComponent(camera.password)}`, { signal: AbortSignal.timeout(8000) }); }
+      catch { throw fail(`Could not reach the tablet at ${host} to switch the camera.`); }
+      try { answer = await response.json(); } catch { }
+      if (!response.ok || answer?.status !== 'OK') throw fail(`The tablet did not switch the camera${answer?.statustext ? ` (${answer.statustext})` : ''}. Check Fully's Remote Admin password.`);
+    };
+    await fully(`cmd=setStringSetting&key=motionCameraId&value=${side === 'back' ? 0 : 1}`);
+    await fully('cmd=setBooleanSetting&key=motionDetection&value=false');
+    await new Promise(resolve => setTimeout(resolve, options.cameraRestartMs ?? 1500));
+    await fully('cmd=setBooleanSetting&key=motionDetection&value=true');
     cameraFrames.delete(roomId);
   }
   // Latest events per room. One fetch serves every tablet for a few seconds, and any difference from the

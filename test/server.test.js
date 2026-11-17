@@ -255,7 +255,7 @@ test('records the battery from check-ins, ignores junk, and keeps it across live
 // Door camera (Fully Kiosk Browser Remote Admin)
 // ---------------------------------------------------------------------------------------------
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 0xff, 0xd9]);
-function withCamera(t, { reply, env = {} } = {}) {
+function withCamera(t, { reply, env = {}, cameraRestartMs } = {}) {
   const calls = [];
   const logs = [];
   const fetchImpl = async (url, init) => {
@@ -263,7 +263,7 @@ function withCamera(t, { reply, env = {} } = {}) {
     if (reply) return reply(String(url));
     return new Response(JPEG, { status: 200, headers: { 'content-type': 'image/jpeg' } });
   };
-  return start(t, { env: { FULLY_CAMERA_HOSTS: 'front=192.168.80.172', FULLY_REMOTE_PASSWORD: 'p&ss word', ...env }, fetchImpl, logger: { error() { }, warn() { }, log: line => logs.push(line) } }).then(s => ({ ...s, calls, logs }));
+  return start(t, { env: { FULLY_CAMERA_HOSTS: 'front=192.168.80.172', FULLY_REMOTE_PASSWORD: 'p&ss word', ...env }, fetchImpl, cameraRestartMs, logger: { error() { }, warn() { }, log: line => logs.push(line) } }).then(s => ({ ...s, calls, logs }));
 }
 test('the door camera gives admins a picture from the room tablet, never cached by the browser', async t => {
   const { base, calls, logs } = await withCamera(t);
@@ -287,19 +287,23 @@ test('the door camera gives admins a picture from the room tablet, never cached 
   assert.deepEqual(overview.rooms.map(r => [r.id, r.camera]), [['front', true], ['back', false]]);
 });
 test('admins can switch the door camera between front and back', async t => {
-  const { base, calls, logs } = await withCamera(t, { reply: url => url.includes('setStringSetting')
+  const { base, calls, logs } = await withCamera(t, { cameraRestartMs: 0, reply: url => url.includes('Setting')
     ? new Response(JSON.stringify({ status: 'OK', statustext: 'Saved and applied Select Camera' }), { headers: { 'content-type': 'application/json' } })
     : new Response(JPEG, { headers: { 'content-type': 'image/jpeg' } }) });
   const side = body => json(base, '/api/admin/rooms/front/camera/side', { token: TOKEN, method: 'POST', body });
   assert.equal((await json(base, '/api/admin/rooms/front/camera/side', { method: 'POST', body: { side: 'back' } })).status, 401);
   assert.equal((await side({ side: 'sideways' })).status, 400);
   assert.equal((await side({ side: 'back' })).status, 200);
-  assert.equal(calls.at(-1), 'http://192.168.80.172:2323/?cmd=setStringSetting&key=motionCameraId&value=0&type=json&password=p%26ss%20word');
+  assert.deepEqual(calls.slice(-3), [
+    'http://192.168.80.172:2323/?cmd=setStringSetting&key=motionCameraId&value=0&type=json&password=p%26ss%20word',
+    'http://192.168.80.172:2323/?cmd=setBooleanSetting&key=motionDetection&value=false&type=json&password=p%26ss%20word',
+    'http://192.168.80.172:2323/?cmd=setBooleanSetting&key=motionDetection&value=true&type=json&password=p%26ss%20word'
+  ], 'Fully only uses the new camera after motion detection restarts');
   await side({ side: 'front' });
-  assert.match(calls.at(-1), /key=motionCameraId&value=1&/);
+  assert.match(calls.at(-3), /key=motionCameraId&value=1&/);
   assert.match(logs.at(-1), /Front Conference Room switched to the front camera by the administrator token/);
   assert.equal((await json(base, '/api/admin/rooms/back/camera/side', { token: TOKEN, method: 'POST', body: { side: 'back' } })).status, 404);
-  const refused = await withCamera(t, { reply: () => new Response(JSON.stringify({ status: 'Error', statustext: 'Please login' }), { headers: { 'content-type': 'application/json' } }) });
+  const refused = await withCamera(t, { cameraRestartMs: 0, reply: () => new Response(JSON.stringify({ status: 'Error', statustext: 'Please login' }), { headers: { 'content-type': 'application/json' } }) });
   const answer = await json(refused.base, '/api/admin/rooms/front/camera/side', { token: TOKEN, method: 'POST', body: { side: 'back' } });
   assert.equal(answer.status, 502);
   assert.match((await answer.json()).error, /did not switch the camera \(Please login\)/);
