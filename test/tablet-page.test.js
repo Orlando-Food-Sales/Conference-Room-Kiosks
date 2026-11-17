@@ -35,6 +35,11 @@ test('the tablet page only reloads after /healthz answers, so an outage never le
   assert.match(app, /addEventListener\('ping'/, 'pings count as proof the connection is alive');
 });
 
+test('the tablet reports its battery level and charging state with each check-in, when the browser can', () => {
+  assert.match(app, /navigator\.getBattery\(\)\.then/);
+  assert.match(app, /level: Math\.round\(BATTERY\.level \* 100\), charging: Boolean\(BATTERY\.charging\)/);
+  assert.match(app, /touch: HAS_TOUCH, battery: batteryInfo\(\) \}/);
+});
 test('the refresh and message buttons show only with ?kiosk=1; the plain address hides them and nothing else', () => {
   assert.match(app, /var IS_KIOSK = new URLSearchParams\(location\.search\)\.get\('kiosk'\) === '1';/);
   assert.match(app, /if \(IS_KIOSK\) document\.documentElement\.classList\.add\('kiosk'\);/);

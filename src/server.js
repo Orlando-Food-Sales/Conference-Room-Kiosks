@@ -292,10 +292,27 @@ export function createAppServer(options = {}) {
     return !celebrations.holidayOn?.(today);
   }
   function clockText(room, ms) { return new Intl.DateTimeFormat('en-US', { timeZone: room.timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(ms)); }
+  // Low battery on a wall tablet that is not charging: one alert below 10%, one more below 5%, and one when it is
+  // charging again. Only for a tablet that is online (an offline one gets the offline alert instead).
+  const BATTERY_STAGES = [5, 10];
+  async function checkBattery(room, tablet, key, quietFor) {
+    const battery = tablet.battery;
+    const batteryKey = `${key}:battery`;
+    const sent = alertState.get(batteryKey);
+    if (!battery || quietFor >= config.tabletOfflineSeconds * 1000) return;
+    if (battery.charging) {
+      if (sent) { alertState.delete(batteryKey); await sendAlert(`${room.name}: the tablet "${tablet.name}" is charging again (${battery.level}%).`); }
+      return;
+    }
+    const stage = BATTERY_STAGES.find(limit => battery.level < limit);
+    if (!stage || (sent && sent <= stage)) return;
+    alertState.set(batteryKey, stage);
+    await sendAlert(`${room.name}: the tablet "${tablet.name}" battery is at ${battery.level}% and not charging. Plug it in${stage === 5 ? ' now, it will switch off soon' : ''}.`);
+  }
   async function checkTablets(ms = Date.now()) {
     const delay = config.alertAfterMinutes * 60000;
     for (const [key, tablet] of [...tablets]) {          // forget tablets that have been gone for a week
-      if (ms - Date.parse(tablet.lastSeen) > 7 * 86400000) { tablets.delete(key); alertState.delete(key); }
+      if (ms - Date.parse(tablet.lastSeen) > 7 * 86400000) { tablets.delete(key); alertState.delete(key); alertState.delete(`${key}:battery`); }
     }
     for (const room of config.rooms) {
       if (!officeSettled(room, ms)) continue;
@@ -310,6 +327,7 @@ export function createAppServer(options = {}) {
           alertState.delete(key);
           await sendAlert(`${room.name}: the tablet "${tablet.name}" is back online.`);
         }
+        await checkBattery(room, tablet, key, quietFor);
       }
       const calendarKey = `${room.id}:calendar`;
       const problem = calendarProblems.get(room.id);
@@ -452,6 +470,12 @@ export function createAppServer(options = {}) {
     const flag = value => value === true || value === '1' || value === 'true';
     return flag(body.kiosk) || flag(body.touch) || /Android|iPad|iPhone|Mobile|Silk|Kindle/i.test(userAgent);
   }
+  function batteryFrom(value) {
+    if (!value || typeof value !== 'object') return null;
+    const level = Number(value.level);
+    if (!Number.isInteger(level) || level < 0 || level > 100 || typeof value.charging !== 'boolean') return null;
+    return { level, charging: value.charging, at: new Date().toISOString() };
+  }
   function recordTablet(req, body, forcedRoomId) {
     const roomId = forcedRoomId || String(body.roomId || '');
     if (!roomById.has(roomId)) throw Object.assign(new Error('Unknown room.'), { status: 404 });
@@ -461,6 +485,10 @@ export function createAppServer(options = {}) {
     const previous = tablets.get(key);
     const tablet = { tabletId, roomId, name: String(body.name || previous?.name || 'Room tablet').trim().slice(0, 100), lastSeen: new Date().toISOString(), connectedAt: previous?.connectedAt || new Date().toISOString(), ip: clientIp(req), userAgent: String(req.headers['user-agent'] || '').slice(0, 300), screen: /^[0-9x@. ]{1,30}$/.test(String(body.screen || '')) ? String(body.screen) : (previous?.screen || '') };
     tablet.wallTablet = isWallTablet(tablet.userAgent, body);
+    // Battery from the heartbeat: { level 0-100, charging }. null = the tablet cannot report it. The live-connection
+    // check-in carries no battery, so it keeps the last reading.
+    if ('battery' in body) tablet.battery = batteryFrom(body.battery);
+    else if (previous?.battery !== undefined) tablet.battery = previous.battery;
     tablets.set(key, tablet);
     return tablet;
   }

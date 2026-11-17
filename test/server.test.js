@@ -234,6 +234,23 @@ test('records tablet check-ins with their screen size and ignores junk screen va
   assert.equal((await beat({ roomId: 'front' })).status, 400);
 });
 
+test('records the battery from check-ins, ignores junk, and keeps it across live-connection check-ins', async t => {
+  const { base, state } = await start(t);
+  const beat = body => json(base, '/api/tablets/heartbeat', { method: 'POST', body, headers: { 'user-agent': 'Mozilla/5.0 (Linux; Android 14; D138; wv)' } });
+  await beat({ roomId: 'front', tabletId: 't1', battery: { level: 87, charging: true } });
+  assert.deepEqual({ ...state.tablets.get('front:t1').battery, at: 'x' }, { level: 87, charging: true, at: 'x' });
+  for (const junk of [{ level: 101, charging: true }, { level: 50.5, charging: false }, { level: 50, charging: 'yes' }, 'full', null]) {
+    await beat({ roomId: 'front', tabletId: 't1', battery: junk });
+    assert.equal(state.tablets.get('front:t1').battery, null, JSON.stringify(junk));
+  }
+  await beat({ roomId: 'front', tabletId: 't1', battery: { level: 40, charging: false } });
+  const stream = await fetch(`${base}/api/stream?room=front&tabletId=t1&name=x&kiosk=1`, { signal: AbortSignal.timeout(1500) }).catch(() => null);
+  await new Promise(r => setTimeout(r, 200));
+  assert.equal(state.tablets.get('front:t1').battery.level, 40, 'the stream check-in keeps the last reading');
+  stream?.body?.cancel?.().catch(() => { });
+  await beat({ roomId: 'front', tabletId: 't2' });
+  assert.equal(state.tablets.get('front:t2').battery, undefined, 'an older tablet page that sends nothing shows nothing');
+});
 test('only accepts Microsoft change notifications that carry the shared secret', async t => {
   const received = [];
   const subscriptions = { start: async () => { }, stop() { }, processNotifications: values => received.push(...values) };
@@ -326,6 +343,47 @@ function withAlerts(t, { holiday = null, env = {}, failWebhook = false, teamsAle
   return start(t, { env: { ALERT_AFTER_MINUTES: '10', ALERT_WEBHOOK_URL: 'https://hooks.example.invalid/abc', ...env }, fetchImpl, teamsAlerts, celebrations: { get: async () => ({}), holidayOn: () => holiday } }).then(s => ({ ...s, posts }));
 }
 
+test('low battery: one alert below 10%, one below 5%, one when charging again; none while charging or offline', async t => {
+  const { state, posts } = await withAlerts(t);
+  const t1 = { ...tablet('front', 't1', 'Front tablet', TUESDAY_3PM - 20000), wallTablet: true, battery: { level: 12, charging: false } };
+  state.tablets.set('front:t1', t1);
+  state.tablets.set('back:t2', { ...tablet('back', 't2', 'Back tablet', TUESDAY_3PM - 20000), battery: { level: 3, charging: true } });
+  await state.checkTablets(TUESDAY_3PM);
+  assert.equal(state.alerts.length, 0, '12% and a charging 3% are fine');
+  t1.battery = { level: 9, charging: false };
+  await state.checkTablets(TUESDAY_3PM);
+  assert.equal(state.alerts.length, 1);
+  assert.match(state.alerts[0].text, /Front Conference Room: the tablet "Front tablet" battery is at 9% and not charging\. Plug it in\./);
+  assert.equal(posts.length, 1, 'sent like the other alerts');
+  const at = ms => { t1.lastSeen = new Date(ms - 20000).toISOString(); return state.checkTablets(ms); };
+  t1.battery = { level: 7, charging: false };
+  await at(TUESDAY_3PM + 60000);
+  assert.equal(state.alerts.length, 1, 'no repeat while it stays below 10%');
+  t1.battery = { level: 4, charging: false };
+  await at(TUESDAY_3PM + 120000);
+  assert.equal(state.alerts.length, 2);
+  assert.match(state.alerts[0].text, /battery is at 4% and not charging\. Plug it in now, it will switch off soon\./);
+  t1.battery = { level: 4, charging: true };
+  await at(TUESDAY_3PM + 180000);
+  assert.equal(state.alerts.length, 3);
+  assert.match(state.alerts[0].text, /"Front tablet" is charging again \(4%\)/);
+  t1.battery = { level: 8, charging: false };
+  t1.lastSeen = new Date(TUESDAY_3PM - 3 * 60000).toISOString();     // quiet for 3 minutes: counts as offline
+  await state.checkTablets(TUESDAY_3PM);
+  assert.equal(state.alerts.length, 3, 'an offline tablet gets no battery alert');
+});
+test('battery alerts wait for office hours and skip desktop test browsers', async t => {
+  const { state } = await withAlerts(t);
+  const night = EST('2026-11-10T04:00:00Z');
+  state.tablets.set('front:t1', { ...tablet('front', 't1', 'Front tablet', night - 20000), battery: { level: 6, charging: false } });
+  await state.checkTablets(night);
+  assert.equal(state.alerts.length, 0, '11 PM: waits');
+  state.tablets.set('back:mac', { ...tablet('back', 'mac', 'Mac', TUESDAY_3PM - 20000), wallTablet: false, battery: { level: 2, charging: false } });
+  state.tablets.get('front:t1').lastSeen = new Date(TUESDAY_3PM - 20000).toISOString();
+  await state.checkTablets(TUESDAY_3PM);
+  assert.equal(state.alerts.filter(a => /battery/.test(a.text)).length, 1, 'only the wall tablet');
+  assert.match(state.alerts.find(a => /battery/.test(a.text)).text, /Front tablet/);
+});
 test('a tablet that goes quiet during office hours raises one alert, and one when it returns', async t => {
   const { state, posts, base } = await withAlerts(t);
   state.tablets.set('front:t1', tablet('front', 't1', 'Front tablet', TUESDAY_3PM - 12 * 60000));

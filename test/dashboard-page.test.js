@@ -46,3 +46,13 @@ test('the dashboard heading and browser tab title say the same thing', () => {
   assert.equal(title, heading, 'the tab title matches the heading');
   assert.doesNotMatch(html, /Operations dashboard/);
 });
+test('the dashboard shows each tablet\'s battery, and "not reported" when it cannot tell', () => {
+  const start = js.indexOf('function batteryText');
+  const batteryText = new Function(`${js.slice(start, js.indexOf('\n', start))}; return batteryText;`)();
+  assert.equal(batteryText({}), '');
+  assert.equal(batteryText({ battery: null }), ' \u00b7 battery not reported');
+  assert.equal(batteryText({ battery: { level: 87, charging: true } }), ' \u00b7 battery 87% charging');
+  assert.equal(batteryText({ battery: { level: 8, charging: false } }), ' \u00b7 battery 8% not charging');
+  assert.match(js, /t\.battery\.level<10\?'low'/);
+  assert.match(css, /\.devices \.low\{/);
+});
