@@ -150,3 +150,24 @@ test('official weather warnings are on by default and can be turned off', () => 
   assert.equal(loadConfig({ ...demo, WEATHER_ALERTS: 'false' }).weather.alerts, false);
   assert.equal(loadConfig({ ...demo, WEATHER_ALERTS: 'true' }).weather.alerts, true);
 });
+
+test('intercom, noise meter and location report: on by default, limits clamp, a bad noise pair turns only the meter off', () => {
+  const c = loadConfig(demo);
+  assert.deepEqual(c.intercom, { enabled: true, ringSeconds: 45, maxMinutes: 10 });
+  assert.deepEqual(c.noise, { enabled: true, talkingDb: -50, loudDb: -35 });
+  assert.deepEqual(c.location, { enabled: true });
+  const off = loadConfig({ ...demo, INTERCOM_ENABLED: 'off', NOISE_METER: 'false', LOCATION_REPORT: 'no', INTERCOM_RING_SECONDS: '5', INTERCOM_MAX_MINUTES: '999' });
+  assert.equal(off.intercom.enabled, false);
+  assert.equal(off.noise.enabled, false);
+  assert.equal(off.location.enabled, false);
+  assert.equal(off.intercom.ringSeconds, 10);
+  assert.equal(off.intercom.maxMinutes, 60);
+  assert.equal(loadConfig({ ...demo, INTERCOM_RING_SECONDS: '500' }).intercom.ringSeconds, 120);
+  assert.deepEqual(loadConfig({ ...demo, NOISE_TALKING_DB: '-60', NOISE_LOUD_DB: '-20' }).noise, { enabled: true, talkingDb: -60, loudDb: -20 });
+  for (const env of [{ NOISE_TALKING_DB: '-30', NOISE_LOUD_DB: '-35' }, { NOISE_TALKING_DB: '-40', NOISE_LOUD_DB: '-40' }]) {
+    const noise = loadConfig({ ...demo, ...env }).noise;
+    assert.equal(noise.enabled, false);
+    assert.match(noise.problem, /must be lower than NOISE_LOUD_DB/);
+  }
+  assert.equal(loadConfig({ ...demo, NOISE_TALKING_DB: '-30', NOISE_LOUD_DB: '-35' }).intercom.enabled, true, 'the meter problem leaves the intercom alone');
+});

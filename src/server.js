@@ -11,6 +11,7 @@ import { WeatherService } from './weather.js';
 import { CelebrationService } from './celebrations.js';
 import { TeamsAlerts } from './teams-alerts.js';
 import { DashboardSignIn, SignInError, signInProblemPage } from './dashboard-signin.js';
+import { createIntercom } from './intercom.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = path.join(ROOT, 'public');
@@ -33,7 +34,7 @@ function securityHeaders(res) {
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('x-frame-options', 'SAMEORIGIN');
   res.setHeader('referrer-policy', 'no-referrer');
-  res.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('permissions-policy', 'camera=(), microphone=(self), geolocation=(self)');
   res.setHeader('content-security-policy', "default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; frame-ancestors 'self'");
   res.setHeader('cache-control', 'no-store');
 }
@@ -227,6 +228,19 @@ export function createAppServer(options = {}) {
     const data = JSON.stringify({ roomId, detail, at: new Date().toISOString() });
     for (const client of sseClients) if (client.roomId === roomId || client.roomId === '*') client.res.write(`event: ${type}\ndata: ${data}\n\n`);
   }
+
+  // Call data for one tablet only. notifyRoom also reaches the public room=* stream, so the door intercom never uses it.
+  function notifyTablet(roomId, tabletId, type, detail = {}) {
+    const data = JSON.stringify({ roomId, detail, at: new Date().toISOString() });
+    for (const client of sseClients) if (client.roomId === roomId && client.roomId !== '*' && client.tabletId && client.tabletId === tabletId) client.res.write(`event: ${type}\ndata: ${data}\n\n`);
+  }
+  // Door intercom (src/intercom.js): the person at the door starts a call, a signed-in administrator answers.
+  const intercomConfig = config.intercom || { enabled: false, ringSeconds: 45, maxMinutes: 10 };
+  const noiseConfig = config.noise || { enabled: false, talkingDb: -50, loudDb: -35 };
+  const locationConfig = config.location || { enabled: false };
+  if (noiseConfig.problem) logger.error?.(`Noise meter is OFF because of a settings problem: ${noiseConfig.problem}`);
+  const intercom = createIntercom({ roomById, config: intercomConfig, logger, notifyTablet, ...(options.intercom || {}) });
+  const whoText = who => who.via === 'session' ? who.session.email : 'the administrator token';
 
   // Door camera (Fully Kiosk Browser Remote Admin, getCamshot). A picture is fetched from the room's tablet only when a
   // signed-in admin asks, and passed straight through: never stored or logged. Each use is logged with who asked, and
@@ -525,6 +539,20 @@ export function createAppServer(options = {}) {
     if (!Number.isInteger(level) || level < 0 || level > 100 || typeof value.charging !== 'boolean') return null;
     return { level, charging: value.charging, at: new Date().toISOString() };
   }
+  // Noise level, location and secure-page flag from the heartbeat. Out-of-range values become null, never an error.
+  function noiseFrom(value) {
+    if (!value || typeof value !== 'object') return null;
+    if (!['quiet', 'talking', 'loud'].includes(value.level)) return null;
+    if (typeof value.db !== 'number' || !Number.isFinite(value.db) || value.db < -120 || value.db > 0) return null;
+    return { level: value.level, db: Math.round(value.db), at: new Date().toISOString() };
+  }
+  function locationFrom(value) {
+    if (!value || typeof value !== 'object') return null;
+    const { lat, lon, accuracy } = value;
+    if (typeof lat !== 'number' || typeof lon !== 'number' || typeof accuracy !== 'number') return null;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(accuracy) || lat < -90 || lat > 90 || lon < -180 || lon > 180 || accuracy < 0 || accuracy > 100000) return null;
+    return { lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5, accuracy: Math.round(accuracy), at: new Date().toISOString() };
+  }
   function recordTablet(req, body, forcedRoomId) {
     const roomId = forcedRoomId || String(body.roomId || '');
     if (!roomById.has(roomId)) throw Object.assign(new Error('Unknown room.'), { status: 404 });
@@ -538,6 +566,23 @@ export function createAppServer(options = {}) {
     // check-in carries no battery, so it keeps the last reading.
     if ('battery' in body) tablet.battery = batteryFrom(body.battery);
     else if (previous?.battery !== undefined) tablet.battery = previous.battery;
+    // Noise level, location and whether the page is on https. A key that is absent keeps the last value (older tablet pages send none).
+    if ('secure' in body) tablet.secure = typeof body.secure === 'boolean' ? body.secure : null;
+    else if (previous?.secure !== undefined) tablet.secure = previous.secure;
+    if ('noise' in body) {
+      tablet.noise = noiseFrom(body.noise);
+      tablet.noiseStatus = tablet.noise ? '' : (/^[A-Za-z0-9 ,.-]{1,40}$/.test(String(body.noiseStatus || '')) ? String(body.noiseStatus) : '');
+    } else {
+      if (previous?.noise !== undefined) tablet.noise = previous.noise;
+      if (previous?.noiseStatus !== undefined) tablet.noiseStatus = previous.noiseStatus;
+    }
+    if ('location' in body) {
+      tablet.location = locationFrom(body.location);
+      tablet.locationStatus = tablet.location ? '' : (['denied', 'unavailable', 'insecure', 'timeout'].includes(body.locationStatus) ? body.locationStatus : '');
+    } else {
+      if (previous?.location !== undefined) tablet.location = previous.location;
+      if (previous?.locationStatus !== undefined) tablet.locationStatus = previous.locationStatus;
+    }
     tablets.set(key, tablet);
     return tablet;
   }
@@ -578,7 +623,7 @@ export function createAppServer(options = {}) {
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
-        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: effectiveControl(room.id) });
+        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: effectiveControl(room.id), features: { intercom: Boolean(intercomConfig.enabled), noise: { enabled: Boolean(noiseConfig.enabled), talkingDb: noiseConfig.talkingDb, loudDb: noiseConfig.loudDb }, location: Boolean(locationConfig.enabled) } });
       }
       if (req.method === 'GET' && url.pathname === '/api/events') {
         const roomId = url.searchParams.get('room') || config.rooms[0].id;
@@ -606,6 +651,24 @@ export function createAppServer(options = {}) {
         keepAlive.unref?.();
         req.on('close', () => { clearInterval(keepAlive); sseClients.delete(client); });
         return;
+      }
+      // Door intercom, tablet side. The call token is given only to the tablet that rang. Nothing here starts a call except ring.
+      if (req.method === 'POST' && url.pathname === '/api/intercom/ring') {
+        const body = await readJson(req);
+        const roomId = String(body.roomId || '');
+        if (!intercomConfig.enabled || !roomById.has(roomId)) return sendJson(res, 404, { error: 'The intercom is not available for this room.' });
+        const tabletId = String(body.tabletId || '').trim().slice(0, 100);
+        if (!tabletId) return sendJson(res, 400, { error: 'tabletId is required.' });
+        const { status, ...answer } = intercom.ring(roomId, tabletId);
+        return sendJson(res, status, answer);
+      }
+      if (req.method === 'POST' && (url.pathname === '/api/intercom/signal' || url.pathname === '/api/intercom/hangup')) {
+        if (!intercomConfig.enabled) return sendJson(res, 404, { error: 'The intercom is not available.' });
+        const body = await readJson(req);
+        const callId = String(body.callId || '');
+        if (!callId) return sendJson(res, 400, { error: 'callId is required.' });
+        const { status, ...answer } = url.pathname.endsWith('/signal') ? intercom.relayFromTablet(callId, String(body.token || ''), String(body.kind || ''), body.data) : intercom.hangupFromTablet(callId, String(body.token || ''));
+        return sendJson(res, status, answer);
       }
       if (req.method === 'POST' && url.pathname === '/api/tablets/heartbeat') return sendJson(res, 200, { ok: true, tablet: recordTablet(req, await readJson(req)), serverTime: new Date().toISOString() });
       if (req.method === 'POST' && url.pathname === '/api/bookings') {
@@ -672,15 +735,43 @@ export function createAppServer(options = {}) {
             let events = [], error = null;
             try { events = await calendars.get(room.id).listEvents(window.start, window.end); } catch (e) { error = e.message; }
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
-            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), error };
+            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), intercom: Boolean(intercomConfig.enabled), error };
           }));
-          return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', intercomAdminsOnline: intercom.adminCount(), outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
           alerts.unshift({ at: new Date().toISOString(), text: `Test alert sent from the dashboard.` });
           alerts.length = Math.min(alerts.length, 20);
           return sendJson(res, 200, await deliver(text, { title: 'Room Display test alert' }));
+        }
+        // Door intercom, administrator side. An administrator can listen for, answer and end a call, never start one.
+        if (url.pathname.startsWith('/api/admin/intercom/')) {
+          if (!intercomConfig.enabled) return sendJson(res, 404, { error: 'The intercom is turned off (INTERCOM_ENABLED).' });
+          if (req.method === 'GET' && url.pathname === '/api/admin/intercom/stream') {
+            const clientId = url.searchParams.get('client') || '';
+            if (!/^[A-Za-z0-9_-]{8,64}$/.test(clientId)) return sendJson(res, 400, { error: 'client must be 8 to 64 letters, numbers, - or _.' });
+            securityHeaders(res);
+            res.writeHead(200, { 'content-type': 'text/event-stream', connection: 'keep-alive', 'cache-control': 'no-cache, no-transform', 'x-accel-buffering': 'no' });
+            const write = (type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
+            const remove = intercom.addAdmin(clientId, write);
+            write('ready', { client: clientId, at: new Date().toISOString() });
+            const keepAlive = setInterval(() => write('ping', {}), (options.pingSeconds ?? PING_SECONDS) * 1000);
+            keepAlive.unref?.();
+            req.on('close', () => { clearInterval(keepAlive); remove(); });
+            return;
+          }
+          if (req.method === 'POST') {
+            const body = await readJson(req);
+            const callId = String(body.callId || ''), client = String(body.client || '');
+            if (!callId || !client) return sendJson(res, 400, { error: 'callId and client are required.' });
+            let result = null;
+            if (url.pathname === '/api/admin/intercom/answer') {
+              result = intercom.answer(callId, client, whoText(who));
+            } else if (url.pathname === '/api/admin/intercom/signal') result = intercom.relayFromAdmin(callId, client, String(body.kind || ''), body.data);
+            else if (url.pathname === '/api/admin/intercom/hangup') result = intercom.hangupFromAdmin(callId, client, whoText(who));
+            if (result) { const { status, ...answer } = result; return sendJson(res, status, answer); }
+          }
         }
         const cameraMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/camera$/);
         if (req.method === 'GET' && cameraMatch) {
@@ -772,8 +863,8 @@ export function createAppServer(options = {}) {
   });
 
   let scheduleTimer = null;
-  server.on('close', () => { subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); });
-  server.appState = { config, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
+  server.on('close', () => { intercom.close(); subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); });
+  server.appState = { config, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {

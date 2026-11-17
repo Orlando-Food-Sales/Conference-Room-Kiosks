@@ -1032,3 +1032,55 @@ test('desktop test browsers never raise offline alerts; wall tablets, touch scre
   assert.equal(state.tablets.get('front:tab-stream').wallTablet, true, 'kiosk=1 on the stream counts');
   tablet?.body?.cancel().catch(() => { });
 });
+
+test('the heartbeat stores noise, location and the secure flag, drops bad values, and keeps the last ones when absent', async t => {
+  const { base, state } = await start(t);
+  const beat = body => json(base, '/api/tablets/heartbeat', { method: 'POST', body });
+  await beat({ roomId: 'front', tabletId: 't1', secure: true, noise: { level: 'talking', db: -43.4 }, location: { lat: 40.959504, lon: -74.125198, accuracy: 35.4 } });
+  let tablet = state.tablets.get('front:t1');
+  assert.equal(tablet.secure, true);
+  assert.deepEqual({ ...tablet.noise, at: 'x' }, { level: 'talking', db: -43, at: 'x' });
+  assert.ok(Date.parse(tablet.noise.at) > 0, 'time is the server time');
+  assert.deepEqual({ ...tablet.location, at: 'x' }, { lat: 40.9595, lon: -74.1252, accuracy: 35, at: 'x' });
+  await beat({ roomId: 'front', tabletId: 't1', battery: { level: 50, charging: true } });
+  tablet = state.tablets.get('front:t1');
+  assert.equal(tablet.secure, true, 'absent keys keep the previous values');
+  assert.equal(tablet.noise.level, 'talking');
+  assert.equal(tablet.location.accuracy, 35);
+  for (const noise of [{ level: 'deafening', db: -20 }, { level: 'loud', db: 5 }, { level: 'loud', db: -200 }, { level: 'loud', db: '-20' }, { level: 'loud' }, 'loud', null]) {
+    await beat({ roomId: 'front', tabletId: 't1', noise });
+    assert.equal(state.tablets.get('front:t1').noise, null, JSON.stringify(noise));
+  }
+  for (const location of [{ lat: 91, lon: 0, accuracy: 5 }, { lat: 0, lon: 181, accuracy: 5 }, { lat: 0, lon: 0, accuracy: -1 }, { lat: 0, lon: 0, accuracy: 100001 }, { lat: '1', lon: 2, accuracy: 3 }, { lat: null, lon: 2, accuracy: 3 }, { lat: 1, lon: 2 }, 'here', null]) {
+    await beat({ roomId: 'front', tabletId: 't1', location });
+    assert.equal(state.tablets.get('front:t1').location, null, JSON.stringify(location));
+  }
+  await beat({ roomId: 'front', tabletId: 't1', noise: null, noiseStatus: 'page hidden', location: null, locationStatus: 'denied', secure: 'yes' });
+  tablet = state.tablets.get('front:t1');
+  assert.equal(tablet.noiseStatus, 'page hidden');
+  assert.equal(tablet.locationStatus, 'denied');
+  assert.equal(tablet.secure, null);
+  await beat({ roomId: 'front', tabletId: 't1', location: null, locationStatus: '<script>' });
+  assert.equal(state.tablets.get('front:t1').locationStatus, '');
+  assert.equal((await beat({ roomId: 'front', tabletId: 't2' })).status, 200);
+  const old = state.tablets.get('front:t2');
+  assert.equal(old.noise, undefined, 'an older tablet page that sends none of them shows none');
+  assert.equal(old.location, undefined);
+  assert.equal(old.secure, undefined);
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  const seen = overview.rooms.find(r => r.id === 'front').tablets.find(x => x.tabletId === 't1');
+  assert.equal(seen.locationStatus, '');
+  assert.equal(seen.noise, null);
+  assert.equal(overview.rooms[0].intercom, true);
+  assert.equal(overview.intercomAdminsOnline, 0);
+});
+
+test('the page may use the microphone and location itself, never the camera; /api/config lists the feature flags', async t => {
+  const { base } = await start(t, { env: { NOISE_LOUD_DB: '-30', LOCATION_REPORT: 'off' } });
+  const health = await fetch(`${base}/healthz`);
+  assert.equal(health.headers.get('permissions-policy'), 'camera=(), microphone=(self), geolocation=(self)');
+  const cfg = await (await fetch(`${base}/api/config?room=front`)).json();
+  assert.deepEqual(cfg.features, { intercom: true, noise: { enabled: true, talkingDb: -50, loudDb: -30 }, location: false });
+  const off = await start(t, { env: { INTERCOM_ENABLED: 'off', NOISE_METER: 'off' } });
+  assert.deepEqual((await (await fetch(`${off.base}/api/config?room=front`)).json()).features, { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: true });
+});

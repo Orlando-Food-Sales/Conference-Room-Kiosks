@@ -127,6 +127,17 @@ function loadCamera(env, rooms) {
   }
   return { enabled: true, hosts, password, port: integerValue(env.FULLY_REMOTE_PORT, 2323, 1, 65535) };
 }
+// Door intercom, noise meter and location report (INSTALL-UBUNTU.md 12f). A noise setting mistake turns the meter off.
+function loadIntercom(env) {
+  return { enabled: booleanValue(env.INTERCOM_ENABLED, true), ringSeconds: integerValue(env.INTERCOM_RING_SECONDS, 45, 10, 120), maxMinutes: integerValue(env.INTERCOM_MAX_MINUTES, 10, 1, 60) };
+}
+function loadNoise(env) {
+  const enabled = booleanValue(env.NOISE_METER, true);
+  const talkingDb = floatValue(env.NOISE_TALKING_DB, -50, -120, 0);
+  const loudDb = floatValue(env.NOISE_LOUD_DB, -35, -120, 0);
+  if (talkingDb >= loudDb) return { enabled: false, talkingDb, loudDb, problem: `NOISE_TALKING_DB (${talkingDb}) must be lower than NOISE_LOUD_DB (${loudDb}).` };
+  return { enabled, talkingDb, loudDb };
+}
 function loadSecretExpiry(env, name = 'CLIENT_SECRET_EXPIRES') {
   const value = String(env[name] || '').trim();
   if (!value) return '';
@@ -237,6 +248,9 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
   // Like sign-in, a camera settings mistake turns the camera off (and is logged); the door screens keep working.
   try { config.camera = loadCamera(env, config.rooms); }
   catch (error) { config.camera = { enabled: false, hosts: {}, password: '', port: 2323, problem: error.message }; }
+  config.intercom = loadIntercom(env);
+  config.noise = loadNoise(env);
+  config.location = { enabled: booleanValue(env.LOCATION_REPORT, true) };
   // A mistake in the sign-in settings turns Microsoft sign-in off (the administrator token still works) and is logged;
   // it never stops the app, so the door screens keep working.
   try { config.dashboardSignIn = loadDashboardSignIn(env, config.tenantId, config.teamsAlerts.recipients, config.publicBaseUrl); }
