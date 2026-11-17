@@ -258,7 +258,7 @@ http://SERVER-IP/room/front
 http://SERVER-IP/room/back
 ```
 
-For wall tablets, add `?kiosk=1` to the address (for example `http://SERVER-IP/room/front?kiosk=1`). That hides the refresh and message buttons so visitors cannot tap them; booking buttons are controlled separately by `allowQuickBooking`. The page also heals itself: the server pings every 25 seconds, a tablet whose live connection goes quiet reconnects within about a minute and a half, and after 5 minutes it reloads the page (only if the server answers, at most every 10 minutes). Use a current Chrome/Edge/WebView and kiosk mode as appropriate. The compatibility fallback in `public/app.js` prevents the confirmed black-screen failure on browsers without `crypto.randomUUID()`.
+For wall tablets, add `?kiosk=1` to the address (for example `http://SERVER-IP/room/front?kiosk=1`). That shows the refresh and message buttons; the plain address (`http://SERVER-IP/room/front`, for example on a computer) hides them. Booking buttons are controlled separately by `allowQuickBooking`. The page also heals itself: the server pings every 25 seconds, a tablet whose live connection goes quiet reconnects within about a minute and a half, and after 5 minutes it reloads the page (only if the server answers, at most every 10 minutes). Use a current Chrome/Edge/WebView and kiosk mode as appropriate. The compatibility fallback in `public/app.js` prevents the confirmed black-screen failure on browsers without `crypto.randomUUID()`.
 
 ## 12. Dashboard access
 

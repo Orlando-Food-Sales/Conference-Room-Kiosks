@@ -18,7 +18,7 @@ var savedTabletId = localStorage.getItem('tabletId');
 var state = { room: null, events: [], source: null, refreshTimer: null, tabletId: savedTabletId || generateId(), tabletName: localStorage.getItem('tabletName') || '' };
 localStorage.setItem('tabletId', state.tabletId);
 state.liveAt = Date.now();   // when the live connection last proved it was alive (see the auto-heal watchdog below)
-// Kiosk mode (?kiosk=1): hides the refresh and message buttons so visitors cannot tap them on a wall tablet.
+// Kiosk mode (?kiosk=1, the door tablets): shows the refresh and message buttons; the plain room address hides them.
 var IS_KIOSK = new URLSearchParams(location.search).get('kiosk') === '1';
 var HAS_TOUCH = (navigator.maxTouchPoints || 0) > 1;   // wall tablets; the server skips offline alerts for desktop test browsers
 if (IS_KIOSK) document.documentElement.classList.add('kiosk');

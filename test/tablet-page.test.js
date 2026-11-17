@@ -35,12 +35,12 @@ test('the tablet page only reloads after /healthz answers, so an outage never le
   assert.match(app, /addEventListener\('ping'/, 'pings count as proof the connection is alive');
 });
 
-test('kiosk mode (?kiosk=1) hides the refresh and message buttons and nothing else', () => {
+test('the refresh and message buttons show only with ?kiosk=1; the plain address hides them and nothing else', () => {
   assert.match(app, /var IS_KIOSK = new URLSearchParams\(location\.search\)\.get\('kiosk'\) === '1';/);
   assert.match(app, /if \(IS_KIOSK\) document\.documentElement\.classList\.add\('kiosk'\);/);
-  const rule = css.match(/\.kiosk #refreshButton[^{]*\{[^}]*\}/);
+  const rule = css.match(/html:not\(\.kiosk\) #refreshButton,\s*html:not\(\.kiosk\) #messageButton\s*\{[^}]*\}/);
   assert.ok(rule, 'rule exists');
-  assert.match(rule[0], /#messageButton/);
+  assert.doesNotMatch(css, /(^|[^(])\.kiosk #(refresh|message)Button/m, 'no rule hides the buttons in kiosk mode');
   assert.match(rule[0], /display:\s*none/);
   assert.doesNotMatch(rule[0], /reserve|quick/i, 'booking stays available');
   assert.match(html, /id="refreshButton"/);
