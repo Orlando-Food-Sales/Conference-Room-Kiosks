@@ -1,4 +1,4 @@
-# Deploy checklist (release 2.3.0 and later)
+# Deploy checklist (release 2.4.0 and later)
 
 For updating the kiosk server from this repository. Real addresses, passwords, tenant and app IDs and email
 addresses are deliberately not written here: use `USER@SERVER` below and take the values from the server's `.env`,
@@ -106,9 +106,9 @@ ssh -t USER@SERVER 'sudo systemctl restart m365-room-display && systemctl is-act
 ssh USER@SERVER 'cd /opt/m365-room-display && bash scripts/smoke-test.sh'   # must end with "Smoke test passed."
 ```
 
-- [ ] The smoke test prints `Running version 2.3.0`. If it shows the old number, the service did not restart on the new code.
+- [ ] The smoke test prints `Running version 2.4.0`. If it shows the old number, the service did not restart on the new code.
 - [ ] `journalctl -u m365-room-display -n 30 --no-pager` shows no errors. (A bad setting stops the server with a clear message.)
-- [ ] The dashboard (`http://SERVER/dashboard`, administrator token) shows the logo, `v2.3.0 · M365`, both rooms, each
+- [ ] The dashboard (`http://SERVER/dashboard`, administrator token) shows the logo, `v2.4.0 · M365`, both rooms, each
       tablet online, and the line **Alerts go to: this dashboard · Teams (2 people)**.
 
 ## 5. Look at the tablets

@@ -14,4 +14,6 @@
 - `TEAMS_BOT_APP_SECRET` is a secret. Keep it in `.env` only and rotate it before it expires. The bot needs only the `TeamsAppInstallation.ReadWriteSelfForUser.All` permission (plus `AppCatalog.Read.All` if you want the server to install the app itself). If the bot reuses the room display's Entra app, one leaked secret exposes both calendar and Teams access; a separate app keeps them apart. The Teams bot is notification-only: it cannot read chats and it ignores replies. Alert messages contain room and tablet names and error summaries, never calendar details.
 - Entra IDs (tenant, application and Teams catalog IDs) are not secrets, but keep real ones, and real email addresses, out of this repository; they belong in `.env`.
 
+The feature switches store no sound or picture. `data/room-switches.json` holds only switch values, who set them and when.
+
 Report suspected vulnerabilities privately to the repository owner. Do not open a public issue containing secrets or tenant details.

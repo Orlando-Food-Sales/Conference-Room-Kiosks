@@ -101,7 +101,7 @@ test('the intercom additions need no inline scripts or styles (CSP)', () => {
 test('the dashboard has a System box, a Recent activity list, readable device names and a Remove button for offline tablets', () => {
   assert.match(html, /<section id="system" class="system"><\/section><section id="alerts" class="alerts"><\/section><section id="activity" class="activity"><\/section>/);
   for (const label of ['Microsoft 365 app secret', 'HTTPS certificate', 'Certificate renewal login', 'Microsoft sign-in']) assert.ok(js.includes(label), label);
-  assert.match(js, /Recent activity \(camera, intercom, sign-ins, walk-in bookings, birthday list changes\)/);
+  assert.match(js, /Recent activity \(camera, intercom, sign-ins, walk-in bookings, birthday list changes, switches\)/);
   assert.match(js, /late:s\.stage!==null/, 'a reminder that is due turns the line red');
   const model = new RegExp(js.match(/var model=\(ua\.match\((\/Android [^/]+\/)\)/)[1].slice(1, -1));
   assert.equal('Mozilla/5.0 (Linux; Android 14; D138 Build/UP1A) wv'.match(model)[1], 'D138');
@@ -118,7 +118,7 @@ test('the birthdays and anniversaries panel asks before deleting, says where it 
   assert.match(block, /button\('Cancel'/);
   assert.doesNotMatch(block, /innerHTML/, 'names from the calendar are only ever set as text');
   assert.match(html, /<section id="celebrations" class="celebrations"><\/section>/);
-  assert.match(js, /Recent activity \(camera, intercom, sign-ins, walk-in bookings, birthday list changes\)/);
+  assert.match(js, /Recent activity \(camera, intercom, sign-ins, walk-in bookings, birthday list changes, switches\)/);
 });
 
 test('the System box lists the walk-in booking switch and one Teams presence line per tracked room', () => {
@@ -137,4 +137,23 @@ test('the System box lists the walk-in booking switch and one Teams presence lin
   assert.equal(rows[1][0], 'Front Teams presence');
   assert.match(rows[1][1], /^Busy \/ InAConferenceCall · call since .+ · last automatic booking .+ to /);
   assert.deepEqual(rows[2], ['Back Teams presence', 'presence not readable: permission missing']);
+});
+
+test('the dashboard has a Features box per room that reads and writes the room switches with DOM methods only', () => {
+  assert.match(js, /admin\('\/api\/admin\/switches'\)/, 'it reads the switch state');
+  assert.match(js, /'\/api\/admin\/rooms\/' \+ encodeURIComponent\(room\.id\) \+ '\/switches'/, 'it posts a change');
+  const start = js.indexOf('function featureControls');
+  const block = js.slice(start, js.indexOf('// Microsoft sign-in'));
+  assert.ok(start > 0 && block.length > 500, 'the Features box is built by featureControls');
+  assert.doesNotMatch(block, /innerHTML/, 'switch text is only ever set as text');
+  for (const text of ['Features', 'Battery saver', 'Back to normal', 'Saves tablet battery', 'Other tablet features', 'Server only, does not save tablet battery', 'Waiting for the tablet', 'Tablet offline, applies when it is back', 'Follow server setting', ' If off: ']) assert.ok(block.includes(text), text);
+  assert.match(block, /preset: 'battery-saver'/);
+  assert.match(block, /preset: 'normal'/);
+  assert.match(js, /Starting the camera, about 8 seconds/);
+  assert.match(js, /featureControls\(room,swRoom,swError\),links/, 'the box sits after the device list and before the links');
+});
+test('the Features box has styles and the page still has no inline script (CSP)', () => {
+  for (const selector of ['.features', '.feature-row', '.switch input', '.chip.ok', '.chip.warn', '.chip.bad']) assert.ok(css.includes(selector), selector);
+  assert.match(css, /\.switch input\{[^}]*width:44px/);
+  assert.doesNotMatch(html, /<script(?![^>]*\bsrc=)[^>]*>/i, 'no inline script');
 });
