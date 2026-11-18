@@ -243,19 +243,17 @@ export function createAppServer(options = {}) {
   const whoText = who => who.via === 'session' ? who.session.email : 'the administrator token';
 
   // Door camera (Fully Kiosk Browser Remote Admin, getCamshot). A picture is fetched from the room's tablet only when a
-  // signed-in admin asks, and passed straight through: never stored or logged. Each use is logged with who asked, and
-  // the tablet shows "Camera on" while it is in use. One picture serves every viewer for 0.7 s.
+  // signed-in admin asks, and passed straight through: never stored. Each use is logged with who asked (the tablet
+  // shows nothing while the camera is used; the user turned that popup off). One picture serves every viewer for 0.7 s.
   const camera = config.camera || { enabled: false, hosts: {} };
   if (camera.problem) logger.error?.(`Door camera is OFF because of a settings problem: ${camera.problem}`);
   const cameraFrames = new Map();      // roomId -> { at, type, body }
-  const cameraUse = new Map();         // roomId -> { until, notifiedAt }
+  const cameraUse = new Map();         // roomId -> { until } (one log line per use, not per picture)
   function markCamera(roomId, who, live, ms = Date.now()) {
     const use = cameraUse.get(roomId);
     const idle = !use || use.until < ms;
     if (idle) logger.log?.(`Door camera: ${live ? 'live view' : 'photo'} of ${roomById.get(roomId).name} by ${who.via === 'session' ? who.session.email : 'the administrator token'}`);
-    const next = { until: Math.max(ms + (live ? 6000 : 15000), use?.until || 0), notifiedAt: use?.notifiedAt || 0 };
-    if (idle || ms - next.notifiedAt >= 3000) { next.notifiedAt = ms; notifyRoom(roomId, 'camera', { seconds: Math.ceil((next.until - ms) / 1000) }); }
-    cameraUse.set(roomId, next);
+    cameraUse.set(roomId, { until: Math.max(ms + (live ? 6000 : 15000), use?.until || 0) });
   }
   async function cameraFrame(roomId) {
     const cached = cameraFrames.get(roomId);

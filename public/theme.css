@@ -512,9 +512,6 @@ body::before {
 .celebration p { margin: 0; font-size: clamp(1.05rem, 2vw, 1.6rem); font-weight: 700; color: var(--text); }
 .celebration p:first-child { color: var(--blue); }
 
-/* Shown while an admin looks through this tablet's camera (dashboard Take photo / Live camera). */
-.camera-notice { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 60; display: none; padding: 4px 14px; border-radius: 999px; background: #b3121f; color: #fff; font-size: .9rem; font-weight: 700; letter-spacing: .02em; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-.camera-notice.on { display: block; }
 /* Refresh and message buttons in the schedule heading. */
 .heading-tools { display: flex; align-items: center; gap: 12px; }
 .icon-button { width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--text); font-size: 1.25rem; line-height: 1; cursor: pointer; opacity: .75; }

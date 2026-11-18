@@ -308,12 +308,13 @@ test('admins can switch the door camera between front and back', async t => {
   assert.equal(answer.status, 502);
   assert.match((await answer.json()).error, /did not switch the camera \(Please login\)/);
 });
-test('the tablet is told to show "Camera on" while the camera is used', async t => {
-  const { base } = await withCamera(t);
+test('the tablet is sent nothing while the camera is used, but the use is logged', async t => {
+  const { base, logs } = await withCamera(t);
   const stream = await listen(base, 'front');
   await json(base, '/api/admin/rooms/front/camera', { token: TOKEN });
-  await waitFor(() => stream.text().includes('event: camera'), 'the camera event');
-  assert.match(stream.text(), /event: camera\ndata: .*"seconds":15/);
+  await sleep(300);
+  assert.ok(!stream.text().includes('event: camera'), 'no popup event for the tablet');
+  assert.equal(logs.filter(l => /Door camera: photo of Front/.test(l)).length, 1, 'still logged with who looked');
   await stream.stop();
 });
 test('door camera problems come back as plain messages, and nothing is shown on the tablet', async t => {
