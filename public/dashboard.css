@@ -39,6 +39,14 @@ input::placeholder{color:var(--muted)}
 .live{margin-top:1rem;overflow:hidden;border-radius:12px;border:1px solid var(--line);background:#000;width:100%;aspect-ratio:16/10;position:relative}
 .live iframe{position:absolute;top:0;left:0;width:1280px;height:800px;border:0;transform-origin:0 0}
 .live-label{position:absolute;inset:0;display:grid;place-items:center;color:#8d767a;font-weight:800;letter-spacing:.25em;pointer-events:none}
+.system{margin:0 0 1rem;padding:.6rem .8rem;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.system h2,.activity h2{margin:.2rem 0 .4rem;font-size:1rem}
+.system p{margin:.2rem 0}
+.system .late{color:var(--red);font-weight:700}
+.activity{margin:0 0 1rem}
+.activity p{margin:.25rem 0;padding:.4rem .8rem;border:1px solid var(--line);border-radius:10px;color:var(--muted)}
+.activity time{color:var(--text);font-weight:700;margin-right:.5rem}
+button.small{min-height:28px;padding:0 .6rem;font-size:.8rem}
 .alerts{margin:0 0 1rem}
 .alerts h2{margin:.5rem 0;font-size:1rem;color:var(--red)}
 .alerts p{margin:.25rem 0;padding:.6rem .8rem;border:1px solid #6b2b2b;border-radius:10px;background:#251317;color:var(--text)}

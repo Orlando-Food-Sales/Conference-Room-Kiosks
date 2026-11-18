@@ -126,7 +126,15 @@ function serveStatic(req, res, file) {
 
 export function createAppServer(options = {}) {
   const config = options.config || loadConfig(options.env || process.env, options.cwd || ROOT);
-  const logger = options.logger || console;
+  const baseLogger = options.logger || console;
+  // The last 30 camera, intercom and sign-in events, kept in memory for the dashboard's "Recent activity" list (the same
+  // lines also go to the service log). Never holds sound, pictures or connection data.
+  const activity = [];
+  const logger = Object.create(baseLogger);
+  logger.log = (line, ...rest) => {
+    baseLogger.log?.(line, ...rest);
+    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
+  };
   const calendars = new Map();
   const tokenProvider = config.demoMode ? null : new GraphTokenProvider(config, options.fetchImpl || fetch);
   config.rooms.forEach((room, index) => calendars.set(room.id, config.demoMode ? new DemoCalendar(room, index) : new GraphCalendar(config, room, tokenProvider, options.fetchImpl || fetch)));
@@ -481,6 +489,11 @@ export function createAppServer(options = {}) {
       await sendAlert(`The login the server uses to renew its HTTPS certificate ${whenText(login)}. ${login.daysLeft < 0 ? 'Certificate renewals fail until it is replaced.' : 'Certificate renewals fail after that.'} Create a new secret (az ad sp credential reset --id <its app ID> --years 2), put it in AZUREDNS_CLIENTSECRET in /etc/acme.sh/account.conf on the server, set CERT_RENEWAL_SECRET_EXPIRES to its new date and restart the service (INSTALL-UBUNTU.md 13b).`);
     }
   }
+  // What the dashboard's System box shows: the three expiry dates the server already watches, the server's uptime and
+  // whether sign-in is on. Each has { expires, daysLeft, stage } (stage non-null = a reminder is due), or null if not set.
+  function systemHealth() {
+    return { uptimeSeconds: Math.round(process.uptime()), signIn: Boolean(signIn.enabled), clientSecret: secretStatus(), httpsCert: httpsCertStatus(), certLogin: certRenewalSecretStatus() };
+  }
   // Official weather warnings for the location (empty when off, outside the US, or unreachable). Never throws.
   async function currentWeatherAlerts() {
     try { return (await weather.alerts?.()) || []; } catch { return []; }
@@ -735,7 +748,7 @@ export function createAppServer(options = {}) {
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
             return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), intercom: Boolean(intercomConfig.enabled), error };
           }));
-          return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', intercomAdminsOnline: intercom.adminCount(), outfits: pushableOutfits(), alerts, alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+          return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', intercomAdminsOnline: intercom.adminCount(), outfits: pushableOutfits(), alerts, activity, health: systemHealth(), alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
@@ -781,6 +794,16 @@ export function createAppServer(options = {}) {
           markCamera(roomId, who, url.searchParams.get('live') === '1');
           res.writeHead(200, { 'content-type': frame.type, 'content-length': frame.body.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
           return res.end(frame.body);
+        }
+        if (req.method === 'POST' && url.pathname === '/api/admin/tablets/forget') {
+          const body = await readJson(req);
+          const key = `${String(body.roomId || '')}:${String(body.tabletId || '')}`;
+          const found = tablets.get(key);
+          if (!found) return sendJson(res, 404, { error: 'That tablet is not in the list any more.' });
+          if (Date.now() - Date.parse(found.lastSeen) < config.tabletOfflineSeconds * 1000) return sendJson(res, 409, { error: 'That tablet is online. Only offline entries can be removed.' });
+          tablets.delete(key); alertState.delete(key); alertState.delete(`${key}:battery`);
+          logger.log?.(`Tablet removed: ${found.name} (${found.ip || 'no address'}) from ${roomById.get(found.roomId).name} by ${who.via === 'session' ? who.session.email : 'the administrator token'}`);
+          return sendJson(res, 200, { ok: true });
         }
         const sideMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/camera\/side$/);
         if (req.method === 'POST' && sideMatch) {

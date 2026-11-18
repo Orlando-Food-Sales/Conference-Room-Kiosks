@@ -308,6 +308,41 @@ test('admins can switch the door camera between front and back', async t => {
   assert.equal(answer.status, 502);
   assert.match((await answer.json()).error, /did not switch the camera \(Please login\)/);
 });
+test('the overview lists recent camera, intercom and sign-in activity, and the system health', async t => {
+  const { base, state } = await withCamera(t, { env: { CLIENT_SECRET_EXPIRES: '2027-05-04', CERT_RENEWAL_SECRET_EXPIRES: '2028-11-17' } });
+  await json(base, '/api/admin/rooms/front/camera', { token: TOKEN });
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.equal(overview.activity.length, 1);
+  assert.match(overview.activity[0].text, /^Door camera: photo of Front Conference Room by the administrator token$/);
+  assert.ok(Date.parse(overview.activity[0].at) > 0);
+  const health = overview.health;
+  assert.equal(typeof health.uptimeSeconds, 'number');
+  assert.equal(health.signIn, false);
+  assert.equal(health.clientSecret.expires, '2027-05-04');
+  assert.equal(typeof health.clientSecret.daysLeft, 'number');
+  assert.equal(health.certLogin.expires, '2028-11-17');
+  assert.equal(health.httpsCert, null, 'no HTTPS_CERT_FILE: not checked');
+  const none = await (await json((await start(t)).base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.equal(none.health.clientSecret, null);
+  assert.deepEqual(none.activity, []);
+  for (let i = 0; i < 40; i++) state.tablets.set(`front:x${i}`, { tabletId: `x${i}`, roomId: 'front', name: 'x', lastSeen: new Date().toISOString() });
+});
+test('an offline tablet can be removed from the list, an online one cannot', async t => {
+  const { base, state, } = await start(t);
+  const now = Date.now();
+  const entry = (id, ago) => ({ tabletId: id, roomId: 'front', name: `Tablet ${id}`, lastSeen: new Date(now - ago).toISOString(), connectedAt: new Date(now - ago).toISOString(), ip: '10.0.0.9' });
+  state.tablets.set('front:old', entry('old', 3600000));
+  state.tablets.set('front:live', entry('live', 1000));
+  const forget = (body, token = TOKEN) => json(base, '/api/admin/tablets/forget', { token, method: 'POST', body });
+  assert.equal((await forget({ roomId: 'front', tabletId: 'old' }, '')).status, 401, 'admins only');
+  assert.equal((await forget({ roomId: 'front', tabletId: 'live' })).status, 409);
+  assert.ok(state.tablets.has('front:live'));
+  assert.equal((await forget({ roomId: 'front', tabletId: 'nobody' })).status, 404);
+  assert.equal((await forget({ roomId: 'front', tabletId: 'old' })).status, 200);
+  assert.ok(!state.tablets.has('front:old'));
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.match(overview.activity[0].text, /^Tablet removed: Tablet old \(10\.0\.0\.9\) from Front Conference Room by the administrator token$/);
+});
 test('the tablet is sent nothing while the camera is used, but the use is logged', async t => {
   const { base, logs } = await withCamera(t);
   const stream = await listen(base, 'front');
