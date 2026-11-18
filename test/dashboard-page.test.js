@@ -101,11 +101,22 @@ test('the intercom additions need no inline scripts or styles (CSP)', () => {
 test('the dashboard has a System box, a Recent activity list, readable device names and a Remove button for offline tablets', () => {
   assert.match(html, /<section id="system" class="system"><\/section><section id="alerts" class="alerts"><\/section><section id="activity" class="activity"><\/section>/);
   for (const label of ['Microsoft 365 app secret', 'HTTPS certificate', 'Certificate renewal login', 'Microsoft sign-in']) assert.ok(js.includes(label), label);
-  assert.match(js, /Recent activity \(camera, intercom, sign-ins\)/);
+  assert.match(js, /Recent activity \(camera, intercom, sign-ins, birthday list changes\)/);
   assert.match(js, /late:s\.stage!==null/, 'a reminder that is due turns the line red');
   const model = new RegExp(js.match(/var model=\(ua\.match\((\/Android [^/]+\/)\)/)[1].slice(1, -1));
   assert.equal('Mozilla/5.0 (Linux; Android 14; D138 Build/UP1A) wv'.match(model)[1], 'D138');
   assert.equal('Mozilla/5.0 (Linux; Android 11; SM-T220) wv'.match(model)[1], 'SM-T220');
   assert.match(js, /if\(!t\.online\)\{var forget=button\('Remove'/);
   assert.match(js, /\/api\/admin\/tablets\/forget/);
+});
+test('the birthdays and anniversaries panel asks before deleting, says where it goes, and never uses innerHTML', () => {
+  const block = js.slice(js.indexOf('// ---- Birthdays and work anniversaries'));
+  assert.ok(block.length > 500, 'the panel code is there');
+  assert.match(block, /Delete the whole yearly Work Anniversary series for/);
+  assert.match(block, /Deleted Items in Outlook, where you can restore it/);
+  assert.match(block, /button\('Delete series'/);
+  assert.match(block, /button\('Cancel'/);
+  assert.doesNotMatch(block, /innerHTML/, 'names from the calendar are only ever set as text');
+  assert.match(html, /<section id="celebrations" class="celebrations"><\/section>/);
+  assert.match(js, /Recent activity \(camera, intercom, sign-ins, birthday list changes\)/);
 });

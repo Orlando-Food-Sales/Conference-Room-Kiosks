@@ -98,3 +98,23 @@ select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .intercom-tools{display:flex;flex-wrap:wrap;gap:.5rem;margin:0}
 .intercom-tools button+button{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:700}
 .device-link{color:var(--accent);font-weight:700}
+.celebrations{margin:0 0 1rem;padding:.6rem .8rem;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.celebrations h2{margin:.2rem 0 .4rem;font-size:1rem}
+.celebrations p{margin:.3rem 0}
+.celeb-bar,.celeb-form,.celeb-tools{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.celeb-bar{margin:.5rem 0}
+.celeb-bar input[type=search]{flex:1 1 200px;min-width:0}
+.celeb-form{margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--line)}
+.celeb-form input[type=text]{flex:1 1 180px;min-width:0}
+.celeb-form input[type=number]{width:8.5rem}
+.celeb-form select,.celeb-bar select{max-width:100%}
+.celeb-list{list-style:none;margin:0;padding:0;max-height:26rem;overflow:auto}
+.celeb-row{padding:.5rem 0;border-bottom:1px solid var(--line)}
+.celeb-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:.5rem 1rem}
+.celeb-info{display:grid;gap:.15rem;min-width:0;flex:1 1 260px}
+.celeb-row.is-hidden .celeb-info{opacity:.6}
+.hidden-tag{justify-self:start;padding:.05rem .5rem;border:1px solid var(--amber);border-radius:999px;color:var(--amber);font-size:.8rem;font-weight:800}
+.celeb-note{font-size:.85rem}
+.confirm{margin-top:.5rem;padding:.6rem .8rem;border:1px solid #6b2b2b;border-radius:10px;background:#251317}
+.celeb-result{min-height:1.4em}
+@media (max-width:560px){.celeb-form input[type=number],.celeb-form select,.celeb-form input[type=text]{flex:1 1 100%;width:100%}.celeb-tools{width:100%}}

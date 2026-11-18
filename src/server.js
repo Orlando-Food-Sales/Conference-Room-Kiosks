@@ -9,6 +9,7 @@ import { GraphCalendar, GraphTokenProvider } from './graph-calendar.js';
 import { SubscriptionManager } from './subscription-manager.js';
 import { WeatherService } from './weather.js';
 import { CelebrationService } from './celebrations.js';
+import { CelebrationAdmin } from './celebration-admin.js';
 import { TeamsAlerts } from './teams-alerts.js';
 import { DashboardSignIn, SignInError, signInProblemPage } from './dashboard-signin.js';
 import { createIntercom } from './intercom.js';
@@ -81,12 +82,20 @@ export function calendarProblemText(problem) {
 
 export function failureAnswer(error, pathname = '') {
   const booking = pathname === '/api/bookings';
-  if (error.kind === 'microsoft-down') return { status: 503, body: { reason: 'microsoft-down', error: booking
-    ? 'Microsoft 365 is not responding right now, so the room could not be booked. Please try again in a few minutes, or book it in Outlook.'
-    : 'Microsoft 365 is not responding right now. The display is showing the last meetings it had.' } };
-  if (error.kind === 'permission') return { status: 502, body: { reason: 'permission', error: booking
-    ? 'The room display is not allowed to book this room in Microsoft 365. Please tell IT.'
-    : 'The room display is not allowed to read this room\'s calendar in Microsoft 365. Please tell IT.' } };
+  if (error.kind === 'microsoft-down') return {
+    status: 503, body: {
+      reason: 'microsoft-down', error: booking
+        ? 'Microsoft 365 is not responding right now, so the room could not be booked. Please try again in a few minutes, or book it in Outlook.'
+        : 'Microsoft 365 is not responding right now. The display is showing the last meetings it had.'
+    }
+  };
+  if (error.kind === 'permission') return {
+    status: 502, body: {
+      reason: 'permission', error: booking
+        ? 'The room display is not allowed to book this room in Microsoft 365. Please tell IT.'
+        : 'The room display is not allowed to read this room\'s calendar in Microsoft 365. Please tell IT.'
+    }
+  };
   if (error.kind === 'not-found') return { status: 502, body: { reason: 'not-found', error: 'This room\'s mailbox was not found in Microsoft 365. Please tell IT.' } };
   return { status: error.status || 502, body: { error: error.status ? error.message : 'The room calendar is temporarily unavailable.' } };
 }
@@ -127,13 +136,13 @@ function serveStatic(req, res, file) {
 export function createAppServer(options = {}) {
   const config = options.config || loadConfig(options.env || process.env, options.cwd || ROOT);
   const baseLogger = options.logger || console;
-  // The last 30 camera, intercom and sign-in events, kept in memory for the dashboard's "Recent activity" list (the same
+  // The last 30 camera, intercom, sign-in and birthday-list events, kept in memory for the dashboard's "Recent activity" list (the same
   // lines also go to the service log). Never holds sound, pictures or connection data.
   const activity = [];
   const logger = Object.create(baseLogger);
   logger.log = (line, ...rest) => {
     baseLogger.log?.(line, ...rest);
-    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
+    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:|Celebrations:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
   };
   const calendars = new Map();
   const tokenProvider = config.demoMode ? null : new GraphTokenProvider(config, options.fetchImpl || fetch);
@@ -142,6 +151,9 @@ export function createAppServer(options = {}) {
   const weather = options.weather || new WeatherService(config, options.fetchImpl || fetch);
   const teams = options.teamsAlerts || new TeamsAlerts(config.teamsAlerts, options.fetchImpl || fetch);
   const celebrations = options.celebrations || new CelebrationService(config, tokenProvider, options.fetchImpl || fetch);
+  // Dashboard control over birthdays and work anniversaries. People hidden there are skipped by the door screens.
+  const celebrationAdmin = options.celebrationAdmin || new CelebrationAdmin(config, tokenProvider, options.fetchImpl || fetch, { dataDir: options.dataDir, logger, onHiddenChange: keys => celebrations.setHidden?.(keys) });
+  celebrations.setHidden?.(celebrationAdmin.hiddenKeys);
   const signIn = options.dashboardSignIn || new DashboardSignIn(config.dashboardSignIn, options.fetchImpl || fetch);
   const signInProblem = config.dashboardSignIn?.problem || '';
   if (signInProblem) logger.error?.(`Dashboard sign-in with Microsoft is OFF because of a settings problem (the administrator token still works): ${signInProblem}`);
@@ -795,6 +807,40 @@ export function createAppServer(options = {}) {
           res.writeHead(200, { 'content-type': frame.type, 'content-length': frame.body.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
           return res.end(frame.body);
         }
+        if (url.pathname.startsWith('/api/admin/celebrations')) {
+          const label = p => p.kind === 'anniversary' ? (p.since ? `Work Anniversary since ${p.since}` : 'Work Anniversary') : 'Birthday';
+          try {
+            if (req.method === 'GET' && url.pathname === '/api/admin/celebrations') return sendJson(res, 200, await celebrationAdmin.list());
+            if (req.method === 'POST' && url.pathname === '/api/admin/celebrations/hide') {
+              const body = await readJson(req);
+              const hidden = body.hidden !== false;
+              const done = await celebrationAdmin.setHidden({ kind: String(body.kind || ''), name: String(body.name || ''), hidden });
+              logger.log?.(`Celebrations: ${done.name} (${label(done)}) ${hidden ? 'hidden from the door screens' : 'shown again on the door screens'} by ${whoText(who)}`);
+              return sendJson(res, 200, { ok: true });
+            }
+            if (req.method === 'POST' && url.pathname === '/api/admin/celebrations/add') {
+              const body = await readJson(req);
+              const done = await celebrationAdmin.add({ kind: String(body.kind || ''), name: body.name, month: body.month, day: body.day, since: body.since });
+              logger.log?.(`Celebrations: ${done.person.name} (${label(done.person)}, ${done.person.month}/${done.person.day}) added to the calendar "${done.calendarName}" by ${whoText(who)}`);
+              return sendJson(res, 200, { ok: true, person: done.person });
+            }
+            if (req.method === 'POST' && url.pathname === '/api/admin/celebrations/remove') {
+              const body = await readJson(req);
+              const done = await celebrationAdmin.remove({ id: body.id, calendarId: body.calendarId });
+              logger.log?.(`Celebrations: ${done.name} (${label(done)}) removed from calendar "${done.calendarName}" by ${whoText(who)}`);
+              return sendJson(res, 200, { ok: true });
+            }
+          } catch (error) {
+            const text = error.friendly ? error.message : ({
+              'microsoft-down': 'Microsoft 365 is not answering right now. Nothing was changed. Try again in a few minutes.',
+              permission: 'Microsoft 365 refused the request. The app needs Calendars.ReadWrite on this mailbox (check the app\u2019s permissions).',
+              'not-found': 'Microsoft 365 could not find that mailbox or calendar.'
+            }[error.kind] || (error.status && error.status < 500 ? error.message : 'Microsoft 365 returned an error. Nothing was changed.'));
+            const status = error.friendly ? error.status : ({ 'microsoft-down': 503, permission: 502, 'not-found': 404 }[error.kind] || error.status || 502);
+            if (!error.friendly || status >= 500) logger.warn?.(`Celebrations: request failed (${error.kind || status})`);
+            return sendJson(res, status, { error: text });
+          }
+        }
         if (req.method === 'POST' && url.pathname === '/api/admin/tablets/forget') {
           const body = await readJson(req);
           const key = `${String(body.roomId || '')}:${String(body.tabletId || '')}`;
@@ -892,7 +938,7 @@ export function createAppServer(options = {}) {
       checkTablets().catch(error => logger.error?.(`Tablet check failed: ${error.message}`));
       checkSecretExpiry().catch(error => logger.error?.(`Secret expiry check failed: ${error.message}`));
       checkCertExpiry().catch(error => logger.error?.(`Certificate expiry check failed: ${error.message}`));
-    checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
+      checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
     }, 60000); monitor.unref?.();
   }
   checkOutfitSchedules();

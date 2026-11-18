@@ -71,6 +71,12 @@ export class CelebrationService {
     this.cachedAt = 0;
     this.ttlMs = 15 * 60 * 1000;
     this.holidays = {};      // YYYY-MM-DD -> holiday name, for today and the next week
+    this.hiddenKeys = new Set();   // "kind:full name" of people hidden from the door screens in the dashboard
+  }
+  // The dashboard hides people from the door screens without touching the calendar; show the change at once.
+  setHidden(keys) {
+    this.hiddenKeys = keys instanceof Set ? keys : new Set(keys || []);
+    this.cached = null;
   }
 
   get enabled() {
@@ -181,8 +187,10 @@ export class CelebrationService {
         if (!appliesOn(event, d)) continue;
         const entry = parseCelebration(event.subject, b.nameStyle, d);
         if (!entry) continue;
+        const fullName = parseCelebration(event.subject, 'full', d).name.toLowerCase();
+        if (this.hiddenKeys.has(`${entry.kind}:${fullName}`)) continue;
         // The same person twice (for example on two calendars) shows once; two people who share a first name both show.
-        const key = `${d}:${entry.kind}:${parseCelebration(event.subject, 'full', d).name.toLowerCase()}`;
+        const key = `${d}:${entry.kind}:${fullName}`;
         if (seen.has(key)) continue;
         seen.add(key);
         out.push(d === date ? entry : { ...entry, day: weekdayName(d) });

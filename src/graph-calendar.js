@@ -10,7 +10,7 @@ export function failureKind(status) {
   return 'other';
 }
 
-function graphError(response, body) {
+export function graphError(response, body) {
   const message = body?.error?.message || body?.error_description || response.statusText || 'Unknown error';
   const error = new Error(`Microsoft Graph request failed (${response.status}): ${message}`);
   error.status = response.status;
@@ -21,7 +21,7 @@ function graphError(response, body) {
 // During Microsoft outages requests hung for 20 to 35 seconds before failing. Give up after 20 seconds instead,
 // and treat "no answer" like any other Microsoft outage.
 export const REQUEST_TIMEOUT_MS = 20000;
-async function call(fetchImpl, url, init) {
+export async function call(fetchImpl, url, init) {
   try {
     return await fetchImpl(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   } catch (cause) {

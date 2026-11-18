@@ -62,6 +62,18 @@ All settings are environment variables; see `.env.example`.
   "anniversary" are used; PTO and holidays on the same calendar are ignored. A yearly anniversary can carry the start
   year instead of a count, "Jodi Andrade - Work Anniversary (since 2025)", and the display works out the years
   ("Happy 1-year work anniversary, Jodi!" in 2026, 2-year in 2027).
+- Birthdays and anniversaries control (dashboard, section "Birthdays and work anniversaries"): lists everyone in the
+  calendar sorted by next date, with a search and a filter. **Hide** takes a person off the door screens at once and
+  leaves the calendar alone (works for every entry, **Show again** undoes it; the hide list is saved in
+  `data/celebration-hidden.json`, which deploys never overwrite). **Remove from calendar** deletes the whole yearly
+  series, after a confirmation that names the person, the calendar and the mailbox. It only works for entries in the
+  app's own format, "Name - Work Anniversary (since YYYY)" as an all-day yearly event; birthdays other people entered
+  are hide-only (edit or delete them in Outlook). A removed event goes to **Deleted Items** in Outlook, where it can be
+  restored. **Add person** creates a yearly all-day event in the same format ("Name - Work Anniversary (since YYYY)" or
+  "Name - Birthday"). Editing is done as remove and add. Adding and removing need `Calendars.ReadWrite` on the mailbox
+  and a calendar the app may edit (`canEdit`); hiding does not. Every change appears in the dashboard's Recent
+  activity ("Celebrations: ...") and in the service log with who did it. With `DEMO_MODE=true` the panel shows demo
+  people and nothing leaves the server.
 - Intercom, noise and location: `INTERCOM_ENABLED`, `INTERCOM_RING_SECONDS`, `INTERCOM_MAX_MINUTES`, `NOISE_METER`, `NOISE_TALKING_DB`, `NOISE_LOUD_DB`, `LOCATION_REPORT`
 - Per room, in `rooms.json`: `allowQuickBooking`, and `showCelebrations` (set `false` for
   client-facing rooms).

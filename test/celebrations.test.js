@@ -208,3 +208,13 @@ test('two people with the same first name on the same day both show; the same pe
     { kind: 'birthday', name: 'Jane', years: null }
   ]);
 });
+test('people hidden in the dashboard are skipped on the door screens, and shown again when unhidden', async () => {
+  const svc = service(CALENDARS(), { birthdays: { nameStyle: 'full' } });
+  assert.deepEqual(names(await svc.get(noon('2026-11-10'))), ['Sam Lee']);
+  svc.setHidden(new Set(['anniversary:sam lee']));
+  assert.deepEqual(names(await svc.get(noon('2026-11-10'))), [], 'the cached answer is dropped at once');
+  svc.setHidden(new Set(['birthday:sam lee']));
+  assert.deepEqual(names(await svc.get(noon('2026-11-10'))), ['Sam Lee'], 'a hide only matches the same kind and name');
+  svc.setHidden(new Set());
+  assert.deepEqual(names(await svc.get(noon('2026-11-10'))), ['Sam Lee']);
+});

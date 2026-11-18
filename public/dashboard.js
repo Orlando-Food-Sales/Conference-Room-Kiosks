@@ -12,9 +12,9 @@ async function cameraView(room,live){var run=++cameraRun;cameraRoom=room;cameraL
 function closeCamera(){cameraRun++;$('camera').classList.add('hidden');showFrame('');}
 function button(label,action){var b=document.createElement('button');b.type='button';b.textContent=label;b.addEventListener('click',action);return b;}
 var openViews={};var liveFrames=[];function fitLive(){liveFrames.forEach(function(box){var f=box.firstChild;if(f)f.style.transform='scale('+(box.clientWidth/1280)+')';});}window.addEventListener('resize',fitLive);
-async function load(){try{$('error').textContent='';liveFrames=[];var data=await admin('/api/admin/overview');$('meta').textContent=(data.version?'v'+data.version+' · ':'')+data.mode.toUpperCase()+' · Updated '+new Date(data.generatedAt).toLocaleString();var w=data.weather;$('weather').textContent=w?('Weather: '+w.condition+', '+Math.round(w.temperatureC*9/5+32)+'\u00b0F / '+Math.round(w.temperatureC)+'\u00b0C, feels '+Math.round(w.feelsLikeC*9/5+32)+'\u00b0F \u00b7 '+(w.isDay?'daytime':'night')+' \u00b7 '+(w.source||'').replace('nws ','National Weather Service station ').replace('open-meteo','Open-Meteo model')+(w.observedAt?' \u00b7 observed '+new Date(w.observedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'')+(w.stale?' \u00b7 STALE (service unreachable)':'')):'Weather: not available';var ch=data.alertChannels||{};$('alertChannels').textContent='Alerts go to: this dashboard'+(ch.teamsRecipients?' \u00b7 Teams ('+ch.teamsRecipients+' '+(ch.teamsRecipients===1?'person':'people')+')':'')+(ch.webhook?' \u00b7 chat webhook':'')+(!ch.teamsRecipients&&!ch.webhook?' only (no Teams or webhook set up)':'');function dayText(s){if(!s)return null;var left=s.daysLeft<0?'EXPIRED '+(-s.daysLeft)+' days ago':s.daysLeft+' day'+(s.daysLeft===1?'':'s')+' left';return {text:left+' ('+s.expires+')',late:s.stage!==null};}
+async function load(){try{$('error').textContent='';liveFrames=[];var data=await admin('/api/admin/overview');if(!celebLoaded){celebLoaded=true;loadCelebrations();}$('meta').textContent=(data.version?'v'+data.version+' · ':'')+data.mode.toUpperCase()+' · Updated '+new Date(data.generatedAt).toLocaleString();var w=data.weather;$('weather').textContent=w?('Weather: '+w.condition+', '+Math.round(w.temperatureC*9/5+32)+'\u00b0F / '+Math.round(w.temperatureC)+'\u00b0C, feels '+Math.round(w.feelsLikeC*9/5+32)+'\u00b0F \u00b7 '+(w.isDay?'daytime':'night')+' \u00b7 '+(w.source||'').replace('nws ','National Weather Service station ').replace('open-meteo','Open-Meteo model')+(w.observedAt?' \u00b7 observed '+new Date(w.observedAt).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):'')+(w.stale?' \u00b7 STALE (service unreachable)':'')):'Weather: not available';var ch=data.alertChannels||{};$('alertChannels').textContent='Alerts go to: this dashboard'+(ch.teamsRecipients?' \u00b7 Teams ('+ch.teamsRecipients+' '+(ch.teamsRecipients===1?'person':'people')+')':'')+(ch.webhook?' \u00b7 chat webhook':'')+(!ch.teamsRecipients&&!ch.webhook?' only (no Teams or webhook set up)':'');function dayText(s){if(!s)return null;var left=s.daysLeft<0?'EXPIRED '+(-s.daysLeft)+' days ago':s.daysLeft+' day'+(s.daysLeft===1?'':'s')+' left';return {text:left+' ('+s.expires+')',late:s.stage!==null};}
 var sys=data.health||{};var sysBox=$('system');sysBox.innerHTML='';var sysTitle=document.createElement('h2');sysTitle.textContent='System';sysBox.appendChild(sysTitle);[['Server',(data.version?'v'+data.version:'')+' \u00b7 up '+(sys.uptimeSeconds>=86400?Math.floor(sys.uptimeSeconds/86400)+' d ':'')+Math.floor(sys.uptimeSeconds%86400/3600)+' h '+Math.floor(sys.uptimeSeconds%3600/60)+' min'],['Microsoft sign-in',sys.signIn?'on':'off (administrator token only)'],['Microsoft 365 app secret',sys.clientSecret?dayText(sys.clientSecret):'expiry date not set (CLIENT_SECRET_EXPIRES)'],['HTTPS certificate',sys.httpsCert?(sys.httpsCert.error?{text:'cannot be read: '+sys.httpsCert.error,late:true}:dayText(sys.httpsCert)):'not checked (HTTPS_CERT_FILE)'],['Certificate renewal login',sys.certLogin?dayText(sys.certLogin):'expiry date not set (CERT_RENEWAL_SECRET_EXPIRES)']].forEach(function(row){var line=document.createElement('p');var v=row[1];var late=false;if(v&&typeof v==='object'){late=v.late;v=v.text;}line.className=late?'late':'';var name=document.createElement('strong');name.textContent=row[0]+': ';line.append(name,document.createTextNode(v));sysBox.appendChild(line);});
-var actBox=$('activity');actBox.innerHTML='';if((data.activity||[]).length){var actHead=document.createElement('h2');actHead.textContent='Recent activity (camera, intercom, sign-ins)';actBox.appendChild(actHead);data.activity.slice(0,10).forEach(function(a){var line=document.createElement('p');var when=document.createElement('time');when.textContent=new Date(a.at).toLocaleString();line.append(when,' ',document.createTextNode(a.text));actBox.appendChild(line);});}
+var actBox=$('activity');actBox.innerHTML='';if((data.activity||[]).length){var actHead=document.createElement('h2');actHead.textContent='Recent activity (camera, intercom, sign-ins, birthday list changes)';actBox.appendChild(actHead);data.activity.slice(0,10).forEach(function(a){var line=document.createElement('p');var when=document.createElement('time');when.textContent=new Date(a.at).toLocaleString();line.append(when,' ',document.createTextNode(a.text));actBox.appendChild(line);});}
 var alertBox=$('alerts');alertBox.innerHTML='';if((data.alerts||[]).length){var head=document.createElement('h2');head.textContent='Recent alerts';alertBox.appendChild(head);data.alerts.slice(0,8).forEach(function(a){var line=document.createElement('p');var when=document.createElement('time');when.textContent=new Date(a.at).toLocaleString();line.append(when,' ',document.createTextNode(a.text));alertBox.appendChild(line);});}
 function batteryText(t){if(t.battery===undefined)return '';if(!t.battery)return ' \u00b7 battery not reported';return ' \u00b7 battery '+t.battery.level+'%'+(t.battery.charging?' charging':' not charging');}
 $('rooms').innerHTML='';data.rooms.forEach(function(room){var card=document.createElement('article');card.className='room';var title=document.createElement('h2');title.textContent=room.name;var status=document.createElement('p');status.className=room.error?'bad':'ok';var off=room.control&&room.control.displayEnabled===false;status.textContent=room.error?'Calendar error':(off?'Display OFF (screen is black)':(room.available?'Available':'In use'));if(off)status.className='warn';var tablets=document.createElement('p');tablets.className='muted';tablets.textContent=room.onlineTablets+' online tablet(s)';var devices=document.createElement('ul');devices.className='devices';(room.tablets||[]).forEach(function(t){var li=document.createElement('li');var ua=t.userAgent||'';var model=(ua.match(/Android [0-9.]+;\s*([A-Za-z0-9-]+)/)||[])[1]||(ua.match(/;\s*(SM-[A-Z0-9]+)/)||[])[1]||(/iPad/.test(ua)?'iPad':/Macintosh/.test(ua)?'Mac browser':/Windows/.test(ua)?'Windows browser':/Android/.test(ua)?'Android':'device');li.textContent=(t.online?'\u25CF ':'\u25CB ')+model+' \u00b7 screen '+(t.screen||'unknown')+' \u00b7 '+(t.ip||'')+' \u00b7 '+(t.online?'online':'offline since '+new Date(t.lastSeen).toLocaleTimeString())+batteryText(t)+noiseText(t)+(t.wallTablet===false?' \u00b7 test browser, no alerts':'');li.appendChild(locationText(t));if(t.secure===false)li.appendChild(document.createTextNode(' \u00b7 this tablet is on plain http: intercom, noise and location need https'));li.className=t.online?(t.battery&&!t.battery.charging&&t.battery.level<10?'low':'on'):'off';if(!t.online){var forget=button('Remove',function(){forgetTablet(room.id,t.tabletId)});forget.className='small';forget.title='Take this offline entry off the list';li.appendChild(document.createTextNode(' '));li.appendChild(forget);}devices.appendChild(li);});var controls=document.createElement('div');controls.className='controls';controls.appendChild(button('Refresh display',function(){control(room.id,'refresh')}));controls.appendChild(button('Display on',function(){control(room.id,'displayOn')}));controls.appendChild(button('Display off',function(){control(room.id,'displayOff')}));var message=document.createElement('input');message.placeholder='Temporary message';controls.appendChild(message);controls.appendChild(button('Send message',function(){control(room.id,'message',{message:message.value,ttlMinutes:30})}));controls.appendChild(button('Clear message',function(){control(room.id,'clearMessage')}));var photo=button('Take photo',function(){cameraView(room,false)});var live=button('Live camera',function(){cameraView(room,true)});controls.appendChild(photo);controls.appendChild(live);if(!room.camera){photo.disabled=live.disabled=true;var note=document.createElement('span');note.className='muted camera-note';note.textContent=data.cameraProblem?'Camera off: '+data.cameraProblem:'Camera not set up yet: turn on Remote Admin and Motion Detection in Fully on this tablet, then add its address and password on the server.';controls.appendChild(note);}controls.appendChild(outfitControls(room,data.outfits||[],data.rooms));var links=document.createElement('div');links.className='links';var open=document.createElement('a');open.href=room.displayUrl;open.target='_blank';open.rel='noopener';open.textContent='Open display';var url=document.createElement('code');url.textContent=location.origin+room.displayUrl;links.append(open,url);var live=document.createElement('div');var toggle=button(openViews[room.id]?'Hide live view':'Show live view',function(){openViews[room.id]=!openViews[room.id];load();});links.appendChild(toggle);if(openViews[room.id]){live.className='live';var frame=document.createElement('iframe');frame.title='Live view of '+room.name;frame.src=room.displayUrl+'?nostream=1';live.appendChild(frame);if(off){var tag=document.createElement('span');tag.className='live-label';tag.textContent='DISPLAY OFF';live.appendChild(tag);}liveFrames.push(live);}card.append(title,status,tablets,devices,links,live,controls);$('rooms').appendChild(card);});fitLive();}catch(error){$('error').textContent=error.message;}}
@@ -274,3 +274,104 @@ async function applyOffer() {
 $('intercomAnswer').addEventListener('click', answerCall);
 $('intercomDecline').addEventListener('click', function () { if (intercom.rings.length) dropRing(intercom.rings[0].callId); renderIntercom(); });
 $('intercomHangup').addEventListener('click', function () { endIntercomCall('Call ended.', true); });
+
+// ---- Birthdays and work anniversaries: list, hide, add, remove ----
+var celebLoaded = false;
+var celeb = { data: null, q: '', kind: 'all', confirmId: '', ui: null };
+var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+function celebEl(tag, text, cls) { var e = document.createElement(tag); if (text) e.textContent = text; if (cls) e.className = cls; return e; }
+function celebSay(text, bad) { if (!celeb.ui) return; celeb.ui.result.textContent = text || ''; celeb.ui.result.className = bad ? 'celeb-result bad' : 'celeb-result muted'; }
+function celebWhen(p) { return p.daysUntil === 0 ? 'today' : (p.daysUntil === 1 ? 'tomorrow' : 'in ' + p.daysUntil + ' days'); }
+function celebKindText(p) { return p.kind === 'anniversary' ? 'Work anniversary' + (p.since ? ' (since ' + p.since + ')' : '') : 'Birthday'; }
+function celebConfirmText(p, data) { return 'Delete the whole yearly Work Anniversary series for ' + p.name + (p.since ? ' (since ' + p.since + ')' : '') + ' from the calendar "' + p.calendarName + '" in ' + data.mailbox + '? It stops showing on every door screen. It goes to Deleted Items in Outlook, where you can restore it.'; }
+async function celebCall(path, body, done) {
+  celebSay('Working\u2026');
+  try { await admin(path, { method: 'POST', body: JSON.stringify(body) }); celeb.confirmId = ''; await loadCelebrations(done); }
+  catch (e) { celebSay(e.message, true); }
+}
+function celebRow(p, data) {
+  var li = celebEl('li', '', 'celeb-row' + (p.hidden ? ' is-hidden' : ''));
+  var head = celebEl('div', '', 'celeb-head');
+  var info = celebEl('div', '', 'celeb-info');
+  var name = celebEl('strong', p.name); info.appendChild(name);
+  if (p.hidden) info.appendChild(celebEl('span', 'Hidden', 'hidden-tag'));
+  var years = p.upcomingYears ? ', ' + p.upcomingYears + (p.upcomingYears === 1 ? ' year' : ' years') : '';
+  info.appendChild(celebEl('span', celebKindText(p) + ' \u00b7 ' + MONTHS[p.month - 1].slice(0, 3) + ' ' + p.day + ' \u00b7 ' + celebWhen(p) + years + ' \u00b7 ' + p.calendarName, 'muted'));
+  head.appendChild(info);
+  var tools = celebEl('div', '', 'celeb-tools');
+  tools.appendChild(button(p.hidden ? 'Show again' : 'Hide', function () { celebCall('/api/admin/celebrations/hide', { kind: p.kind, name: p.name, hidden: !p.hidden }, p.name + (p.hidden ? ' is shown on the door screens again.' : ' is hidden from the door screens. The calendar was not changed.')); }));
+  if (p.canDelete) {
+    var del = button('Remove from calendar', function () { celeb.confirmId = p.id; renderCelebrations(); });
+    if (!p.calendarCanEdit) { del.disabled = true; del.title = 'This calendar is read-only for the app, so entries cannot be removed. Use Hide.'; }
+    tools.appendChild(del);
+  } else tools.appendChild(celebEl('span', 'Edit or delete this one in Outlook', 'muted celeb-note'));
+  head.appendChild(tools);
+  li.appendChild(head);
+  if (celeb.confirmId === p.id && p.canDelete) {
+    var box = celebEl('div', '', 'confirm'); box.setAttribute('role', 'alertdialog');
+    box.appendChild(celebEl('p', celebConfirmText(p, data)));
+    var row = celebEl('p', '', 'celeb-tools');
+    row.appendChild(button('Delete series', function () { celebCall('/api/admin/celebrations/remove', { id: p.id, calendarId: p.calendarId }, p.name + ' was removed from the calendar. It is in Deleted Items in Outlook if you need it back.'); }));
+    row.appendChild(button('Cancel', function () { celeb.confirmId = ''; renderCelebrations(); }));
+    box.appendChild(row); li.appendChild(box);
+  }
+  return li;
+}
+function renderCelebrations() {
+  var data = celeb.data, ui = celeb.ui;
+  if (!data || !ui) return;
+  ui.body.replaceChildren();
+  if (!data.enabled) { ui.body.appendChild(celebEl('p', data.message, 'muted')); ui.form.classList.add('hidden'); return; }
+  ui.form.classList.remove('hidden');
+  if (data.writeCalendar && !data.writeCalendar.canEdit) ui.body.appendChild(celebEl('p', 'The calendar "' + data.writeCalendar.name + '" is read-only for the app, so people cannot be added or removed here. You can still hide people from the door screens.', 'warn'));
+  else if (!data.writeCalendar) ui.body.appendChild(celebEl('p', 'Several calendars match, so adding is off. Set BIRTHDAY_CALENDAR_ID to the right calendar.', 'warn'));
+  var q = celeb.q.trim().toLowerCase();
+  var shown = data.people.filter(function (p) { return (celeb.kind === 'all' || p.kind === celeb.kind) && (!q || p.name.toLowerCase().indexOf(q) >= 0); });
+  var ul = celebEl('ul', '', 'celeb-list');
+  shown.forEach(function (p) { ul.appendChild(celebRow(p, data)); });
+  ui.body.appendChild(shown.length ? ul : celebEl('p', data.people.length ? 'Nobody matches that search.' : 'Nobody is on the list yet.', 'muted'));
+  ui.count.textContent = shown.length + ' of ' + data.people.length + ' shown' + (data.demo ? ' \u00b7 demo data' : '');
+  if (data.skipped) ui.body.appendChild(celebEl('p', data.skipped + ' other calendar ' + (data.skipped === 1 ? 'entry is' : 'entries are') + ' not shown (not a yearly birthday or anniversary the app can read).', 'muted'));
+}
+function buildCelebrations() {
+  var box = $('celebrations'); box.replaceChildren();
+  box.appendChild(celebEl('h2', 'Birthdays and work anniversaries'));
+  box.appendChild(celebEl('p', 'Hide keeps the calendar as it is. Remove from calendar deletes the yearly entry.', 'muted'));
+  var bar = celebEl('div', '', 'celeb-bar');
+  var search = document.createElement('input'); search.type = 'search'; search.placeholder = 'Search by name'; search.setAttribute('aria-label', 'Search birthdays and anniversaries by name');
+  search.addEventListener('input', function () { celeb.q = search.value; renderCelebrations(); });
+  var kind = document.createElement('select'); kind.setAttribute('aria-label', 'Show');
+  [['all', 'Everyone'], ['birthday', 'Birthdays'], ['anniversary', 'Work anniversaries']].forEach(function (o) { var opt = document.createElement('option'); opt.value = o[0]; opt.textContent = o[1]; kind.appendChild(opt); });
+  kind.addEventListener('change', function () { celeb.kind = kind.value; renderCelebrations(); });
+  var count = celebEl('span', '', 'muted');
+  bar.append(search, kind, button('Refresh list', function () { loadCelebrations(); }), count);
+  box.appendChild(bar);
+  var body = celebEl('div', '', 'celeb-body'); box.appendChild(body);
+  var form = celebEl('form', '', 'celeb-form'); form.setAttribute('aria-label', 'Add a person');
+  var fKind = document.createElement('select'); fKind.setAttribute('aria-label', 'Type');
+  [['anniversary', 'Work anniversary'], ['birthday', 'Birthday']].forEach(function (o) { var opt = document.createElement('option'); opt.value = o[0]; opt.textContent = o[1]; fKind.appendChild(opt); });
+  var fName = document.createElement('input'); fName.type = 'text'; fName.maxLength = 60; fName.placeholder = 'First Last'; fName.setAttribute('aria-label', 'Full name');
+  var fMonth = document.createElement('select'); fMonth.setAttribute('aria-label', 'Month');
+  MONTHS.forEach(function (m, i) { var opt = document.createElement('option'); opt.value = String(i + 1); opt.textContent = m; fMonth.appendChild(opt); });
+  var fDay = document.createElement('input'); fDay.type = 'number'; fDay.min = 1; fDay.max = 31; fDay.placeholder = 'Day'; fDay.setAttribute('aria-label', 'Day of the month');
+  var fSince = document.createElement('input'); fSince.type = 'number'; fSince.min = 1950; fSince.max = 2100; fSince.placeholder = 'Started in (year)'; fSince.setAttribute('aria-label', 'Year the person started');
+  fKind.addEventListener('change', function () { fSince.classList.toggle('hidden', fKind.value !== 'anniversary'); });
+  var add = button('Add person', function () {});
+  add.type = 'submit';
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+    var name = fName.value.trim();
+    var payload = { kind: fKind.value, name: name, month: Number(fMonth.value), day: Number(fDay.value) };
+    if (fKind.value === 'anniversary') payload.since = Number(fSince.value);
+    celebCall('/api/admin/celebrations/add', payload, name + ' was added to the calendar.').then(function () { if (/was added/.test(celeb.ui.result.textContent)) { fName.value = ''; fDay.value = ''; fSince.value = ''; } });
+  });
+  form.append(fKind, fName, fMonth, fDay, fSince, add);
+  box.appendChild(form);
+  var result = celebEl('p', '', 'celeb-result muted'); result.setAttribute('aria-live', 'polite'); box.appendChild(result);
+  celeb.ui = { body: body, form: form, result: result, count: count };
+}
+async function loadCelebrations(done) {
+  if (!celeb.ui) buildCelebrations();
+  try { celeb.data = await admin('/api/admin/celebrations'); renderCelebrations(); celebSay(done || ''); }
+  catch (e) { celebSay(e.message, true); }
+}
