@@ -33,13 +33,13 @@ class FakePresence {
     return new Map(this.reading ? ids.map(id => [id, this.reading]) : []);
   }
 }
-function setup({ cal = new FakeCalendar(), presence = new FakePresence(), open = true, config = {}, rooms = [ROOM], alertState = new Map() } = {}) {
+function setup({ cal = new FakeCalendar(), presence = new FakePresence(), open = true, config = {}, rooms = [ROOM], alertState = new Map(), roomEnabled } = {}) {
   const logs = [], alerts = [], notes = [];
   const state = { open };
   const calendars = new Map([['front', cal]]);
   const walkIn = createWalkIn({
     config: { enabled: true, maxMinutes: 240, outsideHours: false, rooms: { front: 'u1' }, ...config },
-    rooms, calendars, presence, alertState,
+    rooms, calendars, presence, alertState, roomEnabled,
     listEvents: async () => cal.listEvents(), refreshRoom: async () => cal.listEvents(),
     notifyRoom: (id, type, data) => notes.push({ id, type, ...data }),
     isOpen: async () => state.open, logger: { log: line => logs.push(line) }, sendAlert: async text => alerts.push(text)
@@ -304,4 +304,20 @@ test('DemoCalendar: sample meetings can be turned off, and updateEvent moves the
   const demo = new DemoPresence([ROOM]);
   demo.set('front', true);
   assert.equal((await demo.read()).get('front').activity, 'InAConferenceCall');
+});
+test('a room switched off in the dashboard is skipped, shows no call, and resumes when switched on', async () => {
+  const flag = { on: false };
+  const h = setup({ roomEnabled: id => id === 'front' && flag.on });
+  await run(h, T0, T0 + 4 * MIN, CALL);
+  assert.equal(h.cal.creates, 0);
+  assert.equal(h.walkIn.doorState('front'), null);
+  assert.equal(h.walkIn.roomStatus('front').switchedOff, true);
+  flag.on = true;
+  await run(h, T0 + 5 * MIN, T0 + 8 * MIN, CALL);
+  assert.equal(h.cal.creates, 1);
+  assert.deepEqual(h.walkIn.doorState('front'), { call: true });
+  flag.on = false;
+  assert.equal(h.walkIn.doorState('front'), null);
+  await h.walkIn.check(T0 + 9 * MIN);
+  assert.equal(h.walkIn.roomStatus('front').call, false);
 });

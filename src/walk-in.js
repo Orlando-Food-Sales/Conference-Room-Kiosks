@@ -58,7 +58,7 @@ export class DemoPresence {
   set(roomId, inCall) { if (this.state.has(roomId)) this.state.set(roomId, Boolean(inCall)); }
 }
 
-export function createWalkIn({ config, rooms, calendars, presence, listEvents, refreshRoom, notifyRoom, isOpen, logger = {}, sendAlert, alertState = new Map(), officeSettled }) {
+export function createWalkIn({ config, rooms, calendars, presence, listEvents, refreshRoom, notifyRoom, isOpen, logger = {}, sendAlert, alertState = new Map(), officeSettled, roomEnabled }) {
   const settings = config || { enabled: false, rooms: {} };
   const tracked = (rooms || []).filter(room => Object.prototype.hasOwnProperty.call(settings.rooms || {}, room.id));
   const maxMs = (settings.maxMinutes || 240) * 60000;
@@ -75,6 +75,7 @@ export function createWalkIn({ config, rooms, calendars, presence, listEvents, r
   const log = text => logger.log?.(`Walk-in: ${text}`);
   const keyOf = room => settings.rooms[room.id] || room.id;
   const time = value => Date.parse(value);
+  const switchedOff = room => roomEnabled ? !roomEnabled(room.id) : false;   // an administrator's switch for this room
   let running = false;
 
   async function writeWithRefresh(room, state, ms, action, make) {
@@ -209,6 +210,11 @@ export function createWalkIn({ config, rooms, calendars, presence, listEvents, r
         answers = await presence.read(keys);
       } catch (error) { failure = error?.kind || 'error'; }
       for (const room of tracked) {
+        if (switchedOff(room)) {   // forget the call; an automatic booking already made simply ends within its slice
+          const state = states.get(room.id);
+          Object.assign(state, { callActive: false, callSeenSince: null, notCallSince: null, callSince: null, release: null, capped: false });
+          continue;
+        }
         try { await checkRoom(room, answers?.get(keyOf(room)), failure, ms); }
         catch (error) { reportWriteProblem(room, states.get(room.id), ms, error); }
       }
@@ -231,7 +237,7 @@ export function createWalkIn({ config, rooms, calendars, presence, listEvents, r
 
   return {
     check,
-    doorState(roomId) { const state = states.get(roomId); return state?.callActive ? { call: true } : null; },
+    doorState(roomId) { const state = states.get(roomId); const room = tracked.find(r => r.id === roomId); return state?.callActive && !(room && switchedOff(room)) ? { call: true } : null; },
     roomStatus(roomId) {
       const state = states.get(roomId);
       if (!state) return null;
@@ -242,7 +248,8 @@ export function createWalkIn({ config, rooms, calendars, presence, listEvents, r
         call: state.callActive,
         callSince: state.callSince ? new Date(state.callSince).toISOString() : null,
         lastBooking: state.lastBooking ? { action: state.lastBooking.action, start: new Date(state.lastBooking.start).toISOString(), end: new Date(state.lastBooking.end).toISOString() } : null,
-        problem: state.problem
+        problem: state.problem,
+        ...(switchedOff(tracked.find(r => r.id === roomId)) ? { switchedOff: true } : {})
       };
     },
     health() { return { enabled: Boolean(settings.enabled), problem: settings.problem || '', maxMinutes: settings.maxMinutes || 240, outsideHours: Boolean(settings.outsideHours) }; }

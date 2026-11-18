@@ -7,6 +7,7 @@ import { loadConfig, publicRoom } from './config.js';
 import { DemoCalendar } from './demo-calendar.js';
 import { GraphCalendar, GraphTokenProvider } from './graph-calendar.js';
 import { createWalkIn, GraphPresence, DemoPresence } from './walk-in.js';
+import { RoomSwitches, DEFINITIONS as SWITCH_DEFINITIONS, switchLabel } from './room-switches.js';
 import { SubscriptionManager } from './subscription-manager.js';
 import { WeatherService } from './weather.js';
 import { CelebrationService } from './celebrations.js';
@@ -143,7 +144,7 @@ export function createAppServer(options = {}) {
   const logger = Object.create(baseLogger);
   logger.log = (line, ...rest) => {
     baseLogger.log?.(line, ...rest);
-    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:|Celebrations:|Walk-in:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
+    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:|Celebrations:|Walk-in:|Switches:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
   };
   const calendars = new Map();
   const tokenProvider = config.demoMode ? null : new GraphTokenProvider(config, options.fetchImpl || fetch);
@@ -259,6 +260,10 @@ export function createAppServer(options = {}) {
   const intercomConfig = config.intercom || { enabled: false, ringSeconds: 45, maxMinutes: 10 };
   const noiseConfig = config.noise || { enabled: false, talkingDb: -50, loudDb: -35 };
   const locationConfig = config.location || { enabled: false };
+  // Per-room switches (src/room-switches.js): an administrator's override saved in <dataDir>/room-switches.json over the .env / rooms.json value.
+  const switches = options.switches || new RoomSwitches({ config, dataDir: options.dataDir, logger });
+  const roomView = room => ({ ...publicRoom(room), allowQuickBooking: switches.effective(room.id, 'quickBooking'), showCelebrations: switches.effective(room.id, 'celebrations') });
+  const featuresFor = roomId => ({ intercom: switches.effective(roomId, 'intercom'), noise: { enabled: switches.effective(roomId, 'noise'), talkingDb: noiseConfig.talkingDb, loudDb: noiseConfig.loudDb }, location: switches.effective(roomId, 'location'), weather: switches.effective(roomId, 'weather'), snoopy: switches.effective(roomId, 'snoopy'), snoopyMotion: switches.effective(roomId, 'snoopyMotion') });
   if (noiseConfig.problem) logger.error?.(`Noise meter is OFF because of a settings problem: ${noiseConfig.problem}`);
   const intercom = createIntercom({ roomById, config: intercomConfig, logger, notifyTablet, ...(options.intercom || {}) });
   const whoText = who => who.via === 'session' ? who.session.email : 'the administrator token';
@@ -532,7 +537,7 @@ export function createAppServer(options = {}) {
   if (config.walkIn.problem) logger.error?.(`Walk-in booking is OFF because of a settings problem: ${config.walkIn.problem}`);
   const presence = options.presence || (config.demoMode ? new DemoPresence(config.rooms) : new GraphPresence(config, tokenProvider, options.fetchImpl || fetch));
   const walkIn = createWalkIn({
-    config: config.walkIn, rooms: config.rooms, calendars, presence, logger, sendAlert, alertState, notifyRoom, refreshRoom,
+    config: config.walkIn, rooms: config.rooms, calendars, presence, logger, sendAlert, alertState, notifyRoom, refreshRoom, roomEnabled: id => switches.effective(id, 'walkIn'),
     listEvents: id => cachedEvents(id, 5000),
     isOpen: async (room, ms) => { try { await celebrations.get(); } catch { /* holiday lookup is best effort */ } return officeSettled(room, ms, 0); }
   });
@@ -617,6 +622,11 @@ export function createAppServer(options = {}) {
       if (previous?.location !== undefined) tablet.location = previous.location;
       if (previous?.locationStatus !== undefined) tablet.locationStatus = previous.locationStatus;
     }
+    // What the tablet page is actually doing, so the dashboard can show a switch that has not reached it yet. Known keys, booleans only.
+    if (body.applied && typeof body.applied === 'object' && !Array.isArray(body.applied)) {
+      tablet.applied = Object.fromEntries(SWITCH_DEFINITIONS.filter(d => d.key !== 'camera' && typeof body.applied[d.key] === 'boolean').map(d => [d.key, body.applied[d.key]]));
+      tablet.appliedAt = new Date().toISOString();
+    } else if (previous?.applied !== undefined) { tablet.applied = previous.applied; tablet.appliedAt = previous.appliedAt; }
     tablets.set(key, tablet);
     return tablet;
   }
@@ -650,14 +660,14 @@ export function createAppServer(options = {}) {
         const room = roomById.get(url.searchParams.get('room') || '');
         const today = await celebrations.get();
         // Birthdays can be hidden per room; a company holiday always applies.
-        return sendJson(res, 200, room && !room.showCelebrations ? { ...today, celebrations: [] } : today);
+        return sendJson(res, 200, room && !switches.effective(room.id, 'celebrations') ? { ...today, celebrations: [] } : today);
       }
       if (req.method === 'GET' && url.pathname === '/api/weather') return sendJson(res, 200, { weather: await weather.get(), alerts: await currentWeatherAlerts() });
-      if (req.method === 'GET' && url.pathname === '/api/rooms') return sendJson(res, 200, { rooms: config.rooms.map(publicRoom), refreshSeconds: config.eventRefreshSeconds });
+      if (req.method === 'GET' && url.pathname === '/api/rooms') return sendJson(res, 200, { rooms: config.rooms.map(roomView), refreshSeconds: config.eventRefreshSeconds });
       if (req.method === 'GET' && url.pathname === '/api/config') {
         const room = roomById.get(url.searchParams.get('room') || config.rooms[0].id);
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
-        return sendJson(res, 200, { ...publicRoom(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: effectiveControl(room.id), features: { intercom: Boolean(intercomConfig.enabled), noise: { enabled: Boolean(noiseConfig.enabled), talkingDb: noiseConfig.talkingDb, loudDb: noiseConfig.loudDb }, location: Boolean(locationConfig.enabled) } });
+        return sendJson(res, 200, { ...roomView(room), demoMode: config.demoMode, refreshSeconds: config.eventRefreshSeconds, officeHours: config.officeHours, control: effectiveControl(room.id), features: featuresFor(room.id) });
       }
       if (req.method === 'GET' && url.pathname === '/api/events') {
         const roomId = url.searchParams.get('room') || config.rooms[0].id;
@@ -691,14 +701,14 @@ export function createAppServer(options = {}) {
       if (req.method === 'POST' && url.pathname === '/api/intercom/ring') {
         const body = await readJson(req);
         const roomId = String(body.roomId || '');
-        if (!intercomConfig.enabled || !roomById.has(roomId)) return sendJson(res, 404, { error: 'The intercom is not available for this room.' });
+        if (!roomById.has(roomId) || !switches.effective(roomId, 'intercom')) return sendJson(res, 404, { error: 'The intercom is not available for this room.' });
         const tabletId = String(body.tabletId || '').trim().slice(0, 100);
         if (!tabletId) return sendJson(res, 400, { error: 'tabletId is required.' });
         const { status, ...answer } = intercom.ring(roomId, tabletId);
         return sendJson(res, status, answer);
       }
       if (req.method === 'POST' && (url.pathname === '/api/intercom/signal' || url.pathname === '/api/intercom/hangup')) {
-        if (!intercomConfig.enabled) return sendJson(res, 404, { error: 'The intercom is not available.' });
+        if (!intercomConfig.enabled && !switches.anyOn('intercom')) return sendJson(res, 404, { error: 'The intercom is not available.' });
         const body = await readJson(req);
         const callId = String(body.callId || '');
         if (!callId) return sendJson(res, 400, { error: 'callId is required.' });
@@ -710,7 +720,7 @@ export function createAppServer(options = {}) {
         const body = await readJson(req);
         const room = roomById.get(String(body.roomId || ''));
         if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
-        if (!room.allowQuickBooking) return sendJson(res, 403, { error: 'Quick booking is disabled for this room.' });
+        if (!switches.effective(room.id, 'quickBooking')) return sendJson(res, 403, { error: 'Quick booking is disabled for this room.' });
         const booking = validateBooking(body);
         // Company holidays are closed days: refuse bookings that start or end on one. If the holiday calendar
         // cannot be read, bookings are allowed (the check never blocks on an outage).
@@ -770,9 +780,42 @@ export function createAppServer(options = {}) {
             let events = [], error = null;
             try { events = await calendars.get(room.id).listEvents(window.start, window.end); } catch (e) { error = e.message; }
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
-            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), intercom: Boolean(intercomConfig.enabled), error, ...(walkIn.roomStatus(room.id) ? { walkIn: walkIn.roomStatus(room.id) } : {}) };
+            return { ...roomView(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), intercom: switches.effective(room.id, 'intercom'), error, ...(walkIn.roomStatus(room.id) ? { walkIn: walkIn.roomStatus(room.id) } : {}) };
           }));
           return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', intercomAdminsOnline: intercom.adminCount(), outfits: pushableOutfits(), alerts, activity, health: systemHealth(), alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
+        }
+        // Per-room feature switches. The choice is saved first; the tablets pick it up from the room.features push (or /api/config when they return).
+        if (req.method === 'GET' && url.pathname === '/api/admin/switches') {
+          const cutoff = Date.now() - config.tabletOfflineSeconds * 1000;
+          const rooms = config.rooms.map(room => {
+            const list = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ tabletId: t.tabletId, name: t.name, online: new Date(t.lastSeen).getTime() >= cutoff, applied: t.applied || null }));
+            return { id: room.id, name: room.name, switches: switches.describe(room.id), tablets: list, tabletsOnline: list.filter(t => t.online).length };
+          });
+          return sendJson(res, 200, { definitions: SWITCH_DEFINITIONS, rooms });
+        }
+        const switchMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/switches$/);
+        if (req.method === 'POST' && switchMatch) {
+          const room = roomById.get(switchMatch[1]);
+          if (!room) return sendJson(res, 404, { error: 'Unknown room.' });
+          const body = await readJson(req);
+          const by = whoText(who), onOff = value => value === false || value === 'off' ? 'OFF' : 'ON';
+          let result, line;
+          if (body.preset !== undefined) {
+            result = switches.preset(room.id, String(body.preset), by);
+            line = body.preset === 'normal' ? `Switches: ${room.name} set back to normal (following the server settings) by ${by}` : `Switches: ${room.name} battery saver applied by ${by}`;
+          } else {
+            if (typeof body.key !== 'string' || !('value' in body)) return sendJson(res, 400, { error: 'Send {"key": ..., "value": true, false or null} or {"preset": "battery-saver" or "normal"}.' });
+            result = switches.set(room.id, body.key, body.value, by);
+            const label = switchLabel(body.key);
+            line = body.value === null ? `Switches: ${room.name} ${label} set to follow the server setting (now ${onOff(switches.effective(room.id, body.key))}) by ${by}` : `Switches: ${room.name} ${label} turned ${onOff(body.value)} by ${by}`;
+          }
+          logger.log?.(line);
+          notifyRoom(room.id, 'room.features', { features: featuresFor(room.id), allowQuickBooking: switches.effective(room.id, 'quickBooking'), showCelebrations: switches.effective(room.id, 'celebrations') });
+          const changedKeys = result.changedKeys || (result.changed ? [body.key] : []);
+          if (changedKeys.some(k => k === 'quickBooking' || k === 'walkIn')) notifyRoom(room.id, 'calendar.changed', { reason: 'switch' });
+          const cutoff = Date.now() - config.tabletOfflineSeconds * 1000;
+          const tabletsOnline = [...tablets.values()].filter(t => t.roomId === room.id && new Date(t.lastSeen).getTime() >= cutoff).length;
+          return sendJson(res, 200, { ok: true, changed: Boolean(result.changed), rows: switches.describe(room.id), tabletsOnline, note: tabletsOnline ? '' : 'No tablet for this room is online; it will apply when the tablet connects.' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
@@ -782,7 +825,7 @@ export function createAppServer(options = {}) {
         }
         // Door intercom, administrator side. An administrator can listen for, answer and end a call, never start one.
         if (url.pathname.startsWith('/api/admin/intercom/')) {
-          if (!intercomConfig.enabled) return sendJson(res, 404, { error: 'The intercom is turned off (INTERCOM_ENABLED).' });
+          if (!intercomConfig.enabled && !switches.anyOn('intercom')) return sendJson(res, 404, { error: 'The intercom is turned off (INTERCOM_ENABLED).' });
           if (req.method === 'GET' && url.pathname === '/api/admin/intercom/stream') {
             const clientId = url.searchParams.get('client') || '';
             if (!/^[A-Za-z0-9_-]{8,64}$/.test(clientId)) return sendJson(res, 400, { error: 'client must be 8 to 64 letters, numbers, - or _.' });
@@ -953,7 +996,7 @@ export function createAppServer(options = {}) {
 
   let scheduleTimer = null;
   server.on('close', () => { intercom.close(); subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); if (walkInTimer) clearInterval(walkInTimer); });
-  server.appState = { config, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems, walkIn, checkWalkIn: ms => walkIn.check(ms) };
+  server.appState = { config, switches, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems, walkIn, checkWalkIn: ms => walkIn.check(ms) };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {

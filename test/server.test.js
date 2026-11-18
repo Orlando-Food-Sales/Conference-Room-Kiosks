@@ -1116,9 +1116,9 @@ test('the page may use the microphone and location itself, never the camera; /ap
   const health = await fetch(`${base}/healthz`);
   assert.equal(health.headers.get('permissions-policy'), 'camera=(), microphone=(self), geolocation=(self)');
   const cfg = await (await fetch(`${base}/api/config?room=front`)).json();
-  assert.deepEqual(cfg.features, { intercom: true, noise: { enabled: true, talkingDb: -50, loudDb: -30 }, location: false });
+  assert.deepEqual(cfg.features, { intercom: true, noise: { enabled: true, talkingDb: -50, loudDb: -30 }, location: false, weather: true, snoopy: true, snoopyMotion: true });
   const off = await start(t, { env: { INTERCOM_ENABLED: 'off', NOISE_METER: 'off' } });
-  assert.deepEqual((await (await fetch(`${off.base}/api/config?room=front`)).json()).features, { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: true });
+  assert.deepEqual((await (await fetch(`${off.base}/api/config?room=front`)).json()).features, { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: true, weather: true, snoopy: true, snoopyMotion: true });
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -1185,4 +1185,134 @@ test('walk-in: a bad setting leaves the server running with a problem in the hea
   assert.equal(overview.health.walkIn.enabled, false);
   assert.match(overview.health.walkIn.problem, /GUID/);
   await state.checkWalkIn(Date.now());
+});
+
+// ---------------------------------------------------------------------------------------------
+// Per-room feature switches (src/room-switches.js). Sessions are covered by the shared /api/admin/ auth block.
+// ---------------------------------------------------------------------------------------------
+const tempData = t => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'switches-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true })); return dir; };
+const setSwitch = (base, room, body) => json(base, `/api/admin/rooms/${room}/switches`, { token: TOKEN, method: 'POST', body });
+const configOf = async (base, room) => (await json(base, `/api/config?room=${room}`)).json();
+test('switches: need the token, and list plain wording for every switch', async t => {
+  const { base } = await start(t);
+  assert.equal((await json(base, '/api/admin/switches')).status, 401);
+  assert.equal((await json(base, '/api/admin/rooms/front/switches', { method: 'POST', body: { key: 'noise', value: true } })).status, 401);
+  const data = await (await json(base, '/api/admin/switches', { token: TOKEN })).json();
+  assert.equal(data.definitions.length, 10);
+  for (const def of data.definitions) { assert.ok(def.what.length > 20, def.key); assert.ok(def.offCost.length > 20, def.key); }
+  for (const key of ['walkIn', 'quickBooking', 'celebrations']) assert.match(data.definitions.find(d => d.key === key).what, /does not save tablet battery/);
+  assert.deepEqual(data.rooms.map(r => r.id), ['front', 'back']);
+  assert.equal(data.rooms[0].switches.length, 10);
+});
+test('switches: with no override /api/config is what the settings say (noise off with NOISE_METER=false, the rest on)', async t => {
+  const { base } = await start(t, { env: { NOISE_METER: 'false' }, dataDir: tempData(t) });
+  const cfg = await configOf(base, 'front');
+  assert.deepEqual(cfg.features, { intercom: true, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: true, weather: true, snoopy: true, snoopyMotion: true });
+  assert.equal(cfg.allowQuickBooking, true);
+  assert.equal((await configOf(base, 'back')).allowQuickBooking, false);
+  assert.equal((await configOf(base, 'back')).showCelebrations, false);
+});
+test('switches: an override changes /api/config, survives a restart with the same data folder, and null follows the setting again', async t => {
+  const dataDir = tempData(t);
+  const first = await start(t, { dataDir });
+  const done = await setSwitch(first.base, 'front', { key: 'location', value: false });
+  assert.equal(done.status, 200);
+  const body = await done.json();
+  assert.equal(body.changed, true);
+  assert.match(body.note, /No tablet for this room is online/);
+  assert.equal((await configOf(first.base, 'front')).features.location, false);
+  assert.equal((await configOf(first.base, 'back')).features.location, true);
+  const second = await start(t, { dataDir });
+  assert.equal((await configOf(second.base, 'front')).features.location, false);
+  assert.equal((await setSwitch(second.base, 'front', { key: 'location', value: null })).status, 200);
+  assert.equal((await configOf(second.base, 'front')).features.location, true);
+  assert.equal((await start(t, { dataDir })).state.switches.effective('front', 'location'), true);
+});
+test('switches: a corrupt data file does not stop the server', async t => {
+  const dataDir = tempData(t);
+  fs.writeFileSync(path.join(dataDir, 'room-switches.json'), '{ not json');
+  const errors = [];
+  const { base } = await start(t, { dataDir, logger: { error: line => errors.push(line), warn() { } } });
+  assert.equal((await configOf(base, 'front')).features.location, true);
+  assert.ok(errors.some(line => /room-switches\.json/.test(line)));
+});
+test('switches: quick booking off refuses bookings for that room only; on overrides a room that was off in rooms.json', async t => {
+  const { base } = await start(t, { dataDir: tempData(t) });
+  const at = minutesFromNow(600);
+  await setSwitch(base, 'front', { key: 'quickBooking', value: false });
+  const refused = await json(base, '/api/bookings', { method: 'POST', body: booking('front', at) });
+  assert.equal(refused.status, 403);
+  assert.equal((await refused.json()).error, 'Quick booking is disabled for this room.');
+  assert.equal((await configOf(base, 'front')).allowQuickBooking, false);
+  assert.equal((await json(base, '/api/bookings', { method: 'POST', body: booking('back', at) })).status, 403);
+  await setSwitch(base, 'back', { key: 'quickBooking', value: true });
+  assert.equal((await configOf(base, 'back')).allowQuickBooking, true);
+  assert.equal((await json(base, '/api/bookings', { method: 'POST', body: booking('back', at) })).status, 201);
+  await setSwitch(base, 'front', { key: 'quickBooking', value: null });
+  assert.equal((await configOf(base, 'front')).allowQuickBooking, true);
+});
+test('switches: celebrations off returns none for that room; intercom off refuses a ring for that room only', async t => {
+  const celebs = { get: async () => ({ date: '2026-11-10', celebrations: [{ name: 'A', kind: 'birthday' }], holiday: null, nextHoliday: null }), holidayOn: () => null };
+  const { base } = await start(t, { celebrations: celebs, dataDir: tempData(t) });
+  assert.equal((await (await json(base, '/api/celebrations?room=front')).json()).celebrations.length, 1);
+  await setSwitch(base, 'front', { key: 'celebrations', value: false });
+  assert.deepEqual((await (await json(base, '/api/celebrations?room=front')).json()).celebrations, []);
+  await setSwitch(base, 'front', { key: 'intercom', value: false });
+  const ring = room => json(base, '/api/intercom/ring', { method: 'POST', body: { roomId: room, tabletId: 'tab-1' } });
+  const off = await ring('front');
+  assert.equal(off.status, 404);
+  assert.equal((await off.json()).error, 'The intercom is not available for this room.');
+  assert.notEqual((await ring('back')).status, 404);
+});
+test('switches: the change is pushed to that room only, and logged with the actor in the activity list', async t => {
+  const { base } = await start(t, { dataDir: tempData(t) });
+  const front = await listen(base, 'front'), back = await listen(base, 'back');
+  await setSwitch(base, 'front', { key: 'snoopyMotion', value: false });
+  await waitFor(() => front.text().includes('event: room.features'), 'the push');
+  assert.match(front.text(), /"snoopyMotion":false/);
+  await sleep(50);
+  assert.equal(back.text().includes('room.features'), false);
+  await front.stop(); await back.stop();
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.ok(overview.activity.some(line => /^Switches: Front Conference Room Snoopy animation turned OFF by the administrator token$/.test(line.text)));
+});
+test('switches: plain errors for an unknown room, key, value or preset, and a feature that cannot work', async t => {
+  const { base } = await start(t, { dataDir: tempData(t) });
+  assert.equal((await setSwitch(base, 'nowhere', { key: 'noise', value: true })).status, 404);
+  assert.equal((await setSwitch(base, 'front', { key: 'bogus', value: true })).status, 400);
+  assert.equal((await setSwitch(base, 'front', { key: 'noise', value: 'yes' })).status, 400);
+  assert.equal((await setSwitch(base, 'front', {})).status, 400);
+  assert.equal((await setSwitch(base, 'front', { preset: 'nope' })).status, 400);
+  const walk = await setSwitch(base, 'front', { key: 'walkIn', value: true });
+  assert.equal(walk.status, 409);
+  assert.match((await walk.json()).error, /WALK_IN_ENABLED/);
+  const camera = await setSwitch(base, 'front', { key: 'camera', value: 'ondemand' });
+  assert.equal(camera.status, 409);
+  assert.match((await camera.json()).error, /FULLY_CAMERA_HOSTS/);
+});
+test('switches: the battery saver preset and back to normal', async t => {
+  const { base } = await start(t, { dataDir: tempData(t) });
+  assert.equal((await setSwitch(base, 'front', { preset: 'battery-saver' })).status, 200);
+  const cfg = await configOf(base, 'front');
+  assert.equal(cfg.features.noise.enabled, false); assert.equal(cfg.features.location, false); assert.equal(cfg.features.snoopyMotion, false);
+  assert.equal(cfg.features.intercom, true); assert.equal(cfg.features.snoopy, true); assert.equal(cfg.features.weather, true);
+  assert.equal((await setSwitch(base, 'front', { preset: 'normal' })).status, 200);
+  assert.equal((await configOf(base, 'front')).features.location, true);
+});
+test('switches: a walk-in switch off keeps the door free of the call state', async t => {
+  const presence = fakePresence();
+  const { base, state } = await start(t, { env: walkInEnv, presence, dataDir: tempData(t) });
+  await setSwitch(base, 'front', { key: 'walkIn', value: false });
+  const now = Date.now();
+  for (let i = 0; i <= 3; i += 1) await state.checkWalkIn(now + i * 30000);
+  assert.equal('walkIn' in await (await json(base, '/api/events?room=front')).json(), false);
+});
+test('switches: the heartbeat keeps what the tablet applied, known keys with true or false only', async t => {
+  const { base } = await start(t);
+  const beat = await json(base, '/api/tablets/heartbeat', { method: 'POST', body: { roomId: 'front', tabletId: 'tab-1', applied: { noise: false, snoopy: true, bogus: true, location: 'x' } } });
+  assert.deepEqual((await beat.json()).tablet.applied, { noise: false, snoopy: true });
+  const again = await json(base, '/api/tablets/heartbeat', { method: 'POST', body: { roomId: 'front', tabletId: 'tab-1' } });
+  assert.deepEqual((await again.json()).tablet.applied, { noise: false, snoopy: true });
+  const data = await (await json(base, '/api/admin/switches', { token: TOKEN })).json();
+  assert.deepEqual(data.rooms[0].tablets[0].applied, { noise: false, snoopy: true });
 });
