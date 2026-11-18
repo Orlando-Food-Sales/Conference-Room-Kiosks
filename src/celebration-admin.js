@@ -124,15 +124,16 @@ export class CelebrationAdmin {
     return calendars.length === 1 ? calendars[0] : null;
   }
   async readEvents(calendar) {
-    const params = new URLSearchParams({ '$select': FIELDS, '$top': '100' });
+    // The whole calendar is read (it holds every PTO day and holiday too, over 2,000 events), 500 at a time, up to 20,000.
+    const params = new URLSearchParams({ '$select': FIELDS, '$top': '500' });
     const out = [];
     let next = `${this.base}/calendars/${encodeURIComponent(calendar.id)}/events?${params}`;
-    for (let page = 0; next && page < 10; page += 1) {
+    for (let page = 0; next && page < 40; page += 1) {
       const body = await this.graph('GET', next);
       out.push(...(body.value || []));
       next = body['@odata.nextLink'] || '';
     }
-    return out;
+    return { events: out, truncated: Boolean(next) };
   }
   person(row, today, calendar) {
     const next = nextOccurrence(row.month, row.day, today);
@@ -155,9 +156,11 @@ export class CelebrationAdmin {
     if (!this.enabled) return { enabled: false, demo: false, mailbox: '', calendars: [], people: [], skipped: 0, writeCalendar: null, message: 'Birthdays and anniversaries are not set up. Set BIRTHDAY_CALENDAR_MAILBOX in the settings file to the shared calendar mailbox.' };
     const calendars = await this.calendars();
     const people = [];
-    let skipped = 0;
+    let skipped = 0, truncated = false;
     for (const calendar of calendars) {
-      for (const event of await this.readEvents(calendar)) {
+      const read = await this.readEvents(calendar);
+      if (read.truncated) truncated = true;
+      for (const event of read.events) {
         if (event.isCancelled) continue;
         const entry = parseCelebration(event.subject, 'full', '');
         if (!entry) { if (KEYWORD.test(String(event.subject || ''))) skipped += 1; continue; }
@@ -174,7 +177,7 @@ export class CelebrationAdmin {
       }
     }
     const write = this.writeCalendar(calendars);
-    return { enabled: true, demo: false, mailbox: b.mailbox, calendars, people: people.sort(bySoonest), skipped, writeCalendar: write ? { name: write.name, canEdit: write.canEdit } : null, message: '' };
+    return { enabled: true, demo: false, mailbox: b.mailbox, calendars, people: people.sort(bySoonest), skipped, writeCalendar: write ? { name: write.name, canEdit: write.canEdit } : null, message: truncated ? 'The calendar is very large, so this list may be missing people.' : '' };
   }
   async setHidden({ kind, name, hidden }, now = new Date()) {
     if (!['birthday', 'anniversary'].includes(kind)) throw this.error(400, 'Pick birthday or anniversary.');

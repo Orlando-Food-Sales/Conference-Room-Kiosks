@@ -46,7 +46,13 @@ function fakeGraph({ canEdit = true, list = events(), calendars = null, fail = n
     const one = p.match(/^\/calendars\/([^/]+)$/);
     if (method === 'GET' && one) return answer(state.calendars.find(c => c.id === decodeURIComponent(one[1])) || {}, state.calendars.some(c => c.id === decodeURIComponent(one[1])) ? 200 : 404);
     const list2 = p.match(/^\/calendars\/([^/]+)\/events$/);
-    if (list2 && method === 'GET') return answer({ value: state.events });
+    if (list2 && method === 'GET') {
+      // Pages of the size asked for, with an @odata.nextLink, like Microsoft does.
+      const size = Number(parsed.searchParams.get('$top')) || 10, from = Number(parsed.searchParams.get('skip')) || 0;
+      state.listPages = (state.listPages || 0) + 1;
+      const value = state.events.slice(from, from + size), more = from + size < state.events.length;
+      return answer({ value, ...(more ? { '@odata.nextLink': `${parsed.origin}${parsed.pathname}?$top=${size}&skip=${from + size}` } : {}) });
+    }
     if (list2 && method === 'POST') { const created = { id: `new${state.events.length}`, ...JSON.parse(init.body) }; state.events.push({ ...created, type: 'seriesMaster' }); return answer(created, 201); }
     const item = p.match(/^\/calendars\/([^/]+)\/events\/([^/]+)$/);
     if (item) {
@@ -331,4 +337,13 @@ test('demo mode lists people, adds and removes without calling Microsoft', async
   assert.equal((await call('/api/admin/celebrations/hide', 'POST', { kind: birthday.kind, name: birthday.name, hidden: true })).status, 200);
   assert.equal(called, 0, 'no request left the server');
   assert.equal(logs.filter(l => l.startsWith('Celebrations:')).length, 3);
+});
+test('the list reads the whole calendar even when it has thousands of events, and says so if it cannot', async () => {
+  const filler = Array.from({ length: 2200 }, (_, i) => ({ id: `pto${i}`, subject: `Someone ${i} - PTO`, isAllDay: true, isCancelled: false, type: 'singleInstance', start: { dateTime: '2026-06-01T00:00:00.0000000' } }));
+  const graph = fakeGraph({ list: [...filler, yearly('late', 'Zed Last - Birthday', 12, 25), ...events()] });
+  const listing = await admin(graph).list(NOW);
+  assert.ok(listing.people.some(p => p.name === 'Zed Last'), 'a person after 2,200 other events is still listed');
+  assert.ok(listing.people.some(p => p.name === 'Maria Santos'));
+  assert.equal(listing.message, '');
+  assert.equal(graph.listPages, 5, '2,200+ events in pages of 500');
 });

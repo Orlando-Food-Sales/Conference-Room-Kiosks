@@ -8,7 +8,7 @@
 .agents/tasks/intercom-noise-location/task-intercom-noise-location/task.json	464 bytes
 .env.example	6573 bytes
 .gitignore	92 bytes
-CHANGELOG.md	42742 bytes
+CHANGELOG.md	43081 bytes
 DEPLOY-CHECKLIST.md	9038 bytes
 INSTALL-UBUNTU.md	38824 bytes
 README.md	13619 bytes
@@ -117,7 +117,7 @@ scripts/smoke-test.sh	1721 bytes
 scripts/update-manifests.sh	1003 bytes
 snippets/app.js-meeting-row.js	935 bytes
 snippets/styles-single-line.css	1576 bytes
-src/celebration-admin.js	17740 bytes
+src/celebration-admin.js	18077 bytes
 src/celebrations.js	10321 bytes
 src/config.js	17631 bytes
 src/dashboard-signin.js	9744 bytes
@@ -128,7 +128,7 @@ src/server.js	72408 bytes
 src/subscription-manager.js	302 bytes
 src/teams-alerts.js	9082 bytes
 src/weather.js	14798 bytes
-test/celebration-admin.test.js	24867 bytes
+test/celebration-admin.test.js	26123 bytes
 test/celebrations.test.js	13751 bytes
 test/config.test.js	12122 bytes
 test/dashboard-page.test.js	8271 bytes
