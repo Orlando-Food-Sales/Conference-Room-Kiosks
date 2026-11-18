@@ -1120,3 +1120,69 @@ test('the page may use the microphone and location itself, never the camera; /ap
   const off = await start(t, { env: { INTERCOM_ENABLED: 'off', NOISE_METER: 'off' } });
   assert.deepEqual((await (await fetch(`${off.base}/api/config?room=front`)).json()).features, { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: true });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Walk-in Teams calls (server side). The presence reader is a fake; nothing touches Microsoft.
+// ---------------------------------------------------------------------------------------------
+const walkInEnv = { WALK_IN_ENABLED: 'true', DEMO_MEETINGS: 'off', OFFICE_HOURS: 'off' };
+function fakePresence(calls = { front: true }) {
+  const presence = { reads: 0, calls, async read(ids) { presence.reads += 1; return new Map(ids.map(id => [id, presence.calls[id] ? { availability: 'Busy', activity: 'InAConferenceCall' } : { availability: 'Available', activity: 'Available' }])); } };
+  return presence;
+}
+test('walk-in: default config never reads presence and adds nothing to /api/events', async t => {
+  const presence = fakePresence();
+  const { base, state } = await start(t, { env: { DEMO_MEETINGS: 'off' }, presence });
+  const now = Date.now();
+  for (let i = 0; i < 4; i += 1) await state.checkWalkIn(now + i * 30000);
+  assert.equal(presence.reads, 0);
+  const events = await (await json(base, '/api/events?room=front')).json();
+  assert.equal('walkIn' in events, false);
+  assert.equal(events.events.length, 0);
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.equal(overview.health.walkIn.enabled, false);
+});
+
+test('walk-in: a call shows in /api/events for the tracked room only, books, and reaches the overview and activity', async t => {
+  const presence = fakePresence({ front: true });
+  const { base, state } = await start(t, { env: walkInEnv, presence });
+  const now = Date.now();
+  for (let i = 0; i <= 2; i += 1) await state.checkWalkIn(now + i * 30000);
+  const front = await (await json(base, '/api/events?room=front')).json();
+  assert.deepEqual(front.walkIn, { call: true });
+  assert.equal(front.events.length, 1);
+  assert.equal(front.events[0].autoBooked, true);
+  const back = await (await json(base, '/api/events?room=back')).json();
+  assert.equal('walkIn' in back, false);
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  const room = overview.rooms.find(r => r.id === 'front');
+  assert.equal(room.walkIn.activity, 'InAConferenceCall');
+  assert.equal(room.walkIn.lastBooking.action, 'created');
+  assert.equal(overview.health.walkIn.enabled, true);
+  assert.ok(overview.activity.some(line => /^Walk-in: /.test(line.text)));
+  assert.equal(JSON.stringify(overview.rooms).includes('presenceUserId'), false);
+});
+
+test('walk-in: the simulate-call route needs the token and demo mode', async t => {
+  const { base, state } = await start(t, { env: walkInEnv });
+  const url = '/api/admin/rooms/front/simulate-call';
+  assert.equal((await json(base, url, { method: 'POST', body: { call: true } })).status, 401);
+  assert.equal((await json(base, '/api/admin/rooms/nowhere/simulate-call', { token: TOKEN, method: 'POST', body: { call: true } })).status, 404);
+  assert.equal((await json(base, url, { token: TOKEN, method: 'POST', body: { call: true } })).status, 200);
+  const now = Date.now();
+  for (let i = 0; i <= 2; i += 1) await state.checkWalkIn(now + i * 30000);
+  assert.deepEqual((await (await json(base, '/api/events?room=front')).json()).walkIn, { call: true });
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.ok(overview.activity.some(line => /simulated call started in Front Conference Room \(demo\)/.test(line.text)));
+  const live = await start(t, { env: { DEMO_MODE: 'false', TENANT_ID: 'tenant', CLIENT_ID: 'client', CLIENT_SECRET: 'secret', WALK_IN_ENABLED: 'true' }, fetchImpl: async () => new Response('{}', { status: 503 }), weather: { get: async () => null, alerts: async () => [] } });
+  assert.equal((await json(live.base, url, { token: TOKEN, method: 'POST', body: { call: true } })).status, 404);
+});
+
+test('walk-in: a bad setting leaves the server running with a problem in the health', async t => {
+  const rooms = [{ id: 'front', name: 'Front', email: 'front@example.com', timeZone: 'UTC', presenceUserId: 'not-a-guid' }];
+  const { base, state } = await start(t, { env: { DEMO_MODE: 'false', TENANT_ID: 'tenant', CLIENT_ID: 'client', CLIENT_SECRET: 'secret', WALK_IN_ENABLED: 'true', ROOMS_JSON: JSON.stringify(rooms) }, fetchImpl: async () => new Response('{}', { status: 503 }), weather: { get: async () => null, alerts: async () => [] } });
+  assert.equal((await json(base, '/healthz')).status, 200);
+  const overview = await (await json(base, '/api/admin/overview', { token: TOKEN })).json();
+  assert.equal(overview.health.walkIn.enabled, false);
+  assert.match(overview.health.walkIn.problem, /GUID/);
+  await state.checkWalkIn(Date.now());
+});

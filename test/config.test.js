@@ -171,3 +171,40 @@ test('intercom, noise meter and location report: on by default, limits clamp, a 
   }
   assert.equal(loadConfig({ ...demo, NOISE_TALKING_DB: '-30', NOISE_LOUD_DB: '-35' }).intercom.enabled, true, 'the meter problem leaves the intercom alone');
 });
+
+test('walk-in is off by default and tracks only rooms with a presenceUserId', () => {
+  const id1 = 'f05cd959-0000-4000-8000-567241874b50';
+  const rooms = [{ id: 'a', name: 'A', email: 'a@example.com', timeZone: 'UTC', presenceUserId: id1 }, { id: 'b', name: 'B', email: 'b@example.com', timeZone: 'UTC' }];
+  const base = { ROOMS_JSON: JSON.stringify(rooms) };
+  const off = loadConfig({ ...demo, ...base });
+  assert.equal(off.walkIn.enabled, false);
+  assert.equal(off.walkIn.maxMinutes, 240);
+  assert.equal(off.walkIn.problem, undefined);
+  const on = loadConfig({ DEMO_MODE: 'false', TENANT_ID: 't', CLIENT_ID: 'c', CLIENT_SECRET: 's', ...base, WALK_IN_ENABLED: 'true' });
+  assert.equal(on.walkIn.enabled, true);
+  assert.deepEqual(on.walkIn.rooms, { a: id1 });
+  assert.equal(on.walkIn.checkSeconds, 30);
+  assert.equal(on.walkIn.outsideHours, false);
+  assert.equal(publicRoom(on.rooms[0]).presenceUserId, undefined);
+});
+
+test('walk-in settings mistakes turn it off with a problem and never throw', () => {
+  const id1 = 'f05cd959-0000-4000-8000-567241874b50';
+  const mk = list => loadConfig({ DEMO_MODE: 'false', TENANT_ID: 't', CLIENT_ID: 'c', CLIENT_SECRET: 's', WALK_IN_ENABLED: 'true', ROOMS_JSON: JSON.stringify(list) });
+  const room = (idn, extra = {}) => ({ id: idn, name: idn, email: `${idn}@example.com`, timeZone: 'UTC', ...extra });
+  const bad = mk([room('a', { presenceUserId: 'not-a-guid' })]);
+  assert.equal(bad.walkIn.enabled, false);
+  assert.match(bad.walkIn.problem, /GUID/);
+  assert.match(mk([room('a', { presenceUserId: id1 }), room('b', { presenceUserId: id1.toUpperCase() })]).walkIn.problem, /already used/);
+  assert.match(mk([room('a')]).walkIn.problem, /no room has a presenceUserId/);
+});
+
+test('walk-in in demo mode tracks every room, and the cap is clamped to 15..720', () => {
+  const rooms = [{ id: 'a', name: 'A', email: 'a@example.com', timeZone: 'UTC' }, { id: 'b', name: 'B', email: 'b@example.com', timeZone: 'UTC' }];
+  const config = loadConfig({ ...demo, ROOMS_JSON: JSON.stringify(rooms), WALK_IN_ENABLED: 'true', WALK_IN_MAX_MINUTES: '5' });
+  assert.deepEqual(Object.keys(config.walkIn.rooms), ['a', 'b']);
+  assert.equal(config.walkIn.maxMinutes, 15);
+  assert.equal(loadConfig({ ...demo, WALK_IN_MAX_MINUTES: '9999' }).walkIn.maxMinutes, 720);
+  assert.equal(loadConfig(demo).demoMeetings, true);
+  assert.equal(loadConfig({ ...demo, DEMO_MEETINGS: 'off' }).demoMeetings, false);
+});

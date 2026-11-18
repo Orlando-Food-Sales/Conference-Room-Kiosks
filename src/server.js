@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { loadConfig, publicRoom } from './config.js';
 import { DemoCalendar } from './demo-calendar.js';
 import { GraphCalendar, GraphTokenProvider } from './graph-calendar.js';
+import { createWalkIn, GraphPresence, DemoPresence } from './walk-in.js';
 import { SubscriptionManager } from './subscription-manager.js';
 import { WeatherService } from './weather.js';
 import { CelebrationService } from './celebrations.js';
@@ -142,11 +143,11 @@ export function createAppServer(options = {}) {
   const logger = Object.create(baseLogger);
   logger.log = (line, ...rest) => {
     baseLogger.log?.(line, ...rest);
-    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:|Celebrations:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
+    if (typeof line === 'string' && /^(Door camera:|Intercom:|Dashboard sign-in:|Tablet removed:|Celebrations:|Walk-in:)/.test(line)) { activity.unshift({ at: new Date().toISOString(), text: line }); activity.length = Math.min(activity.length, 30); }
   };
   const calendars = new Map();
   const tokenProvider = config.demoMode ? null : new GraphTokenProvider(config, options.fetchImpl || fetch);
-  config.rooms.forEach((room, index) => calendars.set(room.id, config.demoMode ? new DemoCalendar(room, index) : new GraphCalendar(config, room, tokenProvider, options.fetchImpl || fetch)));
+  config.rooms.forEach((room, index) => calendars.set(room.id, config.demoMode ? new DemoCalendar(room, index, { meetings: config.demoMeetings }) : new GraphCalendar(config, room, tokenProvider, options.fetchImpl || fetch)));
 
   const weather = options.weather || new WeatherService(config, options.fetchImpl || fetch);
   const teams = options.teamsAlerts || new TeamsAlerts(config.teamsAlerts, options.fetchImpl || fetch);
@@ -363,11 +364,11 @@ export function createAppServer(options = {}) {
     return { day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(part('weekday')), minutes: Number(part('hour')) * 60 + Number(part('minute')) };
   }
   // True once the office has been open for at least the alert delay (so nothing fires the moment the doors open).
-  function officeSettled(room, ms) {
+  function officeSettled(room, ms, settleMinutes = config.alertAfterMinutes) {
     const hours = config.officeHours;
     if (hours) {
       const clock = localClock(room.timeZone, ms);
-      if (!hours.days.includes(clock.day) || clock.minutes < hours.startMinutes + config.alertAfterMinutes || clock.minutes >= hours.endMinutes) return false;
+      if (!hours.days.includes(clock.day) || clock.minutes < hours.startMinutes + settleMinutes || clock.minutes >= hours.endMinutes) return false;
     }
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: room.timeZone }).format(new Date(ms));
     return !celebrations.holidayOn?.(today);
@@ -504,7 +505,7 @@ export function createAppServer(options = {}) {
   // What the dashboard's System box shows: the three expiry dates the server already watches, the server's uptime and
   // whether sign-in is on. Each has { expires, daysLeft, stage } (stage non-null = a reminder is due), or null if not set.
   function systemHealth() {
-    return { uptimeSeconds: Math.round(process.uptime()), signIn: Boolean(signIn.enabled), clientSecret: secretStatus(), httpsCert: httpsCertStatus(), certLogin: certRenewalSecretStatus() };
+    return { uptimeSeconds: Math.round(process.uptime()), walkIn: walkIn.health(), signIn: Boolean(signIn.enabled), clientSecret: secretStatus(), httpsCert: httpsCertStatus(), certLogin: certRenewalSecretStatus() };
   }
   // Official weather warnings for the location (empty when off, outside the US, or unreachable). Never throws.
   async function currentWeatherAlerts() {
@@ -526,6 +527,16 @@ export function createAppServer(options = {}) {
       await sendAlert(`Weather: ${alert.event}${alert.ends ? ` until ${when(alert.ends)}` : ''}. ${alert.headline && !alert.headline.startsWith(alert.event) ? `${alert.headline}. ` : ''}The room displays are showing this warning. Check weather.gov or your local news before deciding about the office.`);
     }
   }
+  // ---- Walk-in Teams calls (door state and automatic booking). Off unless WALK_IN_ENABLED; see src/walk-in.js ----
+  config.walkIn ||= { enabled: false, maxMinutes: 240, outsideHours: false, checkSeconds: 30, rooms: {} };   // a config passed in by a test may not have it
+  if (config.walkIn.problem) logger.error?.(`Walk-in booking is OFF because of a settings problem: ${config.walkIn.problem}`);
+  const presence = options.presence || (config.demoMode ? new DemoPresence(config.rooms) : new GraphPresence(config, tokenProvider, options.fetchImpl || fetch));
+  const walkIn = createWalkIn({
+    config: config.walkIn, rooms: config.rooms, calendars, presence, logger, sendAlert, alertState, notifyRoom, refreshRoom,
+    listEvents: id => cachedEvents(id, 5000),
+    isOpen: async (room, ms) => { try { await celebrations.get(); } catch { /* holiday lookup is best effort */ } return officeSettled(room, ms, 0); }
+  });
+  let walkInTimer = null;
   let monitor = null;
 
   let watcher = null;
@@ -657,7 +668,8 @@ export function createAppServer(options = {}) {
         const end = url.searchParams.get('end') || defaults.end;
         if (!Number.isFinite(new Date(start).getTime()) || !Number.isFinite(new Date(end).getTime())) return sendJson(res, 400, { error: 'Invalid date range.' });
         const events = (!url.searchParams.get('start') && !url.searchParams.get('end')) ? await cachedEvents(roomId) : await calendar.listEvents(start, end);
-        return sendJson(res, 200, { roomId, events, generatedAt: new Date().toISOString() });
+        const walkInState = walkIn.doorState(roomId);
+        return sendJson(res, 200, { roomId, events, ...(walkInState ? { walkIn: walkInState } : {}), generatedAt: new Date().toISOString() });
       }
       if (req.method === 'GET' && url.pathname === '/api/stream') {
         const roomId = url.searchParams.get('room') || '';
@@ -758,7 +770,7 @@ export function createAppServer(options = {}) {
             let events = [], error = null;
             try { events = await calendars.get(room.id).listEvents(window.start, window.end); } catch (e) { error = e.message; }
             const roomTablets = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ ...t, online: new Date(t.lastSeen).getTime() >= cutoff }));
-            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), intercom: Boolean(intercomConfig.enabled), error };
+            return { ...publicRoom(room), ...eventSummary(events), events, tablets: roomTablets, onlineTablets: roomTablets.filter(t => t.online).length, control: effectiveControl(room.id), camera: Boolean(camera.enabled && camera.hosts[room.id]), intercom: Boolean(intercomConfig.enabled), error, ...(walkIn.roomStatus(room.id) ? { walkIn: walkIn.roomStatus(room.id) } : {}) };
           }));
           return sendJson(res, 200, { version: VERSION, rooms, cameraProblem: camera.problem || '', intercomAdminsOnline: intercom.adminCount(), outfits: pushableOutfits(), alerts, activity, health: systemHealth(), alertChannels: { webhook: Boolean(config.alertWebhookUrl), teamsRecipients: teams.recipients.length }, weather: await weather.get().catch(() => null), generatedAt: new Date().toISOString(), mode: config.demoMode ? 'demo' : 'm365' });
         }
@@ -862,6 +874,16 @@ export function createAppServer(options = {}) {
           logger.log?.(`Door camera: ${roomById.get(roomId).name} switched to the ${side} camera by ${who.via === 'session' ? who.session.email : 'the administrator token'}`);
           return sendJson(res, 200, { ok: true, roomId, side });
         }
+        const callMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/simulate-call$/);
+        if (req.method === 'POST' && callMatch) {
+          const roomId = callMatch[1];
+          if (!config.demoMode || !roomById.has(roomId) || !config.walkIn.enabled || !Object.prototype.hasOwnProperty.call(config.walkIn.rooms, roomId) || typeof presence.set !== 'function') return sendJson(res, 404, { error: 'Not available.' });
+          const body = await readJson(req);
+          const inCall = body.call === true;
+          presence.set(roomId, inCall);
+          logger.log?.(`Walk-in: simulated call ${inCall ? 'started' : 'ended'} in ${roomById.get(roomId).name} (demo)`);
+          return sendJson(res, 200, { ok: true, roomId, call: inCall });
+        }
         const match = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/control$/);
         if (req.method === 'POST' && match) {
           const roomId = match[1];
@@ -930,8 +952,8 @@ export function createAppServer(options = {}) {
   });
 
   let scheduleTimer = null;
-  server.on('close', () => { intercom.close(); subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); });
-  server.appState = { config, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems };
+  server.on('close', () => { intercom.close(); subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); if (walkInTimer) clearInterval(walkInTimer); });
+  server.appState = { config, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems, walkIn, checkWalkIn: ms => walkIn.check(ms) };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {
@@ -940,6 +962,9 @@ export function createAppServer(options = {}) {
       checkCertExpiry().catch(error => logger.error?.(`Certificate expiry check failed: ${error.message}`));
       checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
     }, 60000); monitor.unref?.();
+  }
+  if (options.startSubscriptions !== false && config.walkIn.enabled) {
+    walkInTimer = setInterval(() => walkIn.check().catch(error => logger.error?.(`Walk-in check failed: ${error.message}`)), config.walkIn.checkSeconds * 1000); walkInTimer.unref?.();
   }
   checkOutfitSchedules();
   if (options.startSubscriptions !== false) { scheduleTimer = setInterval(() => checkOutfitSchedules(), 15000); scheduleTimer.unref?.(); }

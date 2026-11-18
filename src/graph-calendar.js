@@ -68,6 +68,10 @@ export class GraphTokenProvider {
   }
 }
 
+// The room display's own walk-in booking is recognised by this exact subject plus a body that starts with the marker,
+// so it survives a restart without any stored state, and a person's "Reserved" booking never matches.
+export const WALK_IN_SUBJECT = 'Teams call (booked automatically)';
+export const WALK_IN_BODY = 'Booked automatically by the room display because a Teams call is in progress.';
 export class GraphCalendar {
   constructor(config, room, tokenProvider, fetchImpl = fetch) {
     this.config = config;
@@ -98,7 +102,7 @@ export class GraphCalendar {
     const params = new URLSearchParams({
       startDateTime: new Date(start).toISOString(),
       endDateTime: new Date(end).toISOString(),
-      '$select': 'id,subject,organizer,start,end,sensitivity,isCancelled,showAs',
+      '$select': 'id,subject,organizer,start,end,sensitivity,isCancelled,showAs,bodyPreview',
       '$orderby': 'start/dateTime',
       '$top': '100'
     });
@@ -111,13 +115,15 @@ export class GraphCalendar {
     }
     return values.filter(event => !event.isCancelled).map(event => {
       const isPrivate = String(event.sensitivity || '').toLowerCase() === 'private';
+      const autoBooked = !isPrivate && event.subject === WALK_IN_SUBJECT && String(event.bodyPreview || '').startsWith('Booked automatically by the room display');
       return {
         id: event.id,
         subject: isPrivate ? 'Private meeting' : (event.subject || 'Reserved'),
         organizer: isPrivate ? '' : (event.organizer?.emailAddress?.name || event.organizer?.emailAddress?.address || ''),
         start: asUtcIso(event.start?.dateTime),
         end: asUtcIso(event.end?.dateTime),
-        isPrivate
+        isPrivate,
+        autoBooked
       };
     });
   }
@@ -127,7 +133,7 @@ export class GraphCalendar {
       subject: booking.subject || 'Reserved',
       start: { dateTime: new Date(booking.start).toISOString().replace(/Z$/, ''), timeZone: 'UTC' },
       end: { dateTime: new Date(booking.end).toISOString().replace(/Z$/, ''), timeZone: 'UTC' },
-      body: { contentType: 'text', content: booking.organizer ? `Reserved from room display by ${booking.organizer}` : 'Reserved from room display' }
+      body: { contentType: 'text', content: booking.autoBooked ? WALK_IN_BODY : booking.organizer ? `Reserved from room display by ${booking.organizer}` : 'Reserved from room display' }
     };
     const event = await this.request(`/users/${encodeURIComponent(this.room.email)}/events`, { method: 'POST', body: JSON.stringify(payload) });
     return {
@@ -136,7 +142,14 @@ export class GraphCalendar {
       organizer: booking.organizer || '',
       start: booking.start,
       end: booking.end,
-      isPrivate: false
+      isPrivate: false,
+      autoBooked: Boolean(booking.autoBooked)
     };
+  }
+  // Moves the end of an existing event (walk-in renewals and release). Only the end is sent.
+  async updateEvent(id, { end }) {
+    const payload = { end: { dateTime: new Date(end).toISOString().replace(/Z$/, ''), timeZone: 'UTC' } };
+    await this.request(`/users/${encodeURIComponent(this.room.email)}/events/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    return { id, end: new Date(end).toISOString() };
   }
 }

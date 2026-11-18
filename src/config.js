@@ -63,7 +63,8 @@ function normalizeRoom(value) {
     email: String(value.email || '').trim(),
     timeZone: String(value.timeZone || 'UTC').trim(),
     allowQuickBooking: Boolean(value.allowQuickBooking),
-    showCelebrations: value.showCelebrations !== false      // set false for client-facing rooms
+    showCelebrations: value.showCelebrations !== false,     // set false for client-facing rooms
+    presenceUserId: String(value.presenceUserId || '').trim()   // Entra object id of the room's Teams account (walk-in calls)
   };
   if (!room.name) throw new Error(`Room ${room.id} needs a name.`);
   if (!room.email || !room.email.includes('@')) throw new Error(`Room ${room.id} needs a valid mailbox address.`);
@@ -126,6 +127,25 @@ function loadCamera(env, rooms) {
     hosts[match[1]] = match[2];
   }
   return { enabled: true, hosts, password, port: integerValue(env.FULLY_REMOTE_PORT, 2323, 1, 65535) };
+}
+// Walk-in Teams calls (INSTALL-UBUNTU.md 12g). Off unless WALK_IN_ENABLED; a room is watched only when it has a presenceUserId.
+// In demo mode every room is watched without an id. A settings mistake turns the feature off and is logged.
+function loadWalkIn(env, rooms, demoMode) {
+  const enabled = booleanValue(env.WALK_IN_ENABLED, false);
+  const result = { enabled, maxMinutes: integerValue(env.WALK_IN_MAX_MINUTES, 240, 15, 720), outsideHours: booleanValue(env.WALK_IN_OUTSIDE_HOURS, false), checkSeconds: 30, rooms: {} };
+  if (!enabled) return result;
+  const seen = new Set();
+  for (const room of rooms) {
+    if (demoMode) { result.rooms[room.id] = ''; continue; }
+    if (!room.presenceUserId) continue;
+    if (!GUID.test(room.presenceUserId)) throw new Error(`Room ${room.id}: presenceUserId must be the Teams account's object id, a GUID.`);
+    const key = room.presenceUserId.toLowerCase();
+    if (seen.has(key)) throw new Error(`Room ${room.id}: presenceUserId is already used by another room.`);
+    seen.add(key);
+    result.rooms[room.id] = room.presenceUserId;
+  }
+  if (!Object.keys(result.rooms).length) throw new Error('WALK_IN_ENABLED is on but no room has a presenceUserId in rooms.json.');
+  return result;
 }
 // Door intercom, noise meter and location report (INSTALL-UBUNTU.md 12f). A noise setting mistake turns the meter off.
 function loadIntercom(env) {
@@ -248,6 +268,10 @@ export function loadConfig(env = process.env, cwd = process.cwd()) {
   // Like sign-in, a camera settings mistake turns the camera off (and is logged); the door screens keep working.
   try { config.camera = loadCamera(env, config.rooms); }
   catch (error) { config.camera = { enabled: false, hosts: {}, password: '', port: 2323, problem: error.message }; }
+  try { config.walkIn = loadWalkIn(env, config.rooms, demoMode); }
+  catch (error) { config.walkIn = { enabled: false, maxMinutes: 240, outsideHours: false, checkSeconds: 30, rooms: {}, problem: error.message }; }
+  // DEMO_MEETINGS=off removes the demo calendars' sample meetings (used by tests).
+  config.demoMeetings = !/^(off|false|0|no)$/i.test(String(env.DEMO_MEETINGS || ''));
   config.intercom = loadIntercom(env);
   config.noise = loadNoise(env);
   config.location = { enabled: booleanValue(env.LOCATION_REPORT, true) };
