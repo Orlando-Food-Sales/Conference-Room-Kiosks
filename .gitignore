@@ -7,3 +7,5 @@ node_modules/
 *.tar.gz
 teams-app-build/
 /data/
+# Planning notes and review files that the build workflows write while they work
+/.agents/

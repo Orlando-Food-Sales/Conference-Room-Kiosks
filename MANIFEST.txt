@@ -10,7 +10,7 @@
 .agents/tasks/intercom-noise-location/task-intercom-noise-location/features/FEAT-003.json	5707 bytes
 .agents/tasks/intercom-noise-location/task-intercom-noise-location/task.json	464 bytes
 .env.example	7454 bytes
-.gitignore	92 bytes
+.gitignore	183 bytes
 CHANGELOG.md	46441 bytes
 DEPLOY-CHECKLIST.md	9038 bytes
 INSTALL-UBUNTU.md	46373 bytes
