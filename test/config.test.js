@@ -120,8 +120,13 @@ test('door camera settings: off by default, both or neither, known rooms and pri
   const rooms = JSON.stringify([{ id: 'front', name: 'Front', email: 'f@example.com' }, { id: 'back', name: 'Back', email: 'b@example.com' }]);
   const cam = env => loadConfig({ ...demo, ROOMS_JSON: rooms, ...env }).camera;
   assert.equal(cam({}).enabled, false);
-  assert.deepEqual(cam({ FULLY_CAMERA_HOSTS: ' front=192.168.80.172, back = 10.1.2.3 ', FULLY_REMOTE_PASSWORD: 'pw' }), { enabled: true, hosts: { front: '192.168.80.172', back: '10.1.2.3' }, password: 'pw', port: 2323 });
+  assert.deepEqual(cam({ FULLY_CAMERA_HOSTS: ' front=192.168.80.172, back = 10.1.2.3 ', FULLY_REMOTE_PASSWORD: 'pw' }), { enabled: true, hosts: { front: '192.168.80.172', back: '10.1.2.3' }, password: 'pw', port: 2323, idleSeconds: 120, warmupSeconds: 8 });
   assert.equal(cam({ FULLY_CAMERA_HOSTS: 'front=172.20.0.9', FULLY_REMOTE_PASSWORD: 'pw', FULLY_REMOTE_PORT: '2324' }).port, 2324);
+  assert.deepEqual([cam({}).idleSeconds, cam({}).warmupSeconds], [120, 8], 'the timing is there even when the camera is off');
+  const timed = env => cam({ FULLY_CAMERA_HOSTS: 'front=192.168.80.172', FULLY_REMOTE_PASSWORD: 'pw', ...env });
+  assert.deepEqual([timed({ FULLY_CAMERA_IDLE_SECONDS: '300', FULLY_CAMERA_WARMUP_SECONDS: '12' }).idleSeconds, timed({ FULLY_CAMERA_IDLE_SECONDS: '300', FULLY_CAMERA_WARMUP_SECONDS: '12' }).warmupSeconds], [300, 12]);
+  assert.deepEqual([timed({ FULLY_CAMERA_IDLE_SECONDS: '5', FULLY_CAMERA_WARMUP_SECONDS: '1' }).idleSeconds, timed({ FULLY_CAMERA_IDLE_SECONDS: '5', FULLY_CAMERA_WARMUP_SECONDS: '1' }).warmupSeconds], [30, 3], 'too small is raised to the minimum');
+  assert.deepEqual([timed({ FULLY_CAMERA_IDLE_SECONDS: '99999', FULLY_CAMERA_WARMUP_SECONDS: '99' }).idleSeconds, timed({ FULLY_CAMERA_IDLE_SECONDS: '99999', FULLY_CAMERA_WARMUP_SECONDS: '99' }).warmupSeconds], [1800, 20], 'too large is cut to the maximum');
   const problem = env => cam(env).problem || '';
   assert.match(problem({ FULLY_CAMERA_HOSTS: 'front=192.168.80.172' }), /together/);
   assert.match(problem({ FULLY_REMOTE_PASSWORD: 'pw' }), /together/);

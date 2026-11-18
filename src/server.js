@@ -7,6 +7,7 @@ import { loadConfig, publicRoom } from './config.js';
 import { DemoCalendar } from './demo-calendar.js';
 import { GraphCalendar, GraphTokenProvider } from './graph-calendar.js';
 import { createWalkIn, GraphPresence, DemoPresence } from './walk-in.js';
+import { createFullyCamera } from './fully-camera.js';
 import { RoomSwitches, DEFINITIONS as SWITCH_DEFINITIONS, switchLabel } from './room-switches.js';
 import { SubscriptionManager } from './subscription-manager.js';
 import { WeatherService } from './weather.js';
@@ -300,6 +301,7 @@ export function createAppServer(options = {}) {
   // Front or back camera: Fully's "Select Camera" (motionCameraId; Android camera 1 is the front, 0 the back). Fully
   // keeps using the old camera until motion detection restarts, so it is switched off and on again afterwards.
   async function setCameraSide(roomId, side) {
+    fullyCamera.refuseIfOff(roomId);
     const host = camera.hosts[roomId];
     const fail = message => Object.assign(new Error(message), { status: 502 });
     const fully = async query => {
@@ -314,7 +316,10 @@ export function createAppServer(options = {}) {
     await new Promise(resolve => setTimeout(resolve, options.cameraRestartMs ?? 1500));
     await fully('cmd=setBooleanSetting&key=motionDetection&value=true');
     cameraFrames.delete(roomId);
+    fullyCamera.touch(roomId);          // On request: the camera was just started, so it is switched off again later
   }
+  // Camera modes, Fully's real state and re-applying the choice (src/fully-camera.js). Unmanaged (the default) makes no calls of its own.
+  const fullyCamera = createFullyCamera({ camera, rooms: config.rooms, switches, fetchImpl: options.fetchImpl, logger, idleMs: options.cameraIdleMs ?? (camera.idleSeconds ?? 120) * 1000, warmupMs: options.cameraWarmupMs ?? (camera.warmupSeconds ?? 8) * 1000 });
   // Latest events per room. One fetch serves every tablet for a few seconds, and any difference from the
   // previous fetch is pushed to the tablets straight away (this is what makes updates feel instant).
   const latest = new Map();
@@ -382,11 +387,23 @@ export function createAppServer(options = {}) {
   // Low battery on a wall tablet that is not charging: one alert below 10%, one more below 5%, and one when it is
   // charging again. Only for a tablet that is online (an offline one gets the offline alert instead).
   const BATTERY_STAGES = [5, 10];
-  async function checkBattery(room, tablet, key, quietFor) {
+  // Plugged in but still below 15% for 30 minutes: the charger or cable is too weak. One alert, one recovery at 25% (15 to 24% changes nothing).
+  async function checkLowCharge(room, tablet, key, battery, ms) {
+    const lowKey = `${key}:lowcharge`, low = alertState.get(lowKey);
+    if (battery.charging && battery.level < 15) {
+      if (!low) alertState.set(lowKey, { since: ms, alerted: false });
+      else if (!low.alerted && ms - low.since >= 30 * 60000) { low.alerted = true; await sendAlert(`${room.name}: the tablet "${tablet.name}" is plugged in but still at ${battery.level}% after 30 minutes. The charger or cable is probably too weak for what the tablet is doing (try another charger, or use Battery saver in the dashboard).`); }
+    } else if (low && (!battery.charging || battery.level >= 25)) {
+      alertState.delete(lowKey);
+      if (low.alerted && battery.charging) await sendAlert(`${room.name}: the tablet "${tablet.name}" is charging properly again (${battery.level}%).`);
+    }
+  }
+  async function checkBattery(room, tablet, key, quietFor, ms = Date.now()) {
     const battery = tablet.battery;
     const batteryKey = `${key}:battery`;
     const sent = alertState.get(batteryKey);
     if (!battery || quietFor >= config.tabletOfflineSeconds * 1000) return;
+    await checkLowCharge(room, tablet, key, battery, ms);
     if (battery.charging) {
       if (sent) { alertState.delete(batteryKey); await sendAlert(`${room.name}: the tablet "${tablet.name}" is charging again (${battery.level}%).`); }
       return;
@@ -399,7 +416,7 @@ export function createAppServer(options = {}) {
   async function checkTablets(ms = Date.now()) {
     const delay = config.alertAfterMinutes * 60000;
     for (const [key, tablet] of [...tablets]) {          // forget tablets that have been gone for a week
-      if (ms - Date.parse(tablet.lastSeen) > 7 * 86400000) { tablets.delete(key); alertState.delete(key); alertState.delete(`${key}:battery`); }
+      if (ms - Date.parse(tablet.lastSeen) > 7 * 86400000) { tablets.delete(key); alertState.delete(key); alertState.delete(`${key}:battery`); alertState.delete(`${key}:lowcharge`); }
     }
     for (const room of config.rooms) {
       if (!officeSettled(room, ms)) continue;
@@ -414,7 +431,7 @@ export function createAppServer(options = {}) {
           alertState.delete(key);
           await sendAlert(`${room.name}: the tablet "${tablet.name}" is back online.`);
         }
-        await checkBattery(room, tablet, key, quietFor);
+        await checkBattery(room, tablet, key, quietFor, ms);
       }
       const calendarKey = `${room.id}:calendar`;
       const problem = calendarProblems.get(room.id);
@@ -628,6 +645,8 @@ export function createAppServer(options = {}) {
       tablet.appliedAt = new Date().toISOString();
     } else if (previous?.applied !== undefined) { tablet.applied = previous.applied; tablet.appliedAt = previous.appliedAt; }
     tablets.set(key, tablet);
+    // A tablet that is new or was offline may have restarted Fully: put the door camera choice back (does nothing for an unmanaged room).
+    if (!previous || Date.now() - Date.parse(previous.lastSeen) > config.tabletOfflineSeconds * 1000) fullyCamera.reconcile(roomId).catch(() => { });
     return tablet;
   }
 
@@ -787,10 +806,17 @@ export function createAppServer(options = {}) {
         // Per-room feature switches. The choice is saved first; the tablets pick it up from the room.features push (or /api/config when they return).
         if (req.method === 'GET' && url.pathname === '/api/admin/switches') {
           const cutoff = Date.now() - config.tabletOfflineSeconds * 1000;
-          const rooms = config.rooms.map(room => {
+          // Fully's real state for every room with a camera, asked in parallel (4 s each). One tablet that does not answer never fails the request.
+          const rooms = await Promise.all(config.rooms.map(async room => {
             const list = [...tablets.values()].filter(t => t.roomId === room.id).map(t => ({ tabletId: t.tabletId, name: t.name, online: new Date(t.lastSeen).getTime() >= cutoff, applied: t.applied || null }));
-            return { id: room.id, name: room.name, switches: switches.describe(room.id), tablets: list, tabletsOnline: list.filter(t => t.online).length };
-          });
+            const row = { id: room.id, name: room.name, switches: switches.describe(room.id), tablets: list, tabletsOnline: list.filter(t => t.online).length };
+            if (fullyCamera.hasHost(room.id)) {
+              const { reachable, motionDetectorStarted, batteryLevel, isPlugged, screenOn, checkedAt, error } = await fullyCamera.deviceInfo(room.id);
+              const cam = fullyCamera.status(room.id);
+              row.camera = { mode: cam.mode, configuredMode: 'unmanaged', hostSet: true, fully: { reachable, motionDetectorStarted, batteryLevel, isPlugged, screenOn, checkedAt, error }, pending: cam.pending, problem: cam.problem, running: cam.running, onDemandOffAt: cam.onDemandOffAt };
+            }
+            return row;
+          }));
           return sendJson(res, 200, { definitions: SWITCH_DEFINITIONS, rooms });
         }
         const switchMatch = url.pathname.match(/^\/api\/admin\/rooms\/([a-z0-9-]+)\/switches$/);
@@ -810,12 +836,15 @@ export function createAppServer(options = {}) {
             line = body.value === null ? `Switches: ${room.name} ${label} set to follow the server setting (now ${onOff(switches.effective(room.id, body.key))}) by ${by}` : `Switches: ${room.name} ${label} turned ${onOff(body.value)} by ${by}`;
           }
           logger.log?.(line);
+          // The camera choice is applied to Fully after it is saved; an unreachable tablet leaves it saved and pending (never an error).
+          if (fullyCamera.hasHost(room.id) && (body.preset !== undefined || body.key === 'camera')) await fullyCamera.reconcile(room.id);
           notifyRoom(room.id, 'room.features', { features: featuresFor(room.id), allowQuickBooking: switches.effective(room.id, 'quickBooking'), showCelebrations: switches.effective(room.id, 'celebrations') });
           const changedKeys = result.changedKeys || (result.changed ? [body.key] : []);
           if (changedKeys.some(k => k === 'quickBooking' || k === 'walkIn')) notifyRoom(room.id, 'calendar.changed', { reason: 'switch' });
           const cutoff = Date.now() - config.tabletOfflineSeconds * 1000;
           const tabletsOnline = [...tablets.values()].filter(t => t.roomId === room.id && new Date(t.lastSeen).getTime() >= cutoff).length;
-          return sendJson(res, 200, { ok: true, changed: Boolean(result.changed), rows: switches.describe(room.id), tabletsOnline, note: tabletsOnline ? '' : 'No tablet for this room is online; it will apply when the tablet connects.' });
+          const cam = fullyCamera.hasHost(room.id) ? fullyCamera.status(room.id) : null;
+          return sendJson(res, 200, { ok: true, changed: Boolean(result.changed), rows: switches.describe(room.id), ...(cam ? { pending: cam.pending, problem: cam.problem } : {}), tabletsOnline, note: tabletsOnline ? '' : 'No tablet for this room is online; it will apply when the tablet connects.' });
         }
         if (req.method === 'POST' && url.pathname === '/api/admin/test-alert') {
           const text = 'This is a test alert from the Room Display dashboard. If you can read this, alerts reach you.';
@@ -856,8 +885,18 @@ export function createAppServer(options = {}) {
           const roomId = cameraMatch[1];
           if (!roomById.has(roomId)) return sendJson(res, 404, { error: 'Unknown room.' });
           if (!camera.enabled || !camera.hosts[roomId]) return sendJson(res, 404, { error: camera.problem ? `The door camera is off: ${camera.problem}` : 'No camera is set up for this room (FULLY_CAMERA_HOSTS).' });
-          let frame;
-          try { frame = await cameraFrame(roomId); } catch (error) { return sendJson(res, error.status || 502, { error: error.message }); }
+          let frame, fresh;
+          try { fresh = await fullyCamera.ensureForPicture(roomId); } catch (error) { return sendJson(res, error.status || 502, { error: error.message }); }
+          if (fresh.started) logger.log?.(`Door camera: ${roomById.get(roomId).name} camera started for a picture requested by ${whoText(who)}`);
+          try {
+            try { frame = await cameraFrame(roomId); }
+            catch (error) {                     // right after a start Fully may still answer with a web page: try once more
+              if (!fresh.fresh) throw error;
+              await new Promise(resolve => setTimeout(resolve, options.cameraRetryMs ?? 2000));
+              frame = await cameraFrame(roomId);
+            }
+          } catch (error) { return sendJson(res, error.status || 502, { error: error.message }); }
+          fullyCamera.touch(roomId);
           markCamera(roomId, who, url.searchParams.get('live') === '1');
           res.writeHead(200, { 'content-type': frame.type, 'content-length': frame.body.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
           return res.end(frame.body);
@@ -902,7 +941,7 @@ export function createAppServer(options = {}) {
           const found = tablets.get(key);
           if (!found) return sendJson(res, 404, { error: 'That tablet is not in the list any more.' });
           if (Date.now() - Date.parse(found.lastSeen) < config.tabletOfflineSeconds * 1000) return sendJson(res, 409, { error: 'That tablet is online. Only offline entries can be removed.' });
-          tablets.delete(key); alertState.delete(key); alertState.delete(`${key}:battery`);
+          tablets.delete(key); alertState.delete(key); alertState.delete(`${key}:battery`); alertState.delete(`${key}:lowcharge`);
           logger.log?.(`Tablet removed: ${found.name} (${found.ip || 'no address'}) from ${roomById.get(found.roomId).name} by ${who.via === 'session' ? who.session.email : 'the administrator token'}`);
           return sendJson(res, 200, { ok: true });
         }
@@ -994,9 +1033,9 @@ export function createAppServer(options = {}) {
     }
   });
 
-  let scheduleTimer = null;
-  server.on('close', () => { intercom.close(); subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); if (walkInTimer) clearInterval(walkInTimer); });
-  server.appState = { config, switches, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems, walkIn, checkWalkIn: ms => walkIn.check(ms) };
+  let scheduleTimer = null, cameraStartTimer = null;
+  server.on('close', () => { intercom.close(); subscriptions.stop(); if (watcher) clearInterval(watcher); if (monitor) clearInterval(monitor); if (scheduleTimer) clearInterval(scheduleTimer); if (walkInTimer) clearInterval(walkInTimer); if (cameraStartTimer) clearTimeout(cameraStartTimer); fullyCamera.close(); });
+  server.appState = { config, switches, intercom, calendars, tablets, controls, signIn, liveControl, effectiveControl, checkOutfitSchedules, endOfDay, pushableOutfits, subscriptions, notifyRoom, refreshRoom, checkTablets, checkSecretExpiry, secretStatus, checkCertExpiry, httpsCertStatus, certRenewalSecretStatus, checkWeatherAlerts, alerts, teams, calendarProblems, walkIn, checkWalkIn: ms => walkIn.check(ms), fullyCamera };
   if (options.startSubscriptions !== false) startWatcher();
   if (options.startSubscriptions !== false) {
     monitor = setInterval(() => {
@@ -1004,7 +1043,9 @@ export function createAppServer(options = {}) {
       checkSecretExpiry().catch(error => logger.error?.(`Secret expiry check failed: ${error.message}`));
       checkCertExpiry().catch(error => logger.error?.(`Certificate expiry check failed: ${error.message}`));
       checkWeatherAlerts().catch(error => logger.error?.(`Weather alert check failed: ${error.message}`));
+      fullyCamera.tick().catch(() => { });
     }, 60000); monitor.unref?.();
+    cameraStartTimer = setTimeout(() => { for (const room of config.rooms) fullyCamera.reconcile(room.id); }, options.cameraStartMs ?? 2000); cameraStartTimer.unref?.();
   }
   if (options.startSubscriptions !== false && config.walkIn.enabled) {
     walkInTimer = setInterval(() => walkIn.check().catch(error => logger.error?.(`Walk-in check failed: ${error.message}`)), config.walkIn.checkSeconds * 1000); walkInTimer.unref?.();

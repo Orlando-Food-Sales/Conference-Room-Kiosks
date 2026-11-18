@@ -1316,3 +1316,201 @@ test('switches: the heartbeat keeps what the tablet applied, known keys with tru
   const data = await (await json(base, '/api/admin/switches', { token: TOKEN })).json();
   assert.deepEqual(data.rooms[0].tablets[0].applied, { noise: false, snoopy: true });
 });
+// ---------------------------------------------------------------------------------------------
+// Door camera modes (src/fully-camera.js) with a fake Fully that keeps its motion-detection state and
+// only returns a picture while detection is on.
+// ---------------------------------------------------------------------------------------------
+function fakeFully({ motion = false, up = true } = {}) {
+  const fully = { motion, up, calls: [], starts: [], stops: [] };
+  const ok = body => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
+  fully.fetchImpl = async url => {
+    url = String(url); fully.calls.push(url);
+    if (!fully.up) throw new Error('ECONNREFUSED');
+    if (url.includes('cmd=deviceInfo')) return ok({ status: 'OK', motionDetectorStarted: fully.motion, batteryLevel: 81, isPlugged: true, screenOn: true });
+    if (url.includes('key=motionDetection')) { fully.motion = url.includes('value=true'); (fully.motion ? fully.starts : fully.stops).push(Date.now()); return ok({ status: 'OK', statustext: 'Saved' }); }
+    if (url.includes('cmd=getCamshot')) return fully.motion ? new Response(JPEG, { headers: { 'content-type': 'image/jpeg' } }) : new Response('<html>no camera</html>', { headers: { 'content-type': 'text/html' } });
+    return ok({ status: 'OK' });
+  };
+  return fully;
+}
+const CAMERA_ENV = { FULLY_CAMERA_HOSTS: 'front=192.168.80.172', FULLY_REMOTE_PASSWORD: 'p&ss word' };
+async function withFully(t, fully, options = {}) {
+  const logs = [];
+  const s = await start(t, { env: CAMERA_ENV, fetchImpl: fully.fetchImpl, cameraWarmupMs: 30, cameraIdleMs: 150, cameraRetryMs: 10, cameraRestartMs: 0, logger: { error() { }, warn() { }, log: line => logs.push(line) }, ...options });
+  return { ...s, logs };
+}
+const camPhoto = (base, query = '') => json(base, `/api/admin/rooms/front/camera${query}`, { token: TOKEN });
+const noSecrets = text => { assert.doesNotMatch(text, /p&ss|p%26ss|192\.168\.80\.172/); };
+
+test('door camera: unmanaged adds no calls and the admin API shows what Fully really does', async t => {
+  const fully = fakeFully();
+  const { base, logs } = await withFully(t, fully);
+  const photo = await camPhoto(base);
+  assert.equal(photo.status, 502, 'detection is off and nothing starts it');
+  assert.equal(fully.calls.length, 1); assert.match(fully.calls[0], /cmd=getCamshot/);
+  const data = await json(base, '/api/admin/switches', { token: TOKEN });
+  const text = await data.text(); noSecrets(text);
+  const front = JSON.parse(text).rooms[0], back = JSON.parse(text).rooms[1];
+  assert.equal(front.camera.mode, 'unmanaged'); assert.equal(front.camera.configuredMode, 'unmanaged'); assert.equal(front.camera.hostSet, true);
+  assert.deepEqual({ ...front.camera.fully, checkedAt: 'x' }, { reachable: true, motionDetectorStarted: false, batteryLevel: 81, isPlugged: true, screenOn: true, checkedAt: 'x', error: '' });
+  assert.equal(front.camera.pending, false);
+  assert.equal(back.camera, undefined, 'no camera, no block');
+  assert.equal(fully.calls.filter(c => /motionDetection/.test(c)).length, 0, 'unmanaged never writes');
+  logs.forEach(noSecrets);
+});
+test('door camera: one unreachable tablet never fails the switches list', async t => {
+  const fully = fakeFully({ up: false });
+  const { base } = await withFully(t, fully);
+  const response = await json(base, '/api/admin/switches', { token: TOKEN });
+  assert.equal(response.status, 200);
+  const text = await response.text(); noSecrets(text);
+  const camera = JSON.parse(text).rooms[0].camera;
+  assert.equal(camera.fully.reachable, false); assert.match(camera.fully.error, /Could not reach the tablet/);
+});
+test('door camera on request: starts, waits for the warm-up, serves, switches off after the idle time; two admins share one start', async t => {
+  const fully = fakeFully();
+  const { base, logs } = await withFully(t, fully);
+  assert.equal((await setSwitch(base, 'front', { key: 'camera', value: 'ondemand' })).status, 200);
+  assert.equal(fully.starts.length + fully.stops.length, 0, 'already off: nothing to change');
+  const mark = fully.calls.length;
+  const began = Date.now();
+  const [one, two] = await Promise.all([camPhoto(base), camPhoto(base, '?live=1')]);
+  assert.equal(one.status, 200); assert.equal(two.status, 200);
+  assert.ok(Date.now() - began >= 25, 'waited for the warm-up');
+  assert.deepEqual(Buffer.from(await one.arrayBuffer()), JPEG);
+  assert.equal(fully.starts.length, 1, 'two admins at once cause one start');
+  const calls = fully.calls.slice(mark).map(c => (c.match(/cmd=(\w+)/)?.[1]) + (c.includes('value=true') ? ':on' : ''));
+  assert.deepEqual(calls.slice(0, 2), ['setBooleanSetting:on', 'getCamshot'], 'start first, then the picture');
+  assert.ok(fully.starts[0] - began < 25 && fully.calls.length > mark);
+  await sleep(100);
+  assert.equal((await camPhoto(base)).status, 200);                 // inside the idle window: resets the timer, no new start
+  assert.equal(fully.starts.length, 1);
+  await sleep(100);
+  assert.equal(fully.motion, true, '200 ms after the first picture but only 100 after the last');
+  await waitFor(() => !fully.motion, 'detection to be switched off');
+  assert.equal(fully.stops.length, 1);
+  assert.ok(logs.some(l => /^Door camera: Front Conference Room camera started for a picture requested by the administrator token/.test(l)));
+  assert.ok(logs.some(l => /^Door camera: Front Conference Room camera switched off after \d+ seconds without use/.test(l)));
+  logs.forEach(noSecrets);
+  assert.equal((await camPhoto(base)).status, 200, 'a new request after switch-off starts it again');
+  assert.equal(fully.starts.length, 2);
+});
+test('door camera on request: a picture right after the start is retried once when Fully still answers with a page', async t => {
+  const fully = fakeFully();
+  let shots = 0;
+  const original = fully.fetchImpl;
+  fully.fetchImpl = async url => { if (String(url).includes('getCamshot') && shots++ === 0) return new Response('<html>warming up</html>', { headers: { 'content-type': 'text/html' } }); return original(url); };
+  const { base } = await withFully(t, fully);
+  await setSwitch(base, 'front', { key: 'camera', value: 'ondemand' });
+  assert.equal((await camPhoto(base)).status, 200);
+  assert.equal(shots, 2);
+});
+test('door camera off: photo, live view and side change answer 409 with a plain sentence and never touch the camera', async t => {
+  const fully = fakeFully();
+  const { base } = await withFully(t, fully);
+  assert.equal((await setSwitch(base, 'front', { key: 'camera', value: 'off' })).status, 200);
+  const mark = fully.calls.length;
+  for (const answer of [await camPhoto(base), await camPhoto(base, '?live=1'), await json(base, '/api/admin/rooms/front/camera/side', { token: TOKEN, method: 'POST', body: { side: 'back' } })]) {
+    assert.equal(answer.status, 409);
+    assert.match((await answer.json()).error, /The door camera is switched off for this room\. Turn it on in the Features box \(On request or Always on\)\./);
+  }
+  assert.equal(fully.calls.length, mark);
+});
+test('door camera on request: the side change starts detection and it is switched off later', async t => {
+  const fully = fakeFully();
+  const { base } = await withFully(t, fully);
+  await setSwitch(base, 'front', { key: 'camera', value: 'ondemand' });
+  assert.equal((await json(base, '/api/admin/rooms/front/camera/side', { token: TOKEN, method: 'POST', body: { side: 'back' } })).status, 200);
+  assert.equal(fully.motion, true);
+  await waitFor(() => !fully.motion, 'detection to be switched off after the side change');
+});
+test('door camera always on: detection is turned on and a restart with the same data folder puts it back', async t => {
+  const fully = fakeFully();
+  const dataDir = tempData(t);
+  const first = await withFully(t, fully, { dataDir });
+  assert.equal((await setSwitch(first.base, 'front', { key: 'camera', value: 'always' })).status, 200);
+  assert.equal(fully.motion, true);
+  const photo = await camPhoto(first.base);
+  assert.equal(photo.status, 200); assert.equal(fully.starts.length, 1, 'a picture does not start or stop anything');
+  fully.motion = false;                                   // the tablet restarted Fully: detection is off again
+  const second = await withFully(t, fully, { dataDir });
+  await second.state.fullyCamera.reconcile('front');
+  assert.equal(fully.motion, true);
+  noSecrets(fs.readFileSync(path.join(dataDir, 'room-switches.json'), 'utf8'));
+});
+test('door camera: an unreachable tablet keeps the choice, says so plainly, and applies it when the tablet answers', async t => {
+  const fully = fakeFully({ up: false });
+  const dataDir = tempData(t);
+  const { base, state, logs } = await withFully(t, fully, { dataDir });
+  const answer = await setSwitch(base, 'front', { key: 'camera', value: 'always' });
+  const text = await answer.text(); noSecrets(text);
+  assert.equal(answer.status, 200);
+  const body = JSON.parse(text);
+  assert.equal(body.pending, true);
+  assert.equal(body.problem, 'Could not reach the tablet. The choice is saved and will be applied as soon as it answers.');
+  assert.equal(body.rows.find(r => r.key === 'camera').effective, 'always');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dataDir, 'room-switches.json'), 'utf8')).rooms.front.camera.value, 'always');
+  await setSwitch(base, 'front', { key: 'camera', value: 'always' });
+  assert.equal(logs.filter(l => /could not be set yet/.test(l)).length, 1, 'logged once per problem');
+  fully.up = true;
+  const beat = await json(base, '/api/tablets/heartbeat', { method: 'POST', body: { roomId: 'front', tabletId: 'new-tablet' } });
+  assert.equal(beat.status, 200);
+  await waitFor(() => fully.motion, 'the heartbeat of a new tablet to apply the choice');
+  assert.equal(state.fullyCamera.status('front').pending, false);
+  assert.ok(logs.some(l => /camera setting applied after the tablet answered again/.test(l)));
+  // and the periodic check applies a later choice that failed
+  fully.up = false;
+  await setSwitch(base, 'front', { key: 'camera', value: 'off' });
+  assert.equal(fully.motion, true);
+  fully.up = true;
+  await state.fullyCamera.tick();
+  assert.equal(fully.motion, false);
+  logs.forEach(noSecrets);
+});
+test('door camera: back to following the server setting stops all calls', async t => {
+  const fully = fakeFully();
+  const { base } = await withFully(t, fully);
+  await setSwitch(base, 'front', { key: 'camera', value: 'always' });
+  await setSwitch(base, 'front', { key: 'camera', value: null });
+  const mark = fully.calls.length;
+  await json(base, '/api/tablets/heartbeat', { method: 'POST', body: { roomId: 'front', tabletId: 'another' } });
+  await sleep(30);
+  assert.equal(fully.calls.length, mark);
+});
+
+test('plugged-in but low: one alert after 30 minutes below 15%, a recovery at 25%, nothing for 15 to 24% or too early', async t => {
+  const { state } = await withAlerts(t);
+  const t1 = { ...tablet('front', 't1', 'Front tablet', TUESDAY_3PM - 20000), wallTablet: true, battery: { level: 13, charging: true } };
+  state.tablets.set('front:t1', t1);
+  const at = (minutes, battery) => { if (battery) t1.battery = battery; const ms = TUESDAY_3PM + minutes * 60000; t1.lastSeen = new Date(ms - 20000).toISOString(); return state.checkTablets(ms); };
+  const low = () => state.alerts.filter(a => /plugged in but still/.test(a.text));
+  await at(0); await at(29);
+  assert.equal(low().length, 0, 'not before 30 minutes');
+  await at(30);
+  assert.equal(low().length, 1);
+  assert.match(low()[0].text, /Front Conference Room: the tablet "Front tablet" is plugged in but still at 13% after 30 minutes\. The charger or cable is probably too weak for what the tablet is doing \(try another charger, or use Battery saver in the dashboard\)\./);
+  await at(31); await at(60);
+  assert.equal(low().length, 1, 'only once');
+  await at(61, { level: 20, charging: true });
+  assert.equal(state.alerts.filter(a => /charging properly again/.test(a.text)).length, 0, '15 to 24% does not clear');
+  await at(62, { level: 26, charging: true });
+  assert.match(state.alerts[0].text, /"Front tablet" is charging properly again \(26%\)/);
+  await at(63, { level: 12, charging: true }); await at(64);
+  assert.equal(low().length, 1, 'a new low spell starts counting from zero');
+  await at(94);
+  assert.equal(low().length, 2);
+});
+test('plugged-in but low: 15 to 24% never starts it, and unplugging forgets the spell without a recovery message', async t => {
+  const { state } = await withAlerts(t);
+  const t1 = { ...tablet('front', 't1', 'Front tablet', TUESDAY_3PM - 20000), wallTablet: true, battery: { level: 20, charging: true } };
+  state.tablets.set('front:t1', t1);
+  const at = (minutes, battery) => { if (battery) t1.battery = battery; const ms = TUESDAY_3PM + minutes * 60000; t1.lastSeen = new Date(ms - 20000).toISOString(); return state.checkTablets(ms); };
+  await at(0); await at(45);
+  assert.equal(state.alerts.length, 0, '20% for 45 minutes is not an alert');
+  await at(46, { level: 12, charging: true }); await at(60, { level: 12, charging: false });
+  await at(61, { level: 12, charging: true }); await at(90);
+  assert.equal(state.alerts.length, 0, 'unplugging restarted the count');
+  await at(91);
+  assert.equal(state.alerts.filter(a => /plugged in but still/.test(a.text)).length, 1);
+  assert.equal(state.alerts.filter(a => /properly again/.test(a.text)).length, 0);
+});

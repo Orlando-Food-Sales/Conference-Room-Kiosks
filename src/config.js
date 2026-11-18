@@ -116,7 +116,9 @@ function privateIPv4(ip) {
 function loadCamera(env, rooms) {
   const list = String(env.FULLY_CAMERA_HOSTS || '').trim();
   const password = String(env.FULLY_REMOTE_PASSWORD || '');
-  if (!list && !password) return { enabled: false, hosts: {}, password: '', port: 2323 };
+  // On request mode (src/fully-camera.js): how long the camera stays on after the last picture, and how long it gets to warm up.
+  const timing = { idleSeconds: integerValue(env.FULLY_CAMERA_IDLE_SECONDS, 120, 30, 1800), warmupSeconds: integerValue(env.FULLY_CAMERA_WARMUP_SECONDS, 8, 3, 20) };
+  if (!list && !password) return { enabled: false, hosts: {}, password: '', port: 2323, ...timing };
   if (!list || !password) throw new Error('The door camera needs FULLY_CAMERA_HOSTS and FULLY_REMOTE_PASSWORD together (or neither).');
   const hosts = {};
   for (const part of list.split(',').map(s => s.trim()).filter(Boolean)) {
@@ -126,7 +128,7 @@ function loadCamera(env, rooms) {
     if (!privateIPv4(match[2])) throw new Error(`FULLY_CAMERA_HOSTS: ${match[2]} must be a private network address (10.x, 172.16-31.x or 192.168.x).`);
     hosts[match[1]] = match[2];
   }
-  return { enabled: true, hosts, password, port: integerValue(env.FULLY_REMOTE_PORT, 2323, 1, 65535) };
+  return { enabled: true, hosts, password, port: integerValue(env.FULLY_REMOTE_PORT, 2323, 1, 65535), ...timing };
 }
 // Walk-in Teams calls (INSTALL-UBUNTU.md 12g). Off unless WALK_IN_ENABLED; a room is watched only when it has a presenceUserId.
 // In demo mode every room is watched without an id. A settings mistake turns the feature off and is logged.
