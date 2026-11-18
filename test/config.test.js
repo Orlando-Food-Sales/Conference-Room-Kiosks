@@ -173,7 +173,7 @@ test('intercom, noise meter and location report: on by default, limits clamp, a 
 });
 
 test('walk-in is off by default and tracks only rooms with a presenceUserId', () => {
-  const id1 = 'f05cd959-0000-4000-8000-567241874b50';
+  const id1 = '11111111-1111-4111-8111-111111111111';
   const rooms = [{ id: 'a', name: 'A', email: 'a@example.com', timeZone: 'UTC', presenceUserId: id1 }, { id: 'b', name: 'B', email: 'b@example.com', timeZone: 'UTC' }];
   const base = { ROOMS_JSON: JSON.stringify(rooms) };
   const off = loadConfig({ ...demo, ...base });
@@ -189,7 +189,7 @@ test('walk-in is off by default and tracks only rooms with a presenceUserId', ()
 });
 
 test('walk-in settings mistakes turn it off with a problem and never throw', () => {
-  const id1 = 'f05cd959-0000-4000-8000-567241874b50';
+  const id1 = '11111111-1111-4111-8111-111111111111';
   const mk = list => loadConfig({ DEMO_MODE: 'false', TENANT_ID: 't', CLIENT_ID: 'c', CLIENT_SECRET: 's', WALK_IN_ENABLED: 'true', ROOMS_JSON: JSON.stringify(list) });
   const room = (idn, extra = {}) => ({ id: idn, name: idn, email: `${idn}@example.com`, timeZone: 'UTC', ...extra });
   const bad = mk([room('a', { presenceUserId: 'not-a-guid' })]);
