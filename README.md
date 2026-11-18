@@ -20,6 +20,7 @@ dependencies; Node.js 22 or later.
 - Door intercom (kiosk tablets on https): a Call button rings the signed-in dashboards, an administrator answers and they talk. Sound is only used during a call the door starts, goes straight from the tablet to the administrator's browser, and is never stored, logged or sent through the server; the person at the door sees the call panel while it is open. Every call is logged with who answered (`INSTALL-UBUNTU.md` 12f).
 - Noise level and tablet location (kiosk tablets on https): the dashboard shows quiet / talking / loud with a dB number, and each tablet's position with an Open map link. The noise meter sends numbers only, never sound, and shows nothing on the tablet while it runs.
 - Dashboard System box (expiry dates of the app secret, HTTPS certificate and renewal login, uptime), Recent activity (camera, intercom, sign-ins) and a Remove button for offline tablets.
+- Walk-in Teams calls (optional): when someone starts a Teams call on the room's Teams Rooms device without a booking, the door shows In use with "Teams call in progress · not booked" and the server books the room automatically in 15-minute slices (office hours only, never over a real booking, 4-hour cap, released 3 minutes after the call ends). Off by default; see INSTALL-UBUNTU.md section 12g. Preview it with `?preview=walkin` and `?preview=walkinbooked`.
 - Kiosk mode: add `?kiosk=1` to a room URL (the door tablets) to show the refresh and message buttons; the plain room URL hides them.
 - No pinch-zoom on the room display: zoom is turned off, and if a tablet's accessibility setting forces it anyway, the page resets itself after 20 seconds without a touch. The dashboard and preview page zoom normally.
 - The current weather in Fahrenheit after the date under the clock ("☁️ 48°F Cloudy · feels 41°"), from the same weather source as the background mood.
@@ -75,14 +76,15 @@ All settings are environment variables; see `.env.example`.
   activity ("Celebrations: ...") and in the service log with who did it. With `DEMO_MODE=true` the panel shows demo
   people and nothing leaves the server.
 - Intercom, noise and location: `INTERCOM_ENABLED`, `INTERCOM_RING_SECONDS`, `INTERCOM_MAX_MINUTES`, `NOISE_METER`, `NOISE_TALKING_DB`, `NOISE_LOUD_DB`, `LOCATION_REPORT`
-- Per room, in `rooms.json`: `allowQuickBooking`, and `showCelebrations` (set `false` for
+- Walk-in Teams calls: `WALK_IN_ENABLED`, `WALK_IN_MAX_MINUTES`, `WALK_IN_OUTSIDE_HOURS`, `DEMO_MEETINGS` (demo only). Needs `Presence.Read.All` (INSTALL-UBUNTU.md section 12g).
+- Per room, in `rooms.json`: `presenceUserId` (walk-in Teams calls), `allowQuickBooking`, and `showCelebrations` (set `false` for
   client-facing rooms).
 
 ## Preview and testing URLs
 
 `/preview.html` shows every theme, weather (including ice), room state, screen size (including the Samsung Galaxy Tab A7 Lite, landscape and portrait), Snoopy animation, outfit, celebration, Easter date, weather warning (one or several), kiosk mode and the logo. It is a review tool; remove or block it on public kiosks if you prefer.
 
-Query options on a room URL: `theme`, `weather`, `warning` (a banner such as `Winter Storm Warning`, `Flood Watch|watch` for amber, several separated by `;`, or `none`), `preview` (free, soon, busy, ended, starting, wrapup, error, outage),
+Query options on a room URL: `theme`, `weather`, `warning` (a banner such as `Winter Storm Warning`, `Flood Watch|watch` for amber, several separated by `;`, or `none`), `preview` (free, soon, busy, walkin, walkinbooked, ended, starting, wrapup, error, outage),
 `kiosk=1` (show the refresh and message buttons), `snoopy` (animation name), `outfit`, `celebrate` (birthday, anniversary, both, weekend), `quickbook=1` (show the booking buttons), `hours` (open or closed), `holiday` (a name, or none), `closedsoon` (a name, or none), `temp` (feels-like Celsius), `day` (1 or 0), `date` (MM-DD or YYYY-MM-DD, pretend today), `nostream=1`.
 
 ## Security

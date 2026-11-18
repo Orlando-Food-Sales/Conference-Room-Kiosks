@@ -3,6 +3,7 @@
 - Never commit `.env`, `config/rooms.json`, client secrets, administrator tokens, backup archives, or production logs.
 - Keep the Node service bound behind Nginx/firewall rules and expose only the intended reverse-proxy port.
 - Use `Calendars.Read` application permission unless quick booking is required; use `Calendars.ReadWrite` only for rooms that need booking.
+- Walk-in Teams calls (optional) need the `Presence.Read.All` application permission. It also exposes the status notes, out-of-office text and location of everybody in the organisation, so grant it only if you use the feature. The server asks only about the ids listed as `presenceUserId` in `config/rooms.json`, and reads, stores and logs only availability and activity. Keep real ids in `config/rooms.json`, never in this repository.
 - Scope application access to the room mailboxes with Exchange Online Application RBAC.
 - Rotate the Entra client secret and `ADMIN_TOKEN` on a defined schedule and after any suspected disclosure.
 - Use HTTPS when traffic crosses an untrusted network.

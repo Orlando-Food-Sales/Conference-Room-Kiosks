@@ -1,4 +1,9 @@
 # Changelog
+## 2.3.0 — 2026-11-18
+- Walk-in Teams calls (optional, off by default, `WALK_IN_ENABLED`). The server reads the Teams presence of each room account every 30 seconds. A call on the room's Teams device with no booking shows **In use** and "Teams call in progress · not booked" on the door (never **Closed**, quick booking hidden), and the server books the room automatically: one 15-minute event that is extended while the call continues, never over a real booking, only in office hours, capped at `WALK_IN_MAX_MINUTES` (default 240). It is shortened to the last call reading when the call has been gone for 3 minutes. The door then says "Teams call in progress · booked automatically".
+- Needs the `Presence.Read.All` application permission (it also exposes status notes, out-of-office text and location of everybody; only availability and activity of the listed ids are read) and `presenceUserId` on each room in `config/rooms.json`. A settings mistake turns the feature off and is logged; the app keeps running.
+- Dashboard: System box shows "Walk-in booking" and one Teams presence line per tracked room; Recent activity lists `Walk-in:` lines. One Teams alert if presence cannot be read for 15 minutes in office hours.
+- Demo mode: a simulate-call route, `DEMO_MEETINGS=off`, `?preview=walkin` and `?preview=walkinbooked`, and a real-browser check, `node tools/e2e-walkin.mjs`.
 
 ## 2.2.0 — 2026-11-17
 - Birthdays and anniversaries list: it now reads the whole calendar (500 events at a time, up to 20,000). It used to stop after 1,000 events, and the shared calendar has over 2,100 (every PTO day and holiday too), so about half of the birthdays were missing from the list. If it ever hits the limit it says the list may be missing people.

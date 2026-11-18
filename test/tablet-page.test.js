@@ -396,3 +396,17 @@ test('the noise meter stops when hidden, display off or in a call, and sends onl
   assert.match(body('stopNoise'), /stopStream\(noise\.stream\)[\s\S]*ctx\.close\(\)/);
   assert.ok(!/connect\(noise\.ctx\.destination|\.destination/.test(body('startNoise')), 'the microphone is never played back');
 });
+
+test('door screen: a Teams call without a booking reads In use, never Closed, and hides quick booking; an automatic booking has no "ends in" text', () => {
+  assert.match(app, /var callOnly = !current && Boolean\(state\.walkIn && state\.walkIn\.call\); var busy = Boolean\(current\); var inUse = busy \|\| callOnly; var closed = !inUse && /);
+  assert.match(app, /classList\.toggle\('busy', inUse\)/);
+  assert.match(app, /textContent = inUse \? 'In use'/);
+  assert.match(app, /allowQuickBooking \|\| inUse \|\| closed\); renderQuickBook\(now, inUse \|\| closed\)/);
+  assert.match(app, /callOnly \? 'Teams call in progress \\u00b7 not booked' : busy && current\.autoBooked \? 'Teams call in progress \\u00b7 booked automatically' : busy \?/);
+  assert.match(app, /state\.walkIn = preview === 'walkin' \? \{ call: true \} : \(data\.walkIn \|\| null\)/);
+  assert.match(app, /mode === 'walkin'\) return \[\]/);
+  assert.match(app, /mode === 'walkinbooked'\) return \[\{[^\n]*autoBooked: true/);
+  const preview = fs.readFileSync(new URL('../public/preview.html', import.meta.url), 'utf8');
+  assert.match(preview, /<option value="walkin">Teams call, not booked<\/option>/);
+  assert.match(preview, /<option value="walkinbooked">Teams call, booked automatically<\/option>/);
+});

@@ -101,7 +101,7 @@ test('the intercom additions need no inline scripts or styles (CSP)', () => {
 test('the dashboard has a System box, a Recent activity list, readable device names and a Remove button for offline tablets', () => {
   assert.match(html, /<section id="system" class="system"><\/section><section id="alerts" class="alerts"><\/section><section id="activity" class="activity"><\/section>/);
   for (const label of ['Microsoft 365 app secret', 'HTTPS certificate', 'Certificate renewal login', 'Microsoft sign-in']) assert.ok(js.includes(label), label);
-  assert.match(js, /Recent activity \(camera, intercom, sign-ins, birthday list changes\)/);
+  assert.match(js, /Recent activity \(camera, intercom, sign-ins, walk-in bookings, birthday list changes\)/);
   assert.match(js, /late:s\.stage!==null/, 'a reminder that is due turns the line red');
   const model = new RegExp(js.match(/var model=\(ua\.match\((\/Android [^/]+\/)\)/)[1].slice(1, -1));
   assert.equal('Mozilla/5.0 (Linux; Android 14; D138 Build/UP1A) wv'.match(model)[1], 'D138');
@@ -118,5 +118,23 @@ test('the birthdays and anniversaries panel asks before deleting, says where it 
   assert.match(block, /button\('Cancel'/);
   assert.doesNotMatch(block, /innerHTML/, 'names from the calendar are only ever set as text');
   assert.match(html, /<section id="celebrations" class="celebrations"><\/section>/);
-  assert.match(js, /Recent activity \(camera, intercom, sign-ins, birthday list changes\)/);
+  assert.match(js, /Recent activity \(camera, intercom, sign-ins, walk-in bookings, birthday list changes\)/);
+});
+
+test('the System box lists the walk-in booking switch and one Teams presence line per tracked room', () => {
+  const fn = js.match(/function walkInRows\(data\)[^\n]*/);
+  assert.ok(fn, 'walkInRows is in public/dashboard.js');
+  const walkInRows = new Function(`${fn[0]}\nreturn walkInRows;`)();
+  assert.deepEqual(walkInRows({ health: {} }), []);
+  assert.deepEqual(walkInRows({ health: { walkIn: { enabled: false } } }), [['Walk-in booking', 'off']]);
+  assert.deepEqual(walkInRows({ health: { walkIn: { enabled: false, problem: 'bad id' } } }), [['Walk-in booking', 'off: bad id']]);
+  const rows = walkInRows({ health: { walkIn: { enabled: true } }, rooms: [
+    { name: 'Front', walkIn: { availability: 'Busy', activity: 'InAConferenceCall', call: true, callSince: '2026-11-18T19:03:00Z', lastBooking: { start: '2026-11-18T19:03:00Z', end: '2026-11-18T19:18:00Z' } } },
+    { name: 'Back', walkIn: { problem: 'permission missing' } },
+    { name: 'Other' }] });
+  assert.equal(rows[0][1], 'on');
+  assert.equal(rows.length, 3);
+  assert.equal(rows[1][0], 'Front Teams presence');
+  assert.match(rows[1][1], /^Busy \/ InAConferenceCall · call since .+ · last automatic booking .+ to /);
+  assert.deepEqual(rows[2], ['Back Teams presence', 'presence not readable: permission missing']);
 });

@@ -4,6 +4,7 @@
     "name": "Front Conference Room",
     "email": "frontconference@example.com",
     "timeZone": "America/New_York",
+    "presenceUserId": "",
     "allowQuickBooking": false,
     "showCelebrations": true
   },
@@ -12,6 +13,7 @@
     "name": "Back Conference Room",
     "email": "backconference@example.com",
     "timeZone": "America/New_York",
+    "presenceUserId": "",
     "allowQuickBooking": false,
     "showCelebrations": true
   }
