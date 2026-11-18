@@ -402,7 +402,13 @@ export function createAppServer(options = {}) {
     const battery = tablet.battery;
     const batteryKey = `${key}:battery`;
     const sent = alertState.get(batteryKey);
-    if (!battery || quietFor >= config.tabletOfflineSeconds * 1000) return;
+    if (battery && quietFor >= config.tabletOfflineSeconds * 1000) {
+      // An offline tablet breaks the run of low readings: a spell that has not alerted yet starts again when it is back.
+      const low = alertState.get(`${key}:lowcharge`);
+      if (low && !low.alerted) alertState.delete(`${key}:lowcharge`);
+      return;
+    }
+    if (!battery) return;
     await checkLowCharge(room, tablet, key, battery, ms);
     if (battery.charging) {
       if (sent) { alertState.delete(batteryKey); await sendAlert(`${room.name}: the tablet "${tablet.name}" is charging again (${battery.level}%).`); }

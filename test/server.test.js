@@ -1500,6 +1500,20 @@ test('plugged-in but low: one alert after 30 minutes below 15%, a recovery at 25
   await at(94);
   assert.equal(low().length, 2);
 });
+test('plugged-in but low: a tablet that goes offline starts the 30 minutes again when it is back', async t => {
+  const { state } = await withAlerts(t);
+  const t1 = { ...tablet('front', 't1', 'Front tablet', TUESDAY_3PM - 20000), wallTablet: true, battery: { level: 8, charging: true } };
+  state.tablets.set('front:t1', t1);
+  const at = (minutes, quiet = 20000) => { const ms = TUESDAY_3PM + minutes * 60000; t1.lastSeen = new Date(ms - quiet).toISOString(); return state.checkTablets(ms); };
+  const low = () => state.alerts.filter(a => /plugged in but still/.test(a.text));
+  await at(0); await at(20);
+  await at(21, 5 * 60000);                       // quiet for 5 minutes: counts as offline
+  await at(40);                                  // back, still low: only 0 minutes into a new spell
+  await at(60);
+  assert.equal(low().length, 0, 'the early readings before the gap do not count');
+  await at(70);
+  assert.equal(low().length, 1, '30 minutes after it came back');
+});
 test('plugged-in but low: 15 to 24% never starts it, and unplugging forgets the spell without a recovery message', async t => {
   const { state } = await withAlerts(t);
   const t1 = { ...tablet('front', 't1', 'Front tablet', TUESDAY_3PM - 20000), wallTablet: true, battery: { level: 20, charging: true } };

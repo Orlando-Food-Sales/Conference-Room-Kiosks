@@ -6,6 +6,7 @@
 - Door camera modes: Not managed (default, nothing changes), Off, On request (Fully's motion detection runs only for a picture: about 8 seconds to start, switched off 120 seconds after the last picture) and Always on. The dashboard shows Fully's real state. If the tablet is unreachable the choice is saved, shown as waiting, and retried.
 - New alert: a tablet that is plugged in but stays under 15% for 30 minutes (charger or cable too weak), with a recovery message at 25%.
 - New settings `FULLY_CAMERA_IDLE_SECONDS` and `FULLY_CAMERA_WARMUP_SECONDS`. Real-browser check: `node tools/e2e-switches.mjs`.
+- The plugged-in-but-low alert starts counting again when a tablet comes back from being offline, so an old low reading cannot trigger it at once.
 - Not switchable on purpose: battery reporting (the low-battery alerts need it), weather warnings, outfit controls.
 ## 2.3.0 — 2026-11-18
 - Walk-in Teams calls (optional, off by default, `WALK_IN_ENABLED`). The server reads the Teams presence of each room account every 30 seconds. A call on the room's Teams device with no booking shows **In use** and "Teams call in progress · not booked" on the door (never **Closed**, quick booking hidden), and the server books the room automatically: one 15-minute event that is extended while the call continues, never over a real booking, only in office hours, capped at `WALK_IN_MAX_MINUTES` (default 240). It is shortened to the last call reading when the call has been gone for 3 minutes. The door then says "Teams call in progress · booked automatically".
