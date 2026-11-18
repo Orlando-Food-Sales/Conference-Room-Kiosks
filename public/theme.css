@@ -481,6 +481,7 @@ body::before {
 }
 
 /* Snoopy (public/snoopy.js). Sits in the empty right side of the status card. */
+:root[data-snoopy="off"] .snoopy { display: none !important; }   /* the room's Snoopy switch is off */
 .snoopy {
   position: absolute;
   right: 240px;

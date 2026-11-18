@@ -2,6 +2,7 @@
 (function () {
   var player = null, ready = false, wrapper, character, previous, zs, lastClip = '', lastPhase = '';
   var manifest, forced = new URLSearchParams(location.search).get('sleepPreview');
+  var off = Boolean(globalThis.roomFeatures && globalThis.roomFeatures.snoopy === false);   // the Snoopy switch: off means no sleeping Snoopy either
   var reduced = globalThis.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   globalThis.SnoopySleep = {
     ownsPlayback: function () { return Boolean(player && player.snapshot().active); },
@@ -58,8 +59,9 @@
     zs = document.createElement('div'); zs.className = 'snoopy-sleep-zs'; zs.style.backgroundImage = 'url(' + manifest.zs + ')'; zs.hidden = true; wrapper.appendChild(zs);
     (document.getElementById('availability') || document.body).appendChild(wrapper);
     player = SnoopySleepEngine.create({ manifest: manifest, reducedMotion: reduced, onMode: mode, onFrame: frame }); ready = true;
-    function closed() { return forced === 'closed' || (forced !== 'open' && document.documentElement.dataset.closed === '1'); }
+    function closed() { return !off && (forced === 'closed' || (forced !== 'open' && document.documentElement.dataset.closed === '1')); }
     player.setClosed(closed(), true);
+    document.addEventListener('room-features', function (event) { off = Boolean(event.detail && event.detail.snoopy === false); wrapper.hidden = off || wrapper.hidden; player.setClosed(closed(), true); });
     new MutationObserver(function () { player.setClosed(closed(), false); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-closed'] });
     document.addEventListener('pointerdown', function () { player.tap(); }, true);   // wakes him; the tap still reaches whatever was tapped (Codex's later version)
     wrapper.addEventListener('keydown', function (event) { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); player.tap(); } });

@@ -111,8 +111,13 @@ function fullyBattery(fully) {
   } catch (_) { return null; }
 }
 function batteryInfo() { return fullyBattery(window.fully) || (BATTERY && typeof BATTERY.level === 'number' ? { level: Math.round(BATTERY.level * 100), charging: Boolean(BATTERY.charging) } : null); }
-async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH, battery: batteryInfo(), secure: SECURE, noise: noiseReading(), noiseStatus: noiseStatusText(), location: locationReading(), locationStatus: locationStatusText() }) }); } catch (_) { } }
-function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('intercom', onIntercomEvent); source.addEventListener('intercom.signal', onIntercomSignal); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') requestRefresh(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
+async function heartbeat() { if (!state.room || NO_STREAM) return; try { await api('/api/tablets/heartbeat', { method: 'POST', body: JSON.stringify({ roomId: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', screen: window.innerWidth + 'x' + window.innerHeight + ' @' + (Math.round((window.devicePixelRatio || 1) * 100) / 100), kiosk: IS_KIOSK, touch: HAS_TOUCH, battery: batteryInfo(), secure: SECURE, noise: noiseReading(), noiseStatus: noiseStatusText(), location: locationReading(), locationStatus: locationStatusText(), applied: { noise: noise.running, intercom: Boolean($('callButton')) && !$('callButton').classList.contains('hidden'), location: features.location === true, weather: features.weather, snoopy: features.snoopy, snoopyMotion: features.snoopyMotion, quickBooking: state.room.allowQuickBooking === true, celebrations: state.room.showCelebrations !== false } }) }); } catch (_) { } }
+// Quick booking and birthdays follow the room switches; ?quickbook=0/1 stays a preview override.
+function applyRoomSettings() { var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; applyFeatures(state.room.features); render(); loadCelebrations(); }
+// Re-reads the room settings after a (re)connect, so a tablet that was off or missed a push catches up.
+async function reloadRoomConfig() { if (!state.room) return; try { var data = await api('/api/config?room=' + encodeURIComponent(state.room.id)); state.room.features = data.features; state.room.allowQuickBooking = data.allowQuickBooking; state.room.showCelebrations = data.showCelebrations; if (data.control) { state.room.control = data.control; activeControl(previewControl(data.control)); } applyRoomSettings(); } catch (_) { /* keep what is showing */ } }
+function connectStream() { if (state.source) state.source.close(); if (!globalThis.EventSource || NO_STREAM) return; var params = new URLSearchParams({ room: state.room.id, tabletId: state.tabletId, name: state.tabletName || state.room.name + ' tablet', kiosk: IS_KIOSK ? '1' : '0', touch: HAS_TOUCH ? '1' : '0' }); var source = state.source = new EventSource('/api/stream?' + params); source.addEventListener('connected', function () { state.liveAt = Date.now(); $('syncState').textContent = 'Live updates connected'; reloadRoomConfig(); }); source.addEventListener('ping', function () { state.liveAt = Date.now(); }); source.addEventListener('calendar.changed', loadEvents); source.addEventListener('intercom', onIntercomEvent); source.addEventListener('intercom.signal', onIntercomSignal); source.addEventListener('graph.changed', loadEvents); source.addEventListener('room.features', function (event) { var data; try { data = JSON.parse(event.data); } catch (_) { return; } var detail = data && data.detail; if (!detail || !state.room) return; if (detail.allowQuickBooking !== undefined) state.room.allowQuickBooking = detail.allowQuickBooking; if (detail.showCelebrations !== undefined) state.room.showCelebrations = detail.showCelebrations; state.room.features = detail.features; applyRoomSettings(); heartbeat(); });
+  source.addEventListener('room.control', async function (event) { var data = JSON.parse(event.data); activeControl(data.detail.control); if (data.detail.action === 'refresh') requestRefresh(); }); source.onerror = function () { $('syncState').textContent = 'Reconnecting live updates…'; }; }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.remove('hidden'); setTimeout(function () { $('toast').classList.add('hidden'); }, 5000); }
 async function initializeRoom(roomId) { state.room = await api('/api/config?room=' + encodeURIComponent(roomId)); var qb = new URLSearchParams(location.search).get('quickbook'); if (qb === '0') state.room.allowQuickBooking = false; else if (qb !== null) state.room.allowQuickBooking = true; localStorage.setItem('selectedRoomId', state.room.id); $('roomName').textContent = state.room.name; document.title = state.room.name + ' · Room Display'; $('picker').classList.add('hidden'); $('display').classList.remove('hidden'); activeControl(previewControl(state.room.control)); updateClock(); await loadEvents(); clearInterval(state.refreshTimer); state.refreshTimer = setInterval(loadEvents, state.room.refreshSeconds * 1000); connectStream(); startExtras(); heartbeat(); loadCelebrations(); loadWeatherAlerts(); }
 
@@ -453,7 +458,7 @@ function noMoreText(now, todayKey) {
 // sends only that number; no sound is recorded, buffered beyond the current second, or sent. Both need https.
 var SECURE = Boolean(window.isSecureContext);
 var CAN_MEDIA = Boolean(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
-var features = { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: false };
+var features = { intercom: false, noise: { enabled: false, talkingDb: -50, loudDb: -35 }, location: false, weather: true, snoopy: true, snoopyMotion: true };
 var door = { id: '', token: '', state: '', stream: null, pc: null, guard: null, pending: [], hideTimer: null, placing: false };
 var noise = { running: false, starting: false, gen: 0, stream: null, ctx: null, analyser: null, buf: null, timer: null, sum: 0, ticks: 0, blocks: [], current: null, refused: false, retryAt: 0, extraAt: 0 };
 var place = { current: null, status: '' };
@@ -664,17 +669,28 @@ function onIntercomSignal(event) {
 $('callButton').addEventListener('click', function () { pressCall(); });
 $('callHangup').addEventListener('click', function () { if (door.id) endCall('Call ended', true); else $('callPanel').classList.add('hidden'); });
 
-// Called once the room settings are known (and again if the room is picked again).
-function startExtras() {
-  var f = (state.room && state.room.features) || {};
+// Applies the room switches (at start, on a room.features push and after a reconnect). A missing field keeps today's behaviour,
+// so an older server still works. A call already in progress keeps running if the Call button goes away.
+function applyFeatures(f) {
+  f = f || {};
   var n = f.noise || {};
   features = {
     intercom: f.intercom === true,
     noise: { enabled: n.enabled === true, talkingDb: typeof n.talkingDb === 'number' ? n.talkingDb : -50, loudDb: typeof n.loudDb === 'number' ? n.loudDb : -35 },
-    location: f.location === true
+    location: f.location === true,
+    weather: f.weather !== false,
+    snoopy: f.snoopy !== false,
+    snoopyMotion: f.snoopyMotion !== false
   };
   $('callButton').classList.toggle('hidden', !callSupported());
   syncNoise();
-  readLocation();
+  readLocation();   // returns at once, with no geolocation call, while location is off
+  window.roomFeatures = features;
+  document.dispatchEvent(new CustomEvent('room-features', { detail: features }));
+}
+// Called once the room settings are known (and again if the room is picked again).
+function startExtras() {
+  var f = (state.room && state.room.features) || {};
+  applyFeatures(f);
   if (!extrasStarted) { extrasStarted = true; setInterval(syncNoise, 60000); setInterval(readLocation, 6 * 3600000); }
 }

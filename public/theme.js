@@ -14,6 +14,7 @@
   var forcedDay = params.get('day');                 // preview: 1 = daytime, 0 = night
   var THEME_COLORS = { dark: '#120b0d', light: '#faf6f5' };
   var weather = null;
+  var weatherOn = true, weatherTimer = null, featuresSeen = false;   // the weather switch (room-features); on until told otherwise
 
   function clockTheme() {
     var hour = new Date().getHours();
@@ -61,12 +62,22 @@
   }
   function refresh() {
     fetch('/api/weather').then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (data) { weather = data && data.weather ? data.weather : null; apply(); })
+      .then(function (data) { if (!weatherOn) return; weather = data && data.weather ? data.weather : null; apply(); })
       .catch(function () { apply(); });
   }
 
+  function startWeather() { if (weatherTimer) return; refresh(); weatherTimer = setInterval(refresh, 10 * 60 * 1000); }
+  // The room switch: off removes the weather line and mood and stops fetching; on starts again.
+  function onFeatures(detail) {
+    featuresSeen = true;
+    weatherOn = !detail || detail.weather !== false;
+    if (weatherOn) startWeather();
+    else { clearInterval(weatherTimer); weatherTimer = null; weather = null; apply(); }
+  }
+  document.addEventListener('room-features', function (event) { onFeatures(event.detail); });
   apply();
-  refresh();
-  setInterval(refresh, 10 * 60 * 1000);
+  // Wait for the room's switches; pages without a room (picker, previews) still get weather after 4 s.
+  if (window.roomFeatures) onFeatures(window.roomFeatures);
+  else setTimeout(function () { if (!featuresSeen) startWeather(); }, 4000);
   setInterval(apply, 60 * 1000);
 })();

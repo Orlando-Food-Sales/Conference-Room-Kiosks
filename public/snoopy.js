@@ -28,6 +28,9 @@
   };
 
   var reduceMotion = globalThis.matchMedia && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var snoopyOn = true, motionOff = false;      // the room switches (room-features): Snoopy shown, Snoopy moving
+  function still() { return reduceMotion || motionOff; }
+  var tickHandle = null, outfitHandle = null, outfitObserver = null;
   var forced = new URLSearchParams(location.search).get('snoopy');
   if (forced && !ANIMATIONS[forced]) forced = null;
 
@@ -61,13 +64,13 @@
   }
 
   function start(animation, once) {
-    name = animation; index = 0; plan = once || null;
+    name = motionOff && !forced ? 'idle' : animation; index = 0; plan = once || null;
     draw(); step();
   }
 
   function step() {
     clearTimeout(timer);
-    if (reduceMotion) return;
+    if (still()) return;
     timer = setTimeout(function () {
       var anim = ANIMATIONS[name];
       index += 1;
@@ -129,6 +132,7 @@
   document.addEventListener('room-booked', function () {
     skipGreetingUntil = Date.now() + 90000;
     if (forced || reduceMotion || sleepOwns()) return;
+    if (motionOff) return;
     nextFlourishAt = Date.now() + 15000;
     setX(x, 0);
     start('jumping', { repeat: 2, then: function () { start(baseMood()); } });
@@ -167,6 +171,7 @@
 
   function tick() {
     if (forced || sleepOwns()) return;
+    if (!snoopyOn || motionOff) return;
     var now = Date.now();
     if (greet(now)) return;                        // a meeting started or ended
     if (plan) return;                              // a one-shot is playing
@@ -194,12 +199,13 @@
 
   el.addEventListener('click', function (event) {
     event.stopPropagation();
+    if (still()) return;
     nextFlourishAt = Date.now() + 15000;
     setX(x, 0);
     start('jumping', { repeat: 1, then: function () { start(baseMood()); } });
   });
   document.addEventListener('pointerdown', function (event) {
-    if (forced || reduceMotion || sleepOwns() || event.target === el) return;
+    if (forced || reduceMotion || sleepOwns() || motionOff || event.target === el) return;
     nextFlourishAt = Date.now() + 15000;
     lookAt(event.clientX, event.clientY);
   });
@@ -357,15 +363,35 @@
     probe.src = url;
   }
 
-  function refreshOutfit() { if (outfits.length) wear(chooseOutfit()); else reveal(); }
+  function refreshOutfit() { if (!snoopyOn) return; if (outfits.length) wear(chooseOutfit()); else reveal(); }
 
   fetch('/snoopy/outfits.json').then(function (r) { return r.ok ? r.json() : { outfits: [] }; })
     .then(function (data) { outfits = data.outfits || []; refreshOutfit(); })
     .catch(function () { });
-  new MutationObserver(refreshOutfit).observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-anniversary', 'data-closed', 'data-outfit-override', 'data-outfit-until'] });
-  setInterval(refreshOutfit, 60000);                                       // catches midnight / date changes
+  function watchOutfit() {
+    if (!outfitObserver) { outfitObserver = new MutationObserver(refreshOutfit); outfitObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-weather', 'data-day', 'data-temp', 'data-birthday', 'data-anniversary', 'data-closed', 'data-outfit-override', 'data-outfit-until'] }); }
+    if (!outfitHandle) outfitHandle = setInterval(refreshOutfit, 60000);   // catches midnight / date changes
+  }
+  function unwatchOutfit() { if (outfitObserver) outfitObserver.disconnect(); outfitObserver = null; clearInterval(outfitHandle); outfitHandle = null; }
 
+  // The room switches. Off: hidden (theme.css), every timer stopped. Movement off: one still picture, no timers.
+  function applyFeatures(f) {
+    if (!f) return;
+    snoopyOn = f.snoopy !== false; motionOff = snoopyOn && f.snoopyMotion === false;
+    if (snoopyOn) document.documentElement.removeAttribute('data-snoopy'); else document.documentElement.setAttribute('data-snoopy', 'off');
+    clearTimeout(timer); plan = null; setX(0, 0);
+    clearInterval(tickHandle); tickHandle = null;
+    if (!snoopyOn) { unwatchOutfit(); return; }
+    watchOutfit(); refreshOutfit();
+    if (motionOff) { name = forced || 'idle'; index = 0; draw(); return; }
+    if (!sleepOwns()) start(forced || baseMood());
+    tickHandle = setInterval(tick, 1000);
+  }
+  document.addEventListener('room-features', function (event) { applyFeatures(event.detail); });
+
+  watchOutfit();
   draw();
   step();
-  setInterval(tick, 1000);
+  tickHandle = setInterval(tick, 1000);
+  if (globalThis.roomFeatures) applyFeatures(globalThis.roomFeatures);
 })();

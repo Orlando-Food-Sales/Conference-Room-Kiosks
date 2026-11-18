@@ -410,3 +410,28 @@ test('door screen: a Teams call without a booking reads In use, never Closed, an
   assert.match(preview, /<option value="walkin">Teams call, not booked<\/option>/);
   assert.match(preview, /<option value="walkinbooked">Teams call, booked automatically<\/option>/);
 });
+
+test('the tablet page follows the room switches live', () => {
+  const theme = fs.readFileSync(new URL('../public/theme.js', import.meta.url), 'utf8');
+  const snoopy = fs.readFileSync(new URL('../public/snoopy.js', import.meta.url), 'utf8');
+  const sleep = fs.readFileSync(new URL('../public/snoopy-sleep.js', import.meta.url), 'utf8');
+  const apply = body('applyFeatures');
+  for (const need of ['f.weather !== false', 'f.snoopy !== false', 'f.snoopyMotion !== false', 'callSupported()', 'syncNoise()', 'readLocation()', 'window.roomFeatures = features', "new CustomEvent('room-features'"]) assert.ok(apply.includes(need), need);
+  assert.match(body('startExtras'), /applyFeatures\(f\)/);
+  assert.match(body('readLocation'), /^[^\n]*\n\s*if \(!features\.location \|\| NO_STREAM\) \{ place\.current = null; place\.status = ''; return; \}/, 'no geolocation call while location is off');
+  assert.match(app, /addEventListener\('room\.features', function \(event\) \{[^\n]*applyRoomSettings\(\); heartbeat\(\); \}\);/);
+  assert.match(body('applyRoomSettings'), /applyFeatures\(state\.room\.features\); render\(\); loadCelebrations\(\)/);
+  assert.match(body('applyRoomSettings'), /get\('quickbook'\)/, 'the quickbook preview override survives');
+  assert.match(app, /'Live updates connected'; reloadRoomConfig\(\)/, 'a reconnect re-reads the settings');
+  assert.match(body('reloadRoomConfig'), /\/api\/config\?room=/);
+  assert.match(body('heartbeat'), /applied: \{ noise: noise\.running, intercom: [^\n]*location: features\.location === true, weather: features\.weather, snoopy: features\.snoopy, snoopyMotion: features\.snoopyMotion, quickBooking: state\.room\.allowQuickBooking === true, celebrations: state\.room\.showCelebrations !== false \}/);
+  assert.match(theme, /addEventListener\('room-features'/);
+  assert.match(theme, /setTimeout\(function \(\) \{ if \(!featuresSeen\) startWeather\(\); \}, 4000\)/);
+  assert.match(theme, /detail\.weather !== false/);
+  assert.match(snoopy, /addEventListener\('room-features'/);
+  assert.match(snoopy, /setAttribute\('data-snoopy', 'off'\)/);
+  assert.match(snoopy, /clearInterval\(tickHandle\)/);
+  assert.match(css, /:root\[data-snoopy="off"\] \.snoopy \{ display: none !important; \}/);
+  assert.match(sleep, /addEventListener\('room-features'/);
+  assert.match(sleep, /player\.setClosed\(closed\(\), true\)/);
+});
