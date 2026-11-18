@@ -508,9 +508,8 @@ async function startNoise() {
   } catch (_) { stopStream(stream); noise.starting = false; noise.retryAt = Date.now() + 600000; return; }
   noise.stream = stream; noise.starting = false; noise.running = true; noise.refused = false;
   noise.sum = 0; noise.ticks = 0; noise.blocks = [];
-  stream.getTracks().forEach(function (track) { track.onended = function () { if (gen === noise.gen) { stopNoise(); noise.retryAt = Date.now() + 60000; } micSync(); }; });
+  stream.getTracks().forEach(function (track) { track.onended = function () { if (gen === noise.gen) { stopNoise(); noise.retryAt = Date.now() + 60000; } }; });
   noise.timer = setInterval(noiseTick, 100);
-  micSync();
 }
 function noiseTick() {
   if (!noise.analyser) return;
@@ -541,7 +540,6 @@ function stopNoise() {
   if (noise.ctx) { try { noise.ctx.close(); } catch (_) { } }
   noise.stream = null; noise.ctx = null; noise.analyser = null; noise.buf = null;
   noise.sum = 0; noise.ticks = 0; noise.blocks = []; noise.current = null;
-  micSync();
 }
 
 // Location, read at page start and every 6 hours (a wall tablet does not move).
@@ -568,12 +566,6 @@ function setCallStatus(text, ended) {
   $('callStatus').textContent = text;
   $('callHangup').textContent = ended ? 'Close' : 'Hang up';
   $('callPanel').classList.remove('hidden');
-}
-function micSync() {
-  var live = function (stream) { return Boolean(stream && stream.getTracks().some(function (track) { return track.readyState === 'live'; })); };
-  var call = live(door.stream), meter = live(noise.stream);
-  $('micNotice').textContent = call || !meter ? '\u25CF Microphone on' : '\u25CF Microphone on (noise level only)';
-  $('micNotice').classList.toggle('on', call || meter);
 }
 function armGuard(ms) {
   clearTimeout(door.guard);
@@ -606,7 +598,6 @@ function endCall(text, tellServer) {
   door.pc = null;
   $('callAudio').srcObject = null;
   door.id = ''; door.token = ''; door.state = ''; door.pending = [];
-  micSync();
   if (id && tellServer) api('/api/intercom/hangup', { method: 'POST', body: JSON.stringify({ callId: id, token: token }) }).catch(function () { });
   setCallStatus(text, true);
   clearTimeout(door.hideTimer);
@@ -632,8 +623,7 @@ async function startCallMedia(id) {
   catch (_) { if (door.id === id) endCall('Could not start the microphone.', true); return; }
   if (door.id !== id) { stopStream(stream); return; }
   door.stream = stream;
-  stream.getTracks().forEach(function (track) { track.enabled = false; track.onended = micSync; });
-  micSync();
+  stream.getTracks().forEach(function (track) { track.enabled = false; });
   var pc = door.pc = new RTCPeerConnection({ iceServers: [] });
   stream.getTracks().forEach(function (track) { pc.addTrack(track, stream); });
   pc.ontrack = function (event) { var audio = $('callAudio'); audio.srcObject = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]); var started = audio.play(); if (started && started.catch) started.catch(function () { }); };

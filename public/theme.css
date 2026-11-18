@@ -619,9 +619,5 @@ input, textarea, select { -webkit-user-select: text; user-select: text; touch-ac
 .clock-sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .weather-now::before { content: " \00b7\0020"; }   /* " · " (a space right after an escape is swallowed, hence \0020) */
 .weather-now .weather-icon { display: inline-block; height: 1em; line-height: 1; vertical-align: -0.1em; }   /* an emoji is taller than text: keep the line (and the top bar) the same height */
-/* Shown while this tablet's own microphone is open for a door call. */
-.mic-notice { position: fixed; top: 44px; left: 50%; transform: translateX(-50%); z-index: 60; display: none; padding: 4px 14px; border-radius: 999px; background: #b3121f; color: #fff; font-size: .9rem; font-weight: 700; letter-spacing: .02em; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
-.mic-notice.on { display: block; }
-/* Small grey pill while the noise meter runs (only a level number leaves the tablet). */
 /* Door call panel. */
 .call-status { margin: 0; font-size: 1.25rem; font-weight: 700; min-height: 1.6em; }

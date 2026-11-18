@@ -150,9 +150,9 @@ async function main() {
   const gumCount = page => page.eval('window.__gum.length');
   const callGum = page => page.eval('window.__gum.filter(function(g){return g.constraints.audio&&g.constraints.audio.echoCancellation===true}).length');
   const pcCount = page => page.eval('window.__pcs.length');
-  const badgeText = page => page.eval(`(function(){var e=document.getElementById('micNotice');return e&&getComputedStyle(e).display!=='none'?e.textContent:''})()`);
-  const noiseBadge = async page => /noise level only/.test(await badgeText(page));
-  const callBadge = async page => { const t = await badgeText(page); return t !== '' && !/noise level only/.test(t); };
+  // There is no microphone popup on the tablet (removed on request): look at the real microphone tracks instead.
+  const noiseBadge = async page => (await liveTracks(page, 'noise')) >= 1;
+  const callBadge = async page => (await liveTracks(page, 'call')) >= 1;
   const liveTracks = (page, which) => page.eval(`window.__gum.filter(function(g){var a=g.constraints.audio;return ${which === 'call' ? 'a&&a.echoCancellation===true' : 'a===true||(a&&a.echoCancellation===false)'}}).reduce(function(n,g){return n+(g.stream?g.stream.getTracks().filter(function(t){return t.readyState==='live'}).length:0)},0)`);
   const audioBytes = (page, kind) => page.eval(`(async function(){var n=0;for(var pc of window.__pcs){var r=await pc.getStats();r.forEach(function(s){if(s.type==='${kind === 'in' ? 'inbound-rtp' : 'outbound-rtp'}'&&(s.kind==='audio'||s.mediaType==='audio'))n+=s.${kind === 'in' ? 'bytesReceived' : 'bytesSent'}||0;});}return n;})()`);
   const adminsOnline = async () => (await api('/api/admin/overview')).intercomAdminsOnline;
@@ -166,10 +166,10 @@ async function main() {
   // ---- (a) nothing but the noise meter before a press; the dashboard shows noise and location ----
   const tablet = await open(tabletUrl, { geo: true, network: true });
   await waitFor('the tablet page', () => noiseBadge(tablet), 20000);
-  check('a1 red microphone badge is visible on the tablet while the meter runs', true);
+  check('a1 the noise meter is running on the tablet', true);
   check('a2 no RTCPeerConnection before any press', (await pcCount(tablet)) === 0, 'count ' + await pcCount(tablet));
   check('a3 the only microphone use is the noise meter (processing off)', (await gumCount(tablet)) === 1 && (await callGum(tablet)) === 0, 'getUserMedia calls ' + await gumCount(tablet));
-  check('a4 the red badge is on and says it is the noise level only', (await noiseBadge(tablet)) && !(await callBadge(tablet)));
+  check('a4 only the noise-level microphone is open, not a call microphone', (await noiseBadge(tablet)) && !(await callBadge(tablet)));
   await waitFor('the call button', () => tablet.shown('callButton'), 10000);
   check('a5 call button is shown on a secure page', true);
   const posts = tablet.requests.filter(r => r.method === 'POST');
@@ -197,7 +197,7 @@ async function main() {
   await waitFor('the nobody message', async () => /Nobody is signed in/.test(await callStatus(tablet)), 10000);
   check('b1 "Nobody is signed in" when no dashboard is open', true);
   check('b2 still no RTCPeerConnection and no new getUserMedia', (await pcCount(tablet)) === 0 && (await gumCount(tablet)) === gumBefore);
-  check('b3 microphone badge hidden', !(await callBadge(tablet)));
+  check('b3 no call microphone is open', !(await callBadge(tablet)));
   await tablet.eval(`document.getElementById('callPanel').classList.add('hidden'),true`);
 
   // ---- (c) dashboard open, press, answer ----
@@ -208,12 +208,12 @@ async function main() {
   await tablet.click('callButton');
   await waitFor('the ring banner', async () => /Front Conference Room door is calling/.test(await admin1.text('intercomText')) && await admin1.shown('intercomAnswer'), 10000);
   check('c1 ring banner with the room name and an Answer button on the dashboard', true);
-  check('c2 tablet says Calling, no peer connection, no microphone badge', /Calling/.test(await callStatus(tablet)) && (await pcCount(tablet)) === 0 && !(await callBadge(tablet)) && (await callGum(tablet)) === 0 && (await gumCount(tablet)) === gumC);
+  check('c2 tablet says Calling, no peer connection, no call microphone', /Calling/.test(await callStatus(tablet)) && (await pcCount(tablet)) === 0 && !(await callBadge(tablet)) && (await callGum(tablet)) === 0 && (await gumCount(tablet)) === gumC);
   check('c3 the dashboard has not opened a microphone or connection before Answer', (await gumCount(admin1)) === 0 && (await pcCount(admin1)) === 0);
   await admin1.click('intercomAnswer');
   await waitFor('the call to connect', async () => /Connected/.test(await callStatus(tablet)) && /Talking with Front Conference Room/.test(await admin1.text('intercomText')), 20000);
   check('c4 connected on both sides', true);
-  check('c5 microphone badge shows only now', (await callBadge(tablet)) && (await callGum(tablet)) === 1 && (await pcCount(tablet)) === 1);
+  check('c5 the call microphone opens only now', (await callBadge(tablet)) && (await callGum(tablet)) === 1 && (await pcCount(tablet)) === 1);
   const inA = await audioBytes(admin1, 'in'), outA = await audioBytes(tablet, 'out');
   await waitFor('audio to flow', async () => (await audioBytes(admin1, 'in')) > inA && (await audioBytes(tablet, 'out')) > outA, 10000, 500);
   check('c6 dashboard receives audio from the tablet and the tablet sends it', true);
@@ -222,7 +222,7 @@ async function main() {
   // ---- (d1) hang up from the door ----
   await tablet.click('callHangup');
   await waitFor('the door hang-up', async () => !(await callBadge(tablet)), 10000);
-  check('d1 door hang-up hides the microphone badge', true);
+  check('d1 door hang-up closes the call microphone', true);
   check('d2 every call track on the tablet is stopped', (await liveTracks(tablet, 'call')) === 0);
   await waitFor('the dashboard to see the end', async () => /Call ended/.test(await admin1.text('intercomText')), 10000);
   check('d3 dashboard shows the call ended', true);
@@ -237,7 +237,7 @@ async function main() {
   await waitFor('the second call to connect', async () => /Connected/.test(await callStatus(tablet)), 20000);
   await admin1.click('intercomHangup');
   await waitFor('the dashboard hang-up', async () => !(await callBadge(tablet)), 10000);
-  check('d5 dashboard hang-up hides the tablet microphone badge', true);
+  check('d5 dashboard hang-up closes the tablet call microphone', true);
   check('d6 tablet shows the call ended and every call track is stopped', /ended/i.test(await callStatus(tablet)) && (await liveTracks(tablet, 'call')) === 0, await callStatus(tablet));
   await waitFor('the meter again', () => noiseBadge(tablet), 20000);
   check('d7 noise meter resumes after a dashboard hang-up', true);
@@ -275,8 +275,8 @@ async function main() {
   // ---- (h) a ?nostream=1 page ----
   const preview = await open(tabletUrl + '&nostream=1');
   await sleep(4000);
-  check('h1 a ?nostream=1 page has no call button, no noise pill, no microphone and no peer connection',
-    !(await preview.shown('callButton')) && !(await preview.shown('micNotice')) && (await gumCount(preview)) === 0 && (await pcCount(preview)) === 0);
+  check('h1 a ?nostream=1 page has no call button, no microphone and no peer connection',
+    !(await preview.shown('callButton')) && (await gumCount(preview)) === 0 && (await pcCount(preview)) === 0);
 
   // ---- (g) what the server wrote ----
   await sleep(500);
