@@ -11,7 +11,7 @@
 .agents/tasks/intercom-noise-location/task-intercom-noise-location/task.json	464 bytes
 .env.example	7454 bytes
 .gitignore	183 bytes
-CHANGELOG.md	46441 bytes
+CHANGELOG.md	47131 bytes
 DEPLOY-CHECKLIST.md	9038 bytes
 INSTALL-UBUNTU.md	46373 bytes
 README.md	14668 bytes
@@ -59,7 +59,7 @@ public/snoopy-sleep.css	1315 bytes
 public/snoopy-sleep.js	6372 bytes
 public/snoopy.js	21988 bytes
 public/snoopy/README.md	4968 bytes
-public/snoopy/outfits.json	12739 bytes
+public/snoopy/outfits.json	13378 bytes
 public/snoopy/outfits/README.md	8194 bytes
 public/snoopy/outfits/april-fools.png	2229621 bytes
 public/snoopy/outfits/autumn-thanksgiving.png	1807627 bytes
@@ -142,7 +142,7 @@ test/dashboard-signin.test.js	23736 bytes
 test/intercom.test.js	19147 bytes
 test/outage.test.js	9801 bytes
 test/outfit-schedule.test.js	11107 bytes
-test/outfits.test.js	29203 bytes
+test/outfits.test.js	30030 bytes
 test/project.test.js	6488 bytes
 test/room-switches.test.js	7683 bytes
 test/server.test.js	102536 bytes

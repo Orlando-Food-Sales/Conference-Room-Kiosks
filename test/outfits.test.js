@@ -416,3 +416,13 @@ test('Earth Day is April 22 only and wins over Easter week when they meet', () =
   assert.ok(outfits.indexOf(earth) < outfits.findIndex(o => o.easter), 'listed before Easter, so the single day wins (Easter week covers April 22 in 2038)');
   assert.equal(D.easterRuleMatches(byId('easter').easter, 2038, 4, 22), true, 'sanity: the two really meet in 2038');
 });
+
+test('Friendsgiving (Nov 23, 2026) and Cookie Swap (Dec 3, 2026) are one-day outfits that beat the season around them', () => {
+  const list = JSON.parse(fs.readFileSync(new URL('../public/snoopy/outfits.json', import.meta.url), 'utf8')).outfits;
+  const by = id => list.find(o => o.id === id);
+  assert.deepEqual(by('friendsgiving').dates, { on: ['2026-11-23'], before: 0, after: 0 });
+  assert.deepEqual(by('cookie-swap').dates, { on: ['2026-12-03'], before: 0, after: 0 });
+  assert.ok(list.indexOf(by('friendsgiving')) < list.indexOf(by('autumn-thanksgiving')), 'the one-day rule is listed before the season');
+  assert.ok(list.indexOf(by('cookie-swap')) < list.indexOf(by('christmas')), 'the one-day rule is listed before Christmas');
+  assert.ok(list.indexOf(by('cookie-swap')) < list.indexOf(by('christmas-day')));
+});

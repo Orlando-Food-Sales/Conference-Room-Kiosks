@@ -23,6 +23,19 @@
       "event": "anniversary"
     },
     {
+      "id": "cookie-swap",
+      "label": "Cookie Swap (Dec 3, 2026 only; wears the chef hat and apron until new art is drawn)",
+      "file": "outfits/chef.png",
+      "rows": 11,
+      "dates": {
+        "on": [
+          "2026-12-03"
+        ],
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
       "id": "christmas-day",
       "label": "Christmas Eve and Christmas Day (kept even when Hanukkah falls on them)",
       "file": "outfits/christmas.png",
@@ -286,6 +299,19 @@
       "rows": 11,
       "from": "11-11",
       "to": "11-11"
+    },
+    {
+      "id": "friendsgiving",
+      "label": "Friendsgiving (Nov 23, 2026 only; wears the rust autumn sweater until new art is drawn)",
+      "file": "outfits/autumn-thanksgiving.png",
+      "rows": 11,
+      "dates": {
+        "on": [
+          "2026-11-23"
+        ],
+        "before": 0,
+        "after": 0
+      }
     },
     {
       "id": "autumn-thanksgiving",
